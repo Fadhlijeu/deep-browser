@@ -13,6 +13,7 @@ import { EnginePicker, EngineLogo } from './EnginePicker';
 import { AttachmentList, type AttachmentItem } from './chat-v2/Attachments';
 
 const ENGINE_DISPLAY_NAMES: Record<string, string> = {
+  gemini: 'Google Gemini',
   'claude-code': 'Claude Code',
   codex: 'Codex',
   browsercode: 'BrowserCode',
@@ -52,7 +53,7 @@ interface TaskInputProps {
 }
 
 const ENGINE_STORAGE_KEY = 'hub.selectedEngine';
-const DEFAULT_ENGINE = 'claude-code';
+const DEFAULT_ENGINE = 'gemini';
 
 function loadStoredEngine(): string {
   try {

@@ -3,6 +3,7 @@ import { STATUS_LABEL } from './constants';
 import { ContentRenderer, getPreview } from './ContentRenderer';
 import { Markdown, linkifyOutputPaths } from './Markdown';
 import { TerminalPane } from './TerminalPane';
+import geminiLogo from './gemini-logo.svg';
 import claudeCodeLogo from './claude-code-logo.svg';
 import openaiLogoDark from './openai-logo.svg';
 import openaiLogoLight from './openai-logo-light.svg';
@@ -1014,6 +1015,9 @@ export function AgentPane({ session, focused, onRerun, onResume, onPause, onFoll
         <span className={`pane__dot pane__dot--${session.status}`} />
         <div className="pane__title-group">
           <span className="pane__prompt">{session.prompt}</span>
+          {session.engine === 'gemini' && (
+            <img className="pane__engine-icon" src={geminiLogo} alt="Google Gemini" title="Google Gemini" />
+          )}
           {session.engine === 'codex' && (
             <img className="pane__engine-icon" src={openaiLogo} alt="Codex" title="Codex" />
           )}

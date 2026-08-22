@@ -82,7 +82,7 @@ function faviconUrl(site: string | null | undefined): string | null {
 const DOMAIN_RE = /\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/[^\s]*)?/i;
 const DOMAIN_RE_GLOBAL = /\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/[^\s]*)?/gi;
 const ENGINE_STORAGE_KEY = 'hub.selectedEngine';
-const DEFAULT_ENGINE = 'claude-code';
+const DEFAULT_ENGINE = 'gemini';
 
 function loadStoredEngine(): string {
   try {

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import geminiLogoSrc from './gemini-logo.svg?raw';
 import claudeLogoSrc from './claude-logo.svg?raw';
 import openaiLogoDarkSrc from './openai-logo.svg?raw';
 import openaiLogoLightSrc from './openai-logo-light.svg?raw';
@@ -28,6 +29,9 @@ export interface EngineStatus {
 export function EngineLogo({ id }: { id: string }): React.ReactElement {
   const openaiLogoSrc = useThemedAsset(openaiLogoDarkSrc, openaiLogoLightSrc);
   const opencodeLogoSrc = useThemedAsset(opencodeLogoDarkSrc, opencodeLogoLightSrc);
+  if (id === 'gemini') {
+    return <span className="engine-logo" dangerouslySetInnerHTML={{ __html: geminiLogoSrc as string }} />;
+  }
   if (id === 'claude-code') {
     return <span className="engine-logo" dangerouslySetInnerHTML={{ __html: claudeLogoSrc as string }} />;
   }
@@ -322,6 +326,10 @@ export function EnginePickerMenuContent({
 
   const onItemClick = (id: string, installed: boolean, authed: boolean): void => {
     log.info('item.click', { id, installed, authed });
+    if (id === 'gemini') {
+      selectEngine(id);
+      return;
+    }
     if (installingRef.current === id || loggingInRef.current === id) return;
     if (!installed) {
       void onInstallClick(id);

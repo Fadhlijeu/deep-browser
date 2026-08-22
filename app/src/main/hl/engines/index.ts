@@ -4,9 +4,10 @@
  */
 
 // Adapters (side-effect register()):
+import './gemini/adapter';
+import './browsercode/adapter';
 import './claude-code/adapter';
 import './codex/adapter';
-import './browsercode/adapter';
 
 export { runEngine } from './runEngine';
 export { get as getAdapter, list as listAdapters, DEFAULT_ENGINE_ID } from './registry';

@@ -62,11 +62,13 @@ interface Credentials {
   authMode: AuthMode | null;
   anthropicApiKey: string | null;
   openaiApiKey: string | null;
+  geminiApiKey?: string | null;
+  geminiModel?: string | null;
   browserCode: BrowserCodeStore | null;
 }
 
 function emptyCredentials(): Credentials {
-  return { authMode: null, anthropicApiKey: null, openaiApiKey: null, browserCode: null };
+  return { authMode: null, anthropicApiKey: null, openaiApiKey: null, geminiApiKey: null, geminiModel: null, browserCode: null };
 }
 
 export interface BrowserCodeKeyEntry {
@@ -457,3 +459,27 @@ export async function resolveAuth(): Promise<ResolvedAuth> {
 
   return null;
 }
+
+export async function loadGeminiApiKey(): Promise<string | null> {
+  const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+  if (envKey) return envKey;
+  const c = await getAll();
+  return c.geminiApiKey ?? null;
+}
+
+export async function saveGeminiApiKey(apiKey: string): Promise<void> {
+  const c = await getAll();
+  c.geminiApiKey = apiKey.trim();
+  await persistCache();
+}
+
+export async function deleteGeminiApiKey(): Promise<void> {
+  const c = await getAll();
+  c.geminiApiKey = null;
+  await persistCache();
+}
+
+export async function loadGeminiModel(): Promise<string> {
+  return process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+}
+
