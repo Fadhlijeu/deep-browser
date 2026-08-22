@@ -1,8 +1,5 @@
-/**
- * Google Gemini engine adapter — Deep-Browser Primary AI Provider.
- * Connects directly to Google Gemini via GOOGLE_API_KEY / GEMINI_API_KEY.
- */
-
+import path from 'node:path';
+import { app } from 'electron';
 import { register } from '../registry';
 import { applyBrowserHarnessEnv } from '../browserHarnessEnv';
 import { buildSkillIndexPrompt, SKILL_DISCOVERY_AND_LIFECYCLE_LINES, htmlBlockGuidanceLines, optionsBlockGuidanceLines, askBlockGuidanceLines } from '../skillIndexPrompt';
@@ -47,6 +44,7 @@ const geminiAdapter: EngineAdapter = {
   buildSpawnArgs(ctx: SpawnContext): string[] {
     const model = ctx.model || DEFAULT_GEMINI_MODEL;
     const args = [
+      '-u',
       '-m', 'deep_browser.cli', 'run',
       '--provider', 'gemini',
       '--cdp-port', String(ctx.cdpPort),
@@ -64,6 +62,11 @@ const geminiAdapter: EngineAdapter = {
 
   buildEnv(ctx: SpawnContext, baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     const env = enrichedEnv(baseEnv);
+    const appPath = typeof app?.getAppPath === 'function' ? app.getAppPath() : process.cwd();
+    const repoRoot = path.resolve(appPath, '..');
+    const existingPythonPath = env.PYTHONPATH ? `${env.PYTHONPATH}${path.delimiter}` : '';
+    env.PYTHONPATH = `${existingPythonPath}${repoRoot}${path.delimiter}${appPath}`;
+
     env.DEEP_BROWSER_TARGET_ID = ctx.targetId;
     env.DEEP_BROWSER_CDP_PORT = String(ctx.cdpPort);
     env.BU_TARGET_ID = ctx.targetId;
