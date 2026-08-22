@@ -43,14 +43,19 @@ const geminiAdapter: EngineAdapter = {
 
   buildSpawnArgs(ctx: SpawnContext): string[] {
     const model = ctx.model || DEFAULT_GEMINI_MODEL;
+    const isAttached = ctx.browserMode === 'ATTACHED' || ctx.cdpPort === 9222;
     const args = [
       '-u',
       '-m', 'deep_browser.cli', 'run',
       '--provider', 'gemini',
-      '--cdp-port', String(ctx.cdpPort),
-      '--target-id', ctx.targetId,
       '--ndjson',
     ];
+    if (isAttached) {
+      args.push('--attached', '--cdp-port', String(ctx.cdpPort || 9222));
+    }
+    if (ctx.targetId && ctx.targetId !== 'default') {
+      args.push('--target-id', ctx.targetId);
+    }
     if (model) args.push('--model', model);
     if (ctx.sessionId) args.push('--session', ctx.sessionId);
     return args;

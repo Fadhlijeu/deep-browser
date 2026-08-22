@@ -16,6 +16,8 @@ export interface SpawnContext {
   harnessDir: string;
   /** App session id (used for naming uploads/outputs dirs + env injection). */
   sessionId: string;
+  /** Browser mode: MANAGED (bundled Chromium) or ATTACHED (existing Chrome). */
+  browserMode?: 'MANAGED' | 'ATTACHED';
   /** CDP target id for the browser view the agent must drive. */
   targetId: string;
   /** Port Electron exposes CDP on. */
@@ -131,6 +133,7 @@ export interface RunEngineOptions {
   engineId: string;
   prompt: string;
   sessionId: string;
+  browserMode?: 'MANAGED' | 'ATTACHED';
   webContents?: WebContents;
   targetId?: string;
   cdpPort: number;

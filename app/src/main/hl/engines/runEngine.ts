@@ -230,6 +230,7 @@ export async function runEngine(opts: RunEngineOptions): Promise<void> {
     prompt: opts.prompt,
     harnessDir: opts.harnessDir,
     sessionId: opts.sessionId,
+    browserMode: opts.browserMode,
     targetId,
     cdpPort: opts.cdpPort,
     resumeSessionId: opts.resumeSessionId,

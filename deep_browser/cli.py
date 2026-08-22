@@ -113,11 +113,14 @@ def run(
     try:
         asyncio.run(_execute())
     except Exception as e:
+        err_str = str(e)
+        if "ConnectError" in type(e).__name__ or "All connection attempts failed" in err_str:
+            err_str = f"Connection failed to browser CDP endpoint ({resolved_cdp or 'local'}). If using Attached Chrome mode, ensure Chrome is launched with '--remote-debugging-port=9222'. For standard mode, use Bundled Chromium."
         if ndjson:
-            sys.stdout.write(json.dumps({"type": "error", "message": str(e)}) + "\n")
+            sys.stdout.write(json.dumps({"type": "error", "message": err_str}) + "\n")
             sys.stdout.flush()
         else:
-            console.print(f"[bold red]Execution error:[/bold red] {e}")
+            console.print(f"[bold red]Execution error:[/bold red] {err_str}")
         sys.exit(1)
 
 

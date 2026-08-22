@@ -1070,15 +1070,17 @@ app.whenReady().then(async () => {
       attachments_count: resumeAttachments.length,
     });
 
+    const resumeSession = sessionManager.getSession(validatedId);
     const runId = beginEngineRun(validatedId);
     runEngine({
       engineId,
       harnessDir: harnessDir(),
       sessionId: validatedId,
+      browserMode: resumeSession?.browserMode ?? 'MANAGED',
       prompt: validatedPrompt,
       attachments: resumeAttachments.map((a) => ({ name: a.name, mime: a.mime, bytes: a.bytes })),
       webContents,
-      cdpPort: resolvedCdp.port,
+      cdpPort: resumeSession?.browserMode === 'ATTACHED' ? 9222 : resolvedCdp.port,
       signal: abortController.signal,
       resumeSessionId: sessionManager.getEngineSessionId(validatedId),
       onRunControl: bindRunControl(validatedId, runId),
@@ -1194,6 +1196,7 @@ app.whenReady().then(async () => {
         engineId,
         harnessDir: harnessDir(),
         sessionId: id,
+        browserMode: session?.browserMode ?? 'MANAGED',
         prompt: sessionManager.getInitialPrompt(id) ?? sessionManager.getSession(id)!.prompt,
         attachments: attachmentsForRun.map((a) => ({ name: a.name, mime: a.mime, bytes: a.bytes })),
         webContents: view?.webContents,
