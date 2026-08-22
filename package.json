@@ -1,0 +1,14 @@
+{
+  "name": "deep-browser",
+  "version": "0.1.0",
+  "description": "Deep-Browser — Local-First Browser Agent Desktop & Companion",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix app run dev",
+    "start": "npm --prefix app start",
+    "typecheck": "npm --prefix app run typecheck",
+    "test": "npm --prefix app test",
+    "package": "npm --prefix app run package",
+    "make": "npm --prefix app run make"
+  }
+}
