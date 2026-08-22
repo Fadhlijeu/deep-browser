@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep-Browser | Personal Browser Agent Workstation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+    <div id="app" class="workstation-container">
+        <!-- Top Navigation Bar -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-logo">
+                    <span class="logo-icon">🌐</span>
+                </div>
+                <div class="brand-text">
+                    <h1>DEEP-BROWSER</h1>
+                    <span class="badge badge-pulse">LOCAL WORKSTATION v0.1.0</span>
+                </div>
+            </div>
+
+            <div class="header-metrics">
+                <div class="metric-pill">
+                    <span class="metric-label">STATUS</span>
+                    <span id="ws-status" class="metric-value status-online">CONNECTED</span>
+                </div>
+                <div class="metric-pill">
+                    <span class="metric-label">SAFE MODE</span>
+                    <span class="metric-value text-amber">ENFORCED</span>
+                </div>
+                <div class="metric-pill">
+                    <span class="metric-label">PROVIDER</span>
+                    <span class="metric-value text-cyan">GEMINI / OLLAMA</span>
+                </div>
+                <div class="metric-pill">
+                    <span class="metric-label">TOTAL TOKENS</span>
+                    <span id="header-tokens" class="metric-value">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workstation Layout -->
+        <div class="workstation-body">
+            <!-- Left Sidebar: Task & Session Explorer -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <h3>ACTIVE SESSIONS</h3>
+                        <span class="badge" id="session-count">0</span>
+                    </div>
+                    <div id="session-list" class="session-list">
+                        <!-- Dynamic Sessions -->
+                        <div class="session-item active">
+                            <div class="session-header">
+                                <span class="status-dot"></span>
+                                <span class="session-name">Browser 1 (Personal)</span>
+                            </div>
+                            <span class="session-url">about:blank</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-header">
+                        <h3>TASKS</h3>
+                        <span class="badge" id="task-count">0</span>
+                    </div>
+                    <div id="task-list" class="task-list">
+                        <!-- Dynamic Tasks -->
+                    </div>
+                </div>
+
+                <div class="sidebar-section artifacts-section">
+                    <div class="section-header">
+                        <h3>WORKSPACE ARTIFACTS</h3>
+                    </div>
+                    <div id="artifact-list" class="artifact-list">
+                        <span class="empty-state">No artifacts generated yet</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center/Right Stage -->
+            <main class="main-stage">
+                <!-- Task Input Bar -->
+                <section class="task-input-bar glass-panel">
+                    <div class="input-wrapper">
+                        <span class="input-prefix">⚡</span>
+                        <input type="text" id="goal-input" placeholder="Give the agent a task (e.g. 'Search PDDIKTI for Computer Science and extract top 5 results')..." />
+                    </div>
+                    <div class="input-controls">
+                        <select id="browser-mode-select">
+                            <option value="managed">Managed Mode (Isolated)</option>
+                            <option value="attached">Attached Mode (Existing Chrome)</option>
+                        </select>
+                        <button id="run-task-btn" class="btn btn-primary">RUN AGENT</button>
+                    </div>
+                </section>
+
+                <!-- Workspace Split Grid -->
+                <div class="workspace-grid">
+                    <!-- Left Column: Reasoning Console & Action Timeline -->
+                    <div class="panel timeline-panel glass-panel">
+                        <div class="panel-header">
+                            <h2>ACTION TIMELINE & SUPERVISION</h2>
+                            <div class="panel-actions">
+                                <button id="pause-btn" class="btn btn-sm btn-ghost" disabled>PAUSE</button>
+                                <button id="cancel-btn" class="btn btn-sm btn-danger" disabled>CANCEL</button>
+                            </div>
+                        </div>
+
+                        <!-- Milestones Checklist -->
+                        <div class="milestones-box">
+                            <div class="milestones-header">MILESTONES</div>
+                            <div id="milestones-list" class="milestones-items">
+                                <span class="empty-text">No active milestones</span>
+                            </div>
+                        </div>
+
+                        <!-- Live Action Feed -->
+                        <div id="timeline-feed" class="timeline-feed">
+                            <div class="timeline-welcome">
+                                <span class="welcome-icon">🤖</span>
+                                <h3>Ready to Assist</h3>
+                                <p>Submit a goal above or hand off a tab from the Deep-Browser Chrome Extension.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Live Browser View & Verification Receipts -->
+                    <div class="panel preview-panel glass-panel">
+                        <div class="panel-header">
+                            <h2>LIVE BROWSER INSPECTOR</h2>
+                            <span id="current-page-pill" class="badge">No active tab</span>
+                        </div>
+
+                        <div class="browser-viewport-wrapper">
+                            <div id="screenshot-container" class="screenshot-container">
+                                <div class="screenshot-placeholder">
+                                    <span>Live Browser Viewport</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Telemetry HUD -->
+                        <div class="telemetry-hud">
+                            <div class="telemetry-item">
+                                <span class="telemetry-label">CURRENT URL</span>
+                                <span id="telemetry-url" class="telemetry-value">about:blank</span>
+                            </div>
+                            <div class="telemetry-grid">
+                                <div class="telemetry-item">
+                                    <span class="telemetry-label">LAST ACTION</span>
+                                    <span id="telemetry-action" class="telemetry-value">-</span>
+                                </div>
+                                <div class="telemetry-item">
+                                    <span class="telemetry-label">VERIFICATION</span>
+                                    <span id="telemetry-verification" class="telemetry-value badge badge-success">IDLE</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Human Confirmation Modal (Safe Mode) -->
+        <div id="confirmation-modal" class="modal-backdrop hidden">
+            <div class="modal glass-panel">
+                <div class="modal-header">
+                    <span class="modal-icon">⚠️</span>
+                    <h3>Human Confirmation Required (Safe Mode)</h3>
+                </div>
+                <div class="modal-body">
+                    <p>The agent is requesting to execute a potentially sensitive or destructive action:</p>
+                    <div id="confirmation-details" class="code-block"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="modal-reject-btn" class="btn btn-secondary">REJECT & PAUSE</button>
+                    <button id="modal-confirm-btn" class="btn btn-success">APPROVE & EXECUTE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

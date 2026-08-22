@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep-Browser Co-Pilot</title>
+    <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+    <div class="sidepanel-container">
+        <!-- Header -->
+        <header class="sidepanel-header">
+            <div class="brand">
+                <span class="logo">🌐</span>
+                <h2>DEEP-BROWSER</h2>
+            </div>
+            <span id="connection-pill" class="pill status-offline">OFFLINE</span>
+        </header>
+
+        <!-- Current Tab Info & Handoff -->
+        <div class="active-tab-box">
+            <div class="tab-label">ACTIVE CHROME TAB</div>
+            <div id="tab-title" class="tab-title">Loading current tab...</div>
+            <div id="tab-url" class="tab-url">-</div>
+            <button id="handoff-btn" class="btn btn-primary">⚡ HANDOFF TAB TO AGENT</button>
+        </div>
+
+        <!-- Quick Goal Input -->
+        <div class="quick-goal-box">
+            <input type="text" id="sidepanel-goal" placeholder="What should the agent do here?" />
+            <button id="submit-goal-btn" class="btn btn-secondary">RUN</button>
+        </div>
+
+        <!-- Live Step Timeline -->
+        <div class="timeline-section">
+            <div class="section-title">AGENT ACTIVITY & VERIFICATION</div>
+            <div id="sidepanel-feed" class="sidepanel-feed">
+                <span class="empty-hint">Agent is idle. Handoff tab or enter a task to begin.</span>
+            </div>
+        </div>
+    </div>
+    <script src="sidepanel.js"></script>
+</body>
+</html>

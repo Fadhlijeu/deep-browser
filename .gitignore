@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Deep-Browser Local Workspace Data
+workspace/screenshots/*
+!workspace/screenshots/.gitkeep
+workspace/artifacts/*
+!workspace/artifacts/.gitkeep
+workspace/downloads/*
+!workspace/downloads/.gitkeep
+workspace/logs/*
+!workspace/logs/.gitkeep
+workspace/agent-state/*
+!workspace/agent-state/.gitkeep
+
+# Environment variables & API keys
+.env
+.env.local
+.env.*.local

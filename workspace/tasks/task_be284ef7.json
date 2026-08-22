@@ -1,0 +1,71 @@
+{
+  "id": "task_be284ef7",
+  "goal": "Verify agent supervisory loop",
+  "status": "completed",
+  "browser_mode": "managed",
+  "profile_id": "default",
+  "session_id": "test_session",
+  "milestones": [
+    {
+      "id": "m_2b9088",
+      "title": "Open target URL",
+      "description": "",
+      "status": "completed",
+      "evidence": null
+    },
+    {
+      "id": "m_ea9d20",
+      "title": "Verify page arrival",
+      "description": "",
+      "status": "completed",
+      "evidence": null
+    }
+  ],
+  "current_milestone_index": 0,
+  "history": [
+    {
+      "step_index": 1,
+      "timestamp": "2026-08-22T08:45:38.806901+00:00",
+      "action": {
+        "tool": "scroll",
+        "params": {
+          "direction": "down",
+          "amount": 200
+        },
+        "thought": "Navigating to starting portal",
+        "expected_consequence": "Page scrolls down",
+        "is_sensitive": false
+      },
+      "execution_success": true,
+      "execution_output": {
+        "status": "success",
+        "scrolled": "down",
+        "amount": 200
+      },
+      "verification": {
+        "is_verified": true,
+        "status": "VERIFIED",
+        "assertion": "Action 'scroll' executed without fatal error",
+        "actual_state": "Page is at 'https://example.com'",
+        "details": {},
+        "error_message": null
+      },
+      "screenshot_path": "workspace\\screenshots\\task_be284ef7_step1_scroll.webp",
+      "page_url": "https://example.com",
+      "page_title": "Example Domain"
+    }
+  ],
+  "retry_count": 0,
+  "max_retries": 3,
+  "token_usage": {
+    "prompt_tokens": 300,
+    "completion_tokens": 100,
+    "total_tokens": 400,
+    "llm_calls": 2
+  },
+  "pending_confirmation_action": null,
+  "result_summary": "Successfully verified navigation and scroll.",
+  "error_message": null,
+  "created_at": "2026-08-22T08:45:38.806199+00:00",
+  "updated_at": "2026-08-22T08:45:38.806987+00:00"
+}
