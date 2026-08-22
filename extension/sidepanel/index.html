@@ -14,21 +14,61 @@
                 <span class="logo">🌐</span>
                 <h2>DEEP-BROWSER</h2>
             </div>
-            <span id="connection-pill" class="pill status-offline">OFFLINE</span>
+            <div class="header-right">
+                <span id="agent-state-pill" class="pill state-idle">IDLE</span>
+                <span id="connection-pill" class="pill status-offline">OFFLINE</span>
+            </div>
         </header>
 
-        <!-- Current Tab Info & Handoff -->
-        <div class="active-tab-box">
-            <div class="tab-label">ACTIVE CHROME TAB</div>
-            <div id="tab-title" class="tab-title">Loading current tab...</div>
-            <div id="tab-url" class="tab-url">-</div>
-            <button id="handoff-btn" class="btn btn-primary">⚡ HANDOFF TAB TO AGENT</button>
+        <!-- Session Control Bar -->
+        <div class="session-bar">
+            <div class="session-select-wrapper">
+                <span class="label">SESSION:</span>
+                <select id="session-select">
+                    <option value="">Loading sessions...</option>
+                </select>
+            </div>
+            <div class="session-actions">
+                <button id="btn-attach-chrome" class="btn btn-xs" title="Attach to running user Chrome on port 9222">⚡ Attach Chrome</button>
+                <button id="btn-new-managed" class="btn btn-xs" title="Create isolated Chromium session">➕ New Session</button>
+            </div>
         </div>
 
-        <!-- Quick Goal Input -->
+        <!-- Active Browser State Card -->
+        <div class="active-tab-box">
+            <div class="tab-header-row">
+                <span class="tab-label">BROWSER CONTEXT</span>
+                <span id="tab-count-badge" class="badge">1 tab</span>
+            </div>
+            <div id="tab-title" class="tab-title">Loading browser context...</div>
+            <div id="tab-url" class="tab-url">-</div>
+            <div class="quick-run-row">
+                <button id="handoff-btn" class="btn btn-primary btn-sm">⚡ HANDOFF TAB TO AGENT</button>
+            </div>
+        </div>
+
+        <!-- Goal Input & Agent Control Surface -->
         <div class="quick-goal-box">
-            <input type="text" id="sidepanel-goal" placeholder="What should the agent do here?" />
-            <button id="submit-goal-btn" class="btn btn-secondary">RUN</button>
+            <input type="text" id="sidepanel-goal" placeholder="Describe agent task..." />
+            <div class="agent-controls">
+                <button id="submit-goal-btn" class="btn btn-success btn-sm">▶ RUN</button>
+                <button id="btn-pause-agent" class="btn btn-secondary btn-sm" disabled>⏸ PAUSE</button>
+                <button id="btn-resume-agent" class="btn btn-secondary btn-sm hidden">⏯ RESUME</button>
+                <button id="btn-stop-agent" class="btn btn-danger btn-sm" disabled>⏹ STOP</button>
+            </div>
+        </div>
+
+        <!-- Action Inspector (Read-Only Live Observability) -->
+        <div id="action-inspector" class="action-inspector hidden">
+            <div class="inspector-header">
+                <span class="inspector-title">🔍 ACTION INSPECTOR</span>
+                <span id="inspector-status" class="pill pill-sm">EXECUTED</span>
+            </div>
+            <div class="inspector-grid">
+                <div class="grid-item"><span class="lbl">Tool:</span> <span id="insp-tool" class="val">-</span></div>
+                <div class="grid-item"><span class="lbl">Target:</span> <span id="insp-target" class="val highlight">-</span></div>
+                <div class="grid-item"><span class="lbl">Verification:</span> <span id="insp-verif" class="val success">PASSED</span></div>
+            </div>
         </div>
 
         <!-- Safe Mode Interactive Confirmation Modal -->
@@ -61,7 +101,7 @@
         <div class="timeline-section">
             <div class="section-title">AGENT ACTIVITY & VERIFICATION</div>
             <div id="sidepanel-feed" class="sidepanel-feed">
-                <span class="empty-hint">Agent is idle. Handoff tab or enter a task to begin.</span>
+                <span class="empty-hint">Agent is idle. Select a session and enter a task to begin.</span>
             </div>
         </div>
     </div>

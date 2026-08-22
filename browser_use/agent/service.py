@@ -3919,15 +3919,21 @@ class Agent(Generic[Context, AgentStructuredOutput]):
 
 	def pause(self) -> None:
 		"""Pause the agent before the next step"""
-		print('\n\n⏸️ Paused the agent and left the browser open.\n\tPress [Enter] to resume or [Ctrl+C] again to quit.')
+		try:
+			print('\n\n⏸️ Paused the agent and left the browser open.\n\tPress [Enter] to resume or [Ctrl+C] again to quit.')
+		except Exception:
+			self.logger.info('Paused the agent and left the browser open.')
 		self.state.paused = True
 		self._external_pause_event.clear()
 
 	def resume(self) -> None:
 		"""Resume the agent"""
 		# TODO: Locally the browser got closed
-		print('----------------------------------------------------------------------')
-		print('▶️  Resuming agent execution where it left off...\n')
+		try:
+			print('----------------------------------------------------------------------')
+			print('▶️  Resuming agent execution where it left off...\n')
+		except Exception:
+			self.logger.info('Resuming agent execution where it left off...')
 		self.state.paused = False
 		self._external_pause_event.set()
 

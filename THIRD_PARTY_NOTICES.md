@@ -27,10 +27,16 @@ Deep-Browser is directly forked and reworked from the open-source **Browser Use*
 
 ---
 
-### 3. Browser Use Desktop
-- **Project**: [Browser Use Desktop](https://github.com/browser-use/desktop) (MIT License)
-- **Copyright**: (c) 2025-2026 Browser Use Contributors
-- **Referenced Patterns**: Multi-agent workstation layouts, desktop-grade parallel session coordination.
+### 3. Browser Use Desktop (Primary Desktop Base)
+- **Project**: [Browser Use Desktop](https://github.com/browser-use/desktop)
+- **Upstream Repository**: `https://github.com/browser-use/desktop.git`
+- **Pinned Base Commit SHA**: `f073b7574f7927185ebbebd87556391d5cb0cfd1`
+- **License**: MIT License
+- **Copyright**: (c) 2025-2026 Reagan Hsu / Browser Use Contributors
+- **Components In Tree**:
+  - `app/` (Electron desktop client, Vite build configs, React 19 UI, WebContentsView pool, local task server)
+  - `shared/` (JSON schemas for tasks, agent events, onboarding, and tabs)
+
 
 ---
 
