@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from browser_use import Agent, BrowserProfile, BrowserSession, Tools
-from browser_use.llm import ChatGoogle, ChatOpenAI, ChatAnthropic, ChatOllama
+from browser_use.llm.google.chat import ChatGoogle
 from deep_browser.events import DeepBrowserEvent, EventBroadcaster, EventType
 from deep_browser.policies.safety import SafeModeManager, SafeModePolicy, SafeTools
 from deep_browser.sessions.coordinator import SessionCoordinator, SessionViewModel
@@ -85,12 +85,15 @@ def _create_llm(provider: str, model_name: Optional[str], api_key: Optional[str]
         model = model_name or "gemini-2.5-flash"
         return ChatGoogle(model=model, api_key=api_key)
     elif provider == "openai":
+        from browser_use.llm.openai.chat import ChatOpenAI
         model = model_name or "gpt-4o"
         return ChatOpenAI(model=model, api_key=api_key)
     elif provider == "anthropic":
+        from browser_use.llm.anthropic.chat import ChatAnthropic
         model = model_name or "claude-3-5-sonnet-20241022"
         return ChatAnthropic(model=model, api_key=api_key)
     elif provider == "ollama":
+        from browser_use.llm.ollama.chat import ChatOllama
         model = model_name or "qwen2.5:7b"
         return ChatOllama(model=model)
     else:
