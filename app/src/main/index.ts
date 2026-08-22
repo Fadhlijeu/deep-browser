@@ -1378,14 +1378,18 @@ app.whenReady().then(async () => {
     await startSessionWithAgent(validatedId);
   });
 
-  ipcMain.handle('sessions:resume', async (_event, payload: { id: string; prompt: string; attachments?: unknown }) => {
+  ipcMain.handle('sessions:resume', async (_event, payload: { id: string; prompt: string; attachments?: unknown; browserType?: string }) => {
     const validatedId = assertString(payload?.id, 'id', 100);
     const validatedPrompt = assertString(payload?.prompt, 'prompt', 10000);
     const resumeAttachments = assertAttachments(payload?.attachments);
+    if (payload?.browserType) {
+      sessionManager.setSessionBrowserType(validatedId, payload.browserType);
+    }
     mainLogger.info('main.sessions:resume', {
       id: validatedId,
       promptLength: validatedPrompt.length,
       attachmentCount: resumeAttachments.length,
+      browserType: payload?.browserType,
       attachmentMeta: resumeAttachments.map((a) => ({ name: a.name, mime: a.mime, size: a.bytes.byteLength })),
     });
 

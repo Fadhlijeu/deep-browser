@@ -107,10 +107,9 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
     try {
       const v = localStorage.getItem(BROWSER_TARGET_STORAGE_KEY) as BrowserTarget;
       if (v && BROWSER_TARGET_INFO[v]) return v;
-      const oldMode = localStorage.getItem(BROWSER_MODE_STORAGE_KEY);
-      return oldMode === 'ATTACHED' ? 'edge' : 'bundled';
+      return 'edge';
     } catch {
-      return 'bundled';
+      return 'edge';
     }
   });
   const textareaRef = useRef<HTMLTextAreaElement>(null);

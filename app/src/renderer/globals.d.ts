@@ -79,6 +79,7 @@ interface ElectronSessionAPI {
     id: string,
     prompt: string,
     attachments?: Array<{ name: string; mime: string; bytes: Uint8Array }>,
+    browserType?: string,
   ) => Promise<{ resumed?: boolean; queued?: boolean; error?: string }>;
   rerun: (id: string) => Promise<{ rerun?: boolean; error?: string }>;
   editAndRerun: (id: string, prompt: string) => Promise<{ rerun?: boolean; error?: string }>;

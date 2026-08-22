@@ -144,7 +144,7 @@ export function ChatPane({ sessionId, onSwitchToBrowser, onExit }: ChatPaneProps
         hasQuote: !!quotedText,
       });
       try {
-        const res = await api.sessions.resume(sessionId, composed, sub.attachments);
+        const res = await api.sessions.resume(sessionId, composed, sub.attachments, sub.browserType);
         console.log('[ChatPane] resume result', res);
         if (res.error) {
           console.error('[ChatPane] resume error', res.error);

@@ -284,8 +284,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       id: string,
       prompt: string,
       attachments?: Array<{ name: string; mime: string; bytes: Uint8Array }>,
+      browserType?: string,
     ): Promise<{ resumed?: boolean; queued?: boolean; error?: string }> =>
-      ipcRenderer.invoke('sessions:resume', { id, prompt, attachments }),
+      ipcRenderer.invoke('sessions:resume', { id, prompt, attachments, browserType }),
     rerun: (id: string): Promise<{ rerun?: boolean; error?: string }> =>
       ipcRenderer.invoke('sessions:rerun', id),
     editAndRerun: (id: string, prompt: string): Promise<{ rerun?: boolean; error?: string }> =>

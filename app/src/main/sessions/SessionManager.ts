@@ -710,6 +710,14 @@ export class SessionManager extends EventEmitter {
     mainLogger.info('SessionManager.setEngineSessionId', { id, engineSessionId });
   }
 
+  setSessionBrowserType(id: string, browserType: string): void {
+    const session = this.sessions.get(id);
+    if (session) {
+      session.browserType = browserType;
+      mainLogger.info('SessionManager.setSessionBrowserType', { id, browserType });
+    }
+  }
+
   /** Retrieve a previously-captured provider conversation id, if any. */
   getEngineSessionId(id: string): string | undefined {
     return this.engineSessionIds.get(id);
