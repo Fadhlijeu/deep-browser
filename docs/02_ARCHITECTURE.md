@@ -70,8 +70,10 @@ graph TD
 
 ---
 
-## 3. Core Directives
+## 3. Core Directives & Invariants
 
-1. **Never Duplicate**: If Browser Use provides a capability (CDP, DOM extraction, BrowserSession, Agent loop), use or modify `browser_use/` directly.
-2. **Deterministic Evidence**: Deep-Browser wraps all tool actions with verification receipts before marking tasks complete.
-3. **Local-First**: Zero mandatory cloud infrastructure; operates over localhost CDP and local bridge.
+1. **Browser Use is the Primary Foundation**: If Browser Use provides a capability (CDP, DOM extraction, BrowserSession, Agent loop, Tools), use or modify `browser_use/` directly. Never create duplicate parallel abstractions.
+2. **Deterministic Verification**: Deep-Browser wraps all tool actions with verification receipts before marking tasks complete ("Never Executed == Success without observable DOM/state evidence").
+3. **Local-First Always**: Zero mandatory cloud infrastructure; operates over localhost CDP and local bridge server.
+4. **Primary UI is Chrome Extension SidePanel**: No fifth standalone dashboard or redundant Electron container. The Chrome Extension SidePanel + HUD is the primary user interface.
+5. **Architectural Decision Reference**: See [docs/WORKSPACE_DECISION.md](file:///d:/PROJECT/deep-browser/docs/WORKSPACE_DECISION.md) for full ecosystem evaluation of `browser-use`, `browsercode`, `desktop`, and `web-ui`.
