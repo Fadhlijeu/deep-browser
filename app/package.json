@@ -59,10 +59,9 @@
     "eval:agent-skills": "node scripts/evaluate-agent-skills.mjs",
     "postinstall": "node scripts/chmod-node-pty-helpers.mjs"
   },
-  "keywords": [],
   "author": {
-    "name": "Reagan Hsu",
-    "email": "reaganhsu123@gmail.com"
+    "name": "Deep-Browser Maintainers",
+    "url": "https://github.com/Fadhlijeu/deep-browser"
   },
   "license": "MIT",
   "devDependencies": {

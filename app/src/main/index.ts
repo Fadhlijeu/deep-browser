@@ -2208,7 +2208,7 @@ function buildApplicationMenu(): void {
           label: 'Report an Issue…',
           click: () => {
             mainLogger.debug('menu.reportIssue');
-            shell.openExternal('https://github.com/browser-use/desktop/issues');
+            shell.openExternal('https://github.com/Fadhlijeu/deep-browser/issues');
           },
         },
       ],
