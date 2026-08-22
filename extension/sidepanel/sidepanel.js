@@ -338,6 +338,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: msg || 'Challenge verification timed out.',
                 isError: true,
             });
+        } else if (eventType === 'CONTEXT_ATTACHED') {
+            setAgentState('THINKING');
+            if (data.url) tabUrl.textContent = data.url;
+            if (data.title) tabTitle.textContent = data.title;
+            appendEventCard({
+                type: 'thinking',
+                tag: 'CONTEXT ATTACHED',
+                icon: '👁️',
+                body: msg || `Attached directly to tab: ${data.title || data.url || 'Active Tab'}`,
+                targetCode: data.url || '',
+            });
+        } else if (eventType === 'THINKING_STATUS') {
+            setAgentState('THINKING');
+            appendEventCard({
+                type: 'thinking',
+                tag: 'ANALYZING',
+                icon: '🧠',
+                body: msg || data.thinking || 'Analyzing page context...',
+            });
         } else if (eventType === 'OBSERVATION') {
             setAgentState('THINKING');
             if (data.url) tabUrl.textContent = data.url;
@@ -345,8 +364,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.thought) {
                 appendEventCard({
                     type: 'thinking',
-                    tag: 'THINKING',
-                    icon: '🧠',
+                    tag: 'OBSERVING',
+                    icon: '👁️',
                     body: data.thought,
                 });
             }
@@ -377,6 +396,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: 'Entering text',
                 targetCode: `"${evt.target || data.text || ''}"`,
             });
+        } else if (eventType === 'PRESS_KEY') {
+            setAgentState('RUNNING');
+            appendEventCard({
+                type: 'action-type',
+                tag: 'PRESS KEY',
+                icon: '⌨️',
+                body: `Pressing key "${evt.target || data.key || ''}"`,
+            });
         } else if (eventType === 'SCROLL') {
             setAgentState('RUNNING');
             appendEventCard({
@@ -393,6 +420,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 tag: 'WAIT',
                 icon: '⏳',
                 body: `Waiting ${evt.target || ''}`,
+            });
+        } else if (eventType === 'TAB_SWITCH') {
+            setAgentState('RUNNING');
+            appendEventCard({
+                type: 'action-navigate',
+                tag: 'TAB SWITCH',
+                icon: '📑',
+                body: 'Switching tab context',
+                targetCode: evt.target || '',
             });
         } else if (eventType === 'VERIFICATION') {
             appendEventCard({
@@ -493,11 +529,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     task: goal,
                     session_id: selectedSid,
+                    session_type: 'EXTENSION',
                     owner: 'EXTENSION',
                     browser_mode: bMode,
                     browser_type: bType,
                     browser_id: `${bType}_9222`,
                     tab_id: currentTab ? currentTab.id : undefined,
+                    window_id: currentTab ? currentTab.windowId : undefined,
+                    url: currentTab ? currentTab.url : undefined,
+                    title: currentTab ? currentTab.title : undefined,
                     model_provider: 'gemini',
                     model_name: selectedModel,
                     safe_mode: true,

@@ -52,11 +52,15 @@ active_tasks: Dict[str, Dict[str, Any]] = {}
 class CreateTaskRequest(BaseModel):
     task: str
     session_id: Optional[str] = None
+    session_type: str = Field(default="EXTENSION", description="EXTENSION or WORKSPACE")
     owner: str = Field(default="EXTENSION", description="WORKSPACE or EXTENSION")
     browser_mode: str = Field(default="ATTACHED", description="ATTACHED (user's current Chrome/Edge) or MANAGED")
     browser_type: str = Field(default="chrome", description="chrome, edge, brave, or bundled")
     browser_id: Optional[str] = "chrome_9222"
     tab_id: Optional[Union[str, int]] = None
+    window_id: Optional[Union[str, int]] = None
+    url: Optional[str] = None
+    title: Optional[str] = None
     model_provider: str = Field(default="gemini", description="gemini, openai, anthropic, or ollama")
     model_name: Optional[str] = None
     api_key: Optional[str] = None
@@ -274,8 +278,40 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             session = coordinator.get_session(session_id)
 
         if not session:
-            # Create according to request mode
-            if is_attached:
+            # For Extension: MUST connect to existing Chrome/Edge CDP, NEVER launch bundled Chromium
+            if req.owner == "EXTENSION" or is_attached:
+                import httpx
+                is_running = False
+                try:
+                    async with httpx.AsyncClient(timeout=1.0) as client:
+                        res = await client.get(f"http://127.0.0.1:{req.cdp_port}/json/version")
+                        if res.status_code == 200:
+                            is_running = True
+                except Exception:
+                    is_running = False
+
+                if not is_running:
+                    err_msg = f"Current browser is unavailable on port {req.cdp_port}. Please launch Chrome or Edge with '--remote-debugging-port={req.cdp_port}'."
+                    logger.warning(f"Extension task failed: {err_msg}")
+                    active_tasks[task_id]["status"] = "failed"
+                    active_tasks[task_id]["error"] = err_msg
+                    await broadcaster.broadcast(
+                        DeepBrowserEvent(
+                            task_id=task_id,
+                            session_id=session_id,
+                            owner=req.owner,
+                            browser_mode=browser_mode,
+                            browser_id=browser_id,
+                            tab_id=tab_id,
+                            event_type=EventType.FAILED,
+                            status="FAILED",
+                            summary="Current browser is unavailable",
+                            message=err_msg,
+                            data={"error": err_msg},
+                        )
+                    )
+                    return
+
                 view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, browser_type=req.browser_type, owner=req.owner)
                 session_id = view.id
                 session = coordinator.get_session(session_id)
@@ -285,6 +321,23 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                 session = coordinator.get_session(session_id)
 
         assert session is not None, "Failed to initialize BrowserSession"
+
+        # 1. Broadcast CONTEXT_ATTACHED event
+        await broadcaster.broadcast(
+            DeepBrowserEvent(
+                task_id=task_id,
+                session_id=session_id,
+                owner=req.owner,
+                browser_mode=browser_mode,
+                browser_id=browser_id,
+                tab_id=tab_id,
+                event_type=EventType.CONTEXT_ATTACHED,
+                status="ATTACHED",
+                summary=f"Attached to current tab: {req.title or req.url or 'Active Tab'}",
+                message=f"Direct tab attachment confirmed ({req.url or 'current tab'})",
+                data={"url": req.url, "title": req.title, "tab_id": tab_id, "window_id": req.window_id},
+            )
+        )
 
         llm = _create_llm(req.model_provider, req.model_name, req.api_key)
 
@@ -304,6 +357,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                 DeepBrowserEvent(
                     task_id=task_id,
                     session_id=session_id,
+                    owner=req.owner,
                     browser_mode=browser_mode,
                     browser_id=browser_id,
                     tab_id=tab_id,
@@ -320,6 +374,24 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                     },
                 )
             )
+
+            # Broadcast THINKING_STATUS if thinking is available
+            if thinking:
+                await broadcaster.broadcast(
+                    DeepBrowserEvent(
+                        task_id=task_id,
+                        session_id=session_id,
+                        owner=req.owner,
+                        browser_mode=browser_mode,
+                        browser_id=browser_id,
+                        tab_id=tab_id,
+                        event_type=EventType.THINKING_STATUS,
+                        status="THINKING",
+                        summary="Analyzing page context...",
+                        message=str(thinking)[:200],
+                        data={"thinking": thinking},
+                    )
+                )
 
             # 2. Check for Cloudflare / Verification Challenge
             lower_title = title.lower() if title else ""
@@ -338,6 +410,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                     DeepBrowserEvent(
                         task_id=task_id,
                         session_id=session_id,
+                        owner=req.owner,
                         browser_mode=browser_mode,
                         browser_id=browser_id,
                         tab_id=tab_id,
@@ -349,7 +422,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                     )
                 )
 
-                # Watchdog polling loop
+                # Watchdog polling loop on the SAME tab
                 start_wait = time.time()
                 while time.time() - start_wait < req.challenge_timeout_seconds:
                     await asyncio.sleep(1.5)
@@ -360,13 +433,14 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                                 DeepBrowserEvent(
                                     task_id=task_id,
                                     session_id=session_id,
+                                    owner=req.owner,
                                     browser_mode=browser_mode,
                                     browser_id=browser_id,
                                     tab_id=tab_id,
                                     event_type=EventType.CHALLENGE_RESOLVED,
                                     status="RESUMED",
-                                    summary="Verification detected. Resuming task...",
-                                    message="Verification detected. Resuming task execution.",
+                                    summary="Verification resolved. Resuming task...",
+                                    message="Verification resolved on current tab. Resuming execution.",
                                 )
                             )
                             break
@@ -377,6 +451,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                         DeepBrowserEvent(
                             task_id=task_id,
                             session_id=session_id,
+                            owner=req.owner,
                             browser_mode=browser_mode,
                             browser_id=browser_id,
                             tab_id=tab_id,
@@ -409,11 +484,18 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                         elif act_name == "wait":
                             evt_type = EventType.WAIT
                             target_str = f"{act_params.get('seconds', '')}s" if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "press_key" or act_name == "key_press":
+                            evt_type = EventType.PRESS_KEY
+                            target_str = act_params.get("key", "") if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "switch_tab":
+                            evt_type = EventType.TAB_SWITCH
+                            target_str = str(act_params)
 
                         await broadcaster.broadcast(
                             DeepBrowserEvent(
                                 task_id=task_id,
                                 session_id=session_id,
+                                owner=req.owner,
                                 browser_mode=browser_mode,
                                 browser_id=browser_id,
                                 tab_id=tab_id,
@@ -426,8 +508,25 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                             )
                         )
 
+        # Prepare initial context prompt for current tab
+        if req.url or req.title:
+            effective_task = f"""[CURRENT ACTIVE TAB CONTEXT]
+URL: {req.url or 'about:blank'}
+Title: {req.title or 'Active Tab'}
+Tab ID: {req.tab_id or 'Current'}
+
+User Task: {req.task}
+
+IMPORTANT INSTRUCTIONS:
+- You are operating directly on the user's active Chrome/Edge tab.
+- The target page is ALREADY OPEN at {req.url or 'the current URL'}.
+- Do NOT search for this website or navigate away unless explicitly requested.
+- Perform the user's task directly on this page."""
+        else:
+            effective_task = req.task
+
         agent = Agent(
-            task=req.task,
+            task=effective_task,
             llm=llm,
             browser_session=session,
             tools=tools,
@@ -441,6 +540,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             DeepBrowserEvent(
                 task_id=task_id,
                 session_id=session_id,
+                owner=req.owner,
                 browser_mode=browser_mode,
                 browser_id=browser_id,
                 tab_id=tab_id,

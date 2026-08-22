@@ -88,14 +88,16 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
         return;
       }
 
-      // 2. List sessions
+      // 2. List sessions (Only return EXTENSION owned sessions)
       if (pathname === '/api/sessions' && req.method === 'GET') {
-        const sessions = sessionManager.listSessions();
+        const sessions = sessionManager.listSessions('EXTENSION');
         const views = sessions.map((s) => ({
           id: s.id,
           name: s.prompt ? s.prompt.slice(0, 40) : 'Session',
-          mode: 'managed',
+          mode: s.browserMode === 'ATTACHED' ? 'attached' : 'managed',
           status: s.status,
+          owner: s.owner ?? 'EXTENSION',
+          tag: s.tag ?? null,
           created_at: s.createdAt,
           target_url: s.lastUrl ?? null,
           title: s.primarySite ?? null,
@@ -107,7 +109,7 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
         return;
       }
 
-      // 3. Create task (dispatch to Desktop SessionManager)
+      // 3. Create task (Strictly EXTENSION owned)
       if (pathname === '/api/tasks' && req.method === 'POST') {
         const raw = await readBody(req);
         const payload = JSON.parse(raw) as {
@@ -115,8 +117,11 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
           prompt?: string;
           engine?: string;
           browser_mode?: 'MANAGED' | 'ATTACHED';
+          browser_type?: string;
           browser_id?: string;
           tab_id?: string | number;
+          url?: string;
+          title?: string;
         };
         const prompt = payload.task ?? payload.prompt ?? '';
         if (!prompt.trim()) {
@@ -126,8 +131,11 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
 
         const sessionId = sessionManager.createSession(prompt, {
           originChannel: 'chrome-extension',
+          owner: 'EXTENSION',
+          origin: 'EXTENSION',
           browserMode: payload.browser_mode ?? 'ATTACHED',
-          browserId: payload.browser_id ?? 'chrome_9222',
+          browserType: payload.browser_type ?? 'edge',
+          browserId: payload.browser_id ?? 'edge_9222',
           tabId: payload.tab_id,
         });
         opts.setActiveSessionId?.(sessionId);
@@ -142,17 +150,45 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
           task_id: sessionId,
           session_id: sessionId,
           browser_mode: payload.browser_mode ?? 'ATTACHED',
-          browser_id: payload.browser_id ?? 'chrome_9222',
+          browser_id: payload.browser_id ?? 'edge_9222',
           tab_id: payload.tab_id ?? null,
-          message: 'Task submitted to Deep-Browser runtime',
+          message: 'Extension task created and executing on active tab',
         });
         return;
       }
 
-      // 4. Attach Chrome / Create Managed Session
+      // 4. Handoff Extension Session to Workspace
+      if ((pathname === '/api/handoff' || pathname.endsWith('/handoff')) && req.method === 'POST') {
+        const raw = await readBody(req);
+        const payload = raw ? JSON.parse(raw) as { session_id?: string; to_owner?: string } : {};
+        const targetId = payload.session_id || pathname.split('/')[3] || opts.getActiveSessionId?.();
+        if (!targetId) {
+          sendJson(res, 400, { error: 'No session_id provided for handoff' });
+          return;
+        }
+        const session = sessionManager.getSession(targetId);
+        if (session) {
+          session.owner = 'WORKSPACE';
+          session.origin = 'EXTENSION';
+          session.tag = 'ext';
+          session.handoffState = 'HANDED_OFF';
+          (sessionManager as any).emitEvent?.('session-created', { ...session });
+          mainLogger.info('companionBridge.handoff.success', { targetId });
+        }
+        sendJson(res, 200, {
+          status: 'success',
+          message: `Session ${targetId} handed off to WORKSPACE`,
+          session: session ? { id: targetId, owner: 'WORKSPACE', tag: 'ext', origin: 'EXTENSION', handoff_state: 'HANDED_OFF' } : null,
+        });
+        return;
+      }
+
+      // 5. Attach Chrome / Create Managed Session
       if (pathname === '/api/sessions/attach' && req.method === 'POST') {
         const sessionId = sessionManager.createSession('Attached Chrome Session', {
           originChannel: 'chrome-extension',
+          owner: 'EXTENSION',
+          origin: 'EXTENSION',
           browserMode: 'ATTACHED',
           browserId: 'chrome_9222',
         });
@@ -171,6 +207,8 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
       if (pathname === '/api/sessions/managed' && req.method === 'POST') {
         const sessionId = sessionManager.createSession('New Browser Session', {
           originChannel: 'chrome-extension',
+          owner: 'EXTENSION',
+          origin: 'EXTENSION',
           browserMode: 'MANAGED',
           browserId: 'bundled_chromium',
         });

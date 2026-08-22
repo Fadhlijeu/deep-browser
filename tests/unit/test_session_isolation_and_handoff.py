@@ -208,3 +208,33 @@ def test_bridge_api_session_filtering_and_handoff_endpoint():
     assert len(sessions_ws_after) == 1
     assert sessions_ws_after[0]["id"] == "ext_bridge_01"
     assert sessions_ws_after[0]["tag"] == "ext"
+
+
+def test_extension_task_creation_with_active_tab_context():
+    """Verify Extension task receives and retains active tab context without Workspace mirroring."""
+    client = TestClient(app)
+
+    res = client.post("/api/tasks", json={
+        "task": "Kerjakan halaman ini",
+        "owner": "EXTENSION",
+        "session_type": "EXTENSION",
+        "browser_mode": "ATTACHED",
+        "browser_type": "edge",
+        "browser_id": "edge_9222",
+        "tab_id": 12345,
+        "window_id": 1,
+        "url": "https://pddikti.kemdikbud.go.id/data_mahasiswa/xyz",
+        "title": "Data Mahasiswa PDDIKTI",
+        "safe_mode": True,
+    })
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "created"
+    assert data["tab_id"] == 12345
+    assert data["browser_mode"] == "ATTACHED"
+
+    # Workspace session list remains 0
+    res_ws = client.get("/api/sessions?owner=WORKSPACE")
+    assert len(res_ws.json().get("sessions", [])) == 0
+
