@@ -1,126 +1,64 @@
-# 25. Workspace & Workstation Strategy: Ecosystem Audit & Architectural Blueprint
+# 25. Workspace Strategy: Browser Use as the Sole Primary Workspace
 
-This document analyzes the official **Browser Use** ecosystem repositories (`browser-use`, `browsercode`, `desktop`, `web-ui`) to establish the authoritative workspace and workstation strategy for **Deep-Browser**, strictly adhering to the directive: **"Modify Browser Use directly; do not build duplicate custom workstations from scratch."**
-
----
-
-## 🔬 Ecosystem Audit
-
-### 1. `browser-use/browser-use` (Core Agent Platform — Python)
-- **What it provides**:
-  - Main Agent reasoning loop (`Agent`, `MessageManager`, `Controller`).
-  - CDP/Playwright browser runtime (`BrowserSession`, `BrowserProfile`, `SessionManager`, `Watchdogs`).
-  - DOM parsing and interactive tree generation (`DomService`, `Serializer`, `MarkdownExtractor`).
-  - Action toolset (`Tools`, `Registry`).
-  - LLM provider abstractions (Gemini, OpenAI, Anthropic, Ollama).
-  - Terminal CLI (`browser-use` command).
-- **What it does NOT provide**:
-  - No graphical multi-agent IDE, dashboard, or browser-native sidepanel.
-
-### 2. `browser-use/browsercode` (In-Browser Coding Agent — TypeScript/OpenCode)
-- **What it provides**:
-  - Browser-as-Execution-Context: treats target browser tabs as living JavaScript/REPL runtimes via CDP.
-  - Script Workspace: capability to record, write, and execute versioned automation scripts in `workspace/scripts/`.
-  - TUI / Terminal IDE interface for developer-centric coding workflows.
-- **Role for Deep-Browser**: Provides the script generation and direct in-page JS execution paradigm (`browser_execute`).
-
-### 3. `browser-use/desktop` & `browser-use/web-ui` (Multi-Agent Workstation)
-- **What it provides**:
-  - Visual workstation dashboard for monitoring teams of local browser agents.
-  - Multi-session status cards (Active, Idle, Blocked, Waiting Confirmation).
-  - Session grid with real-time preview thumbnails.
-- **Role for Deep-Browser**: Provides the architectural UX pattern for visualizing parallel browser sessions.
+This document defines the definitive workspace strategy for **Deep-Browser**: **Browser Use itself is the main workspace, execution platform, and main codebase.** Deep-Browser does NOT build a second parallel workstation IDE or duplicate tools.
 
 ---
 
-## 🎯 Architectural Decisions & Answers to Core Questions
+## 1. Core Principles
 
-### Q1: What workspace/IDE does Browser Use currently provide?
-Browser Use provides a CLI (`browser-use` command) and the foundational `Agent` / `BrowserSession` execution engine, but no built-in graphical IDE.
+1. **Browser Use IS the Main Workspace**:
+   - The primary core codebase is `browser_use/` directly in the repository root.
+   - We do NOT create a separate custom dashboard, task explorer, timeline IDE, or duplicate workspace UI.
 
-### Q2: What does BrowserCode provide?
-BrowserCode provides a browser-native developer REPL and script-oriented workflow (`browser_execute`), allowing agents to run arbitrary JS against active tabs and persist reusable workflow scripts.
+2. **The "Does Browser Use Already Provide This?" Invariant**:
+   - Before adding or implementing ANY capability, evaluate:
+     - **If Browser Use already provides it**: Use Browser Use's native implementation directly (e.g. navigation, clicks, inputs, scrolls, tabs, evaluate/JS execution, DOM extraction).
+     - **If Browser Use provides it but Deep-Browser requires custom UX/telemetry**: Wrap or extend the Browser Use implementation directly in place.
+     - **If Browser Use genuinely does not provide it**: Add it as a lean product-layer addition in `deep_browser/` or `extension/`.
+     - **Never**: Create a third parallel engine or duplicate tool (e.g. do NOT create `browser_execute` because Browser Use already has native CDP `evaluate`/JS tools).
 
-### Q3: What does Browser Use Desktop provide?
-Browser Use Desktop provides a multi-agent visual workspace UI designed to launch, monitor, and coordinate parallel browser sessions.
-
-### Q4: Which one should Deep-Browser use as the main workspace?
-**The Python `browser_use` codebase remains the primary execution core.** Deep-Browser synthesizes:
-1. `browser_use` $\to$ Core agent reasoning, CDP lifecycle, DOM service, tools.
-2. `browsercode` $\to$ Script workspace (`workspace/scripts/`) and in-page script execution.
-3. `desktop` / `web-ui` $\to$ Visual session status and multi-browser coordination concepts.
-
-### Q5: Which codebase should become the base of the user-facing workstation?
-The user-facing workstation in Deep-Browser is **bimodal**:
-1. **In-Browser Co-Pilot**: The **Chrome Extension MV3 SidePanel** ([`extension/`](file:///d:/PROJECT/deep-browser/extension)) connects to the active browser tab (Attached Mode), providing zero-context-switch co-piloting.
-2. **Companion Bridge Server**: The lightweight FastAPI/WebSocket companion ([`deep_browser/bridge/`](file:///d:/PROJECT/deep-browser/deep_browser/bridge)) on `127.0.0.1:8765` connects the Extension and optional WebUI directly to root `browser_use`.
-
-### Q6: Which components should be directly reused?
-- `browser_use.Agent`: Main reasoning engine.
-- `browser_use.BrowserSession` & `BrowserProfile`: Session lifecycle, attached Chrome & managed Chromium.
-- `browser_use.DomService`: Interactive element coordinate mapping.
-- `browser_use.Tools`: Built-in action registry.
-- `browser_use.llm`: LLM provider integration.
-
-### Q7: Which components should be modified/extended?
-- **Event Broadcaster** ([`deep_browser.events`](file:///d:/PROJECT/deep-browser/deep_browser/events)): Extends Browser Use event bus (`bubus`) to stream timeline events (`TASK_CREATED`, `OBSERVATION`, `VERIFICATION`, `COMPLETED`) to the Extension.
-- **Verification Engine** ([`deep_browser.verification`](file:///d:/PROJECT/deep-browser/deep_browser/verification)): Adds deterministic post-action validation around Browser Use actions.
-- **Safe Mode Policy** ([`deep_browser.policies`](file:///d:/PROJECT/deep-browser/deep_browser/policies)): Adds human confirmation gates before destructive actions.
-
-### Q8: Which components should be deleted?
-- Deleted: Duplicate custom engines (`src/deep_browser/`).
-- Deleted: Upstream owner assets (`static/NiceHack69.png`, etc.).
-- Deleted: Upstream cloud-only examples (`examples/cloud/`).
-- **Forbidden**: Do NOT build a third custom workstation framework.
-
-### Q9: How does the Chrome Extension connect to that workspace?
-The Chrome Extension MV3 connects directly via **WebSocket (`ws://127.0.0.1:8765/ws`)** and **REST (`http://127.0.0.1:8765/api`)** to the companion bridge, which dispatches tasks to `browser_use.Agent`.
-
-### Q10: How do parallel browser sessions integrate with it?
-[`MultiBrowserCoordinator`](file:///d:/PROJECT/deep-browser/deep_browser/sessions/coordinator.py) maintains a map of `BrowserSession` instances (each with isolated `BrowserProfile` or attached CDP target). The companion bridge exposes `/api/sessions` to monitor and dispatch tasks across concurrent profiles without state leakage.
+3. **Role of the Browser Use Ecosystem**:
+   - `browser-use/browser-use`: **PRIMARY CORE CODEBASE**.
+   - `browser-use/browsercode`: Reference only for coding agent ideas; do not duplicate tools.
+   - `browser-use/desktop`: Reference only for multi-agent desktop patterns; do not duplicate UI.
+   - `browser-use/web-ui`: Reference only.
 
 ---
 
-## 🏛️ Target Conceptual Architecture
+## 2. Definitive Component Ownership
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    USER CLIENT SURFACES                     │
-│  ┌──────────────────────────────┐  ┌─────────────────────┐  │
-│  │ Chrome Extension SidePanel   │  │ Terminal CLI        │  │
-│  │ & In-Page HUD Overlay        │  │ (deep-browser run)  │  │
-│  └──────────────┬───────────────┘  └──────────┬──────────┘  │
-└─────────────────┼─────────────────────────────┼─────────────┘
-                  │ WebSocket / REST            │ Direct
-                  ▼                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│             DEEP-BROWSER PRODUCT LAYER                      │
-│  ┌───────────────────────┐  ┌────────────────────────────┐  │
-│  │ Bridge Server (:8765) │  │ Event Broadcaster          │  │
-│  ├───────────────────────┤  ├────────────────────────────┤  │
-│  │ Verification Engine   │  │ Safe Mode Confirmation     │  │
-│  ├───────────────────────┤  ├────────────────────────────┤  │
-│  │ Multi-Session Manager │  │ Workspace Storage          │  │
-│  └───────────────────────┴──┴────────────────────────────┘  │
+│             DEEP-BROWSER PRODUCT EXTENSIONS                 │
+│  - Chrome Extension MV3 (SidePanel + HUD Overlay)           │
+│  - Safe Mode & Human Confirmation Gateways (PAUSE/CONFIRM)  │
+│  - Event Stream Bridge (FastAPI + WebSocket :8765)          │
+│  - Deterministic Verification & Evidence Capture Layer      │
+│  - Multi-Session Coordinator & Workspace Disk Persistence   │
+│  - Deep-Browser Branding & Local CLI                        │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ Imports & Wraps
+                               │ Directly Imports & Executes
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│             BROWSER USE CORE (Root browser_use/)            │
-│  ┌───────────────────┐  ┌────────────────────────────────┐  │
-│  │ Agent Loop        │  │ BrowserSession & Profile       │  │
-│  ├───────────────────┤  ├────────────────────────────────┤  │
-│  │ DomService        │  │ Tools Registry & CDP Execution │  │
-│  ├───────────────────┤  ├────────────────────────────────┤  │
-│  │ LLM Abstractions  │  │ Local Watchdogs (CDP/Network)  │  │
-│  └───────────────────┴──┴────────────────────────────────┘  │
+│          BROWSER USE CORE (Root package: browser_use/)      │
+│  - Agent Loop & Message Management                          │
+│  - BrowserSession, BrowserProfile, & SessionManager         │
+│  - DomService & Markdown Extraction                         │
+│  - Tools Registry & Action Handlers (Click, Type, Eval)     │
+│  - Multi-Provider LLM Abstractions (Gemini, OpenAI, Ollama) │
+│  - Local Browser Lifecycle & Watchdogs                      │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ Direct CDP (ws://localhost:9222)
+                               │ Direct Local CDP
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     BROWSER RUNTIME                         │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ Local Chrome (Attached) / Isolated Chromium (Managed)  │  │
-│  └───────────────────────────────────────────────────────┘  │
+│                      LOCAL BROWSER                          │
+│  - Attached Chrome (Port 9222) / Isolated Chromium Profiles │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 3. Workstation Milestone Status
+
+- **Milestone 3 (Custom Workstation Agent IDE Dashboard)**: **HOLD / NOT REQUIRED YET**.
+- Deep-Browser does not need a complex standalone web dashboard when the **Chrome Extension SidePanel** provides zero-context-switch interaction directly within the user's browser.
