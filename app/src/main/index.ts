@@ -1251,17 +1251,17 @@ app.whenReady().then(async () => {
     port: 8765,
     sessionManager,
     startSessionWithAgent,
-  }).catch((err) => {
+  }).catch((err: unknown): null => {
     mainLogger.warn('main.companionBridge.startFailed', { error: (err as Error).message });
     return null;
   });
 
   app.once('before-quit', () => {
-    void localTaskServer.close().catch((err) => {
+    void localTaskServer.close().catch((err: unknown): void => {
       mainLogger.warn('main.localTaskServer.closeFailed', { error: (err as Error).message });
     });
     if (companionBridge) {
-      void companionBridge.close().catch((err: unknown) => {
+      void companionBridge.close().catch((err: unknown): void => {
         mainLogger.warn('main.companionBridge.closeFailed', { error: (err as Error).message });
       });
     }
