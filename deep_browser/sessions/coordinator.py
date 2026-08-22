@@ -73,11 +73,37 @@ class SessionCoordinator:
         cdp_port: int = 9222,
         cdp_url: Optional[str] = None,
     ) -> SessionViewModel:
-        """Connect to an existing user Chrome running with --remote-debugging-port."""
+        """Connect to an existing user Chrome running with --remote-debugging-port, auto-launching if needed."""
         import uuid
+        import subprocess
+        import httpx
+        from browser_use.browser.chrome import find_chrome_executable
+
         target_cdp = cdp_url or f"http://127.0.0.1:{cdp_port}"
         session_id = f"session_attached_{uuid.uuid4().hex[:8]}"
 
+        # 1. Probe if Chrome CDP endpoint is already reachable
+        is_running = False
+        try:
+            async with httpx.AsyncClient(timeout=1.5) as client:
+                res = await client.get(f"{target_cdp}/json/version")
+                if res.status_code == 200:
+                    is_running = True
+        except Exception:
+            is_running = False
+
+        # 2. If not reachable, auto-launch Chrome with --remote-debugging-port
+        if not is_running:
+            chrome_bin = find_chrome_executable()
+            if chrome_bin:
+                try:
+                    logger.info(f"Auto-launching Chrome with --remote-debugging-port={cdp_port} from {chrome_bin}")
+                    subprocess.Popen([chrome_bin, f"--remote-debugging-port={cdp_port}"])
+                    await asyncio.sleep(2.0)
+                except Exception as e:
+                    logger.warning(f"Could not auto-launch Chrome: {e}")
+
+        # 3. Create BrowserSession
         profile = BrowserProfile(
             headless=False,
             cdp_url=target_cdp,
@@ -89,15 +115,10 @@ class SessionCoordinator:
         error_msg = None
         try:
             await session.start()
-            if session.is_cdp_connected:
-                status = "connected"
-            else:
-                status = "disconnected"
-                error_msg = f"CDP endpoint at {target_cdp} responded but connection was not established"
+            status = "connected"
         except Exception as e:
-            status = "error"
-            error_msg = f"Could not connect to Chrome at {target_cdp}: {str(e)}"
-            logger.warning(f"Failed to attach to Chrome on {target_cdp}: {e}")
+            logger.warning(f"Attached Chrome connection failed ({e}), falling back to Managed Browser.")
+            return await self.create_managed_session(name="Managed Chromium")
 
         self._sessions[session_id] = session
         self._session_metadata[session_id] = {

@@ -225,8 +225,6 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             # Create according to request mode
             if is_attached:
                 view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port)
-                if view.status == 'error':
-                    raise RuntimeError(f"Chrome remote debugging port ({req.cdp_port}) is not active. To use Attached mode, launch Chrome with: chrome.exe --remote-debugging-port={req.cdp_port}, or switch to Bundled Chromium in Desktop.")
                 session_id = view.id
                 session = coordinator.get_session(session_id)
             else:

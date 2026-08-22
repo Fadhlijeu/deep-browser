@@ -49,7 +49,7 @@ class FindElementsAction(BaseModel):
 class SearchAction(BaseModel):
 	query: str
 	engine: str = Field(
-		default='duckduckgo', description='duckduckgo, google, bing (use duckduckgo by default because less captchas)'
+		default='google', description='google, duckduckgo, bing (use google by default for best results)'
 	)
 
 
