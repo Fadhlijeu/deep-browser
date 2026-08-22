@@ -342,20 +342,22 @@ export function HubApp(): React.ReactElement {
     }
   }, [focusIndex, sessions, gridColumns, gridPage]);
 
-  const handleCreateSession = useCallback(async (input: string | { prompt: string; attachments?: Array<{ name: string; mime: string; bytes: Uint8Array }>; engine?: string; browserMode?: 'MANAGED' | 'ATTACHED' }) => {
+  const handleCreateSession = useCallback(async (input: string | { prompt: string; attachments?: Array<{ name: string; mime: string; bytes: Uint8Array }>; engine?: string; browserMode?: 'MANAGED' | 'ATTACHED'; browserType?: string }) => {
     const prompt = typeof input === 'string' ? input : input.prompt;
     const attachments = typeof input === 'string' ? [] : (input.attachments ?? []);
     const engine = typeof input === 'string' ? undefined : input.engine;
     const browserMode = typeof input === 'string' ? undefined : input.browserMode;
+    const browserType = typeof input === 'string' ? undefined : input.browserType;
     if (isMock) {
       const id = `session-${++sessionCounter}`;
       const now = Date.now();
       const newSession: AgentSession = {
         id, prompt, status: 'running', createdAt: now,
         browserMode: browserMode ?? 'MANAGED',
+        browserType: browserType as any,
         output: [{ type: 'thinking', text: `Analyzing the task: "${prompt}". Let me break this down and determine the best approach.` }],
       };
-      console.log('[HubApp] createSession (mock)', { id, prompt, browserMode });
+      console.log('[HubApp] createSession (mock)', { id, prompt, browserMode, browserType });
       pendingFocusIdRef.current = id;
       enterChat(id);
       setSessions((prev) => [...prev, newSession]);
@@ -383,12 +385,13 @@ export function HubApp(): React.ReactElement {
     if (!api) { console.error('[HubApp] electronAPI not available'); return; }
 
     try {
-      console.log('[HubApp] createSession (live)', { prompt, attachmentCount: attachments.length, browserMode });
+      console.log('[HubApp] createSession (live)', { prompt, attachmentCount: attachments.length, browserMode, browserType });
       const id = await api.sessions.create({
         prompt,
         attachments,
         engine,
         browserMode,
+        browserType,
       });
       console.log('[HubApp] session created', { id });
       pendingFocusIdRef.current = id;

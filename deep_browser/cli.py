@@ -33,8 +33,8 @@ def serve(host: str, port: int):
 @click.argument("task", required=False, default=None)
 @click.option("--provider", default="gemini", help="LLM Provider: gemini, openai, anthropic, ollama")
 @click.option("--model", default=None, help="Model name")
-@click.option("--headless", is_flag=True, default=False, help="Run browser in headless mode")
-@click.option("--attached", is_flag=True, default=False, help="Attach to running Chrome on port 9222")
+@click.option("--attached", is_flag=True, default=False, help="Attach to running browser on port 9222")
+@click.option("--browser", "browser_type", default="bundled", help="Browser selection: bundled, chrome, edge, brave")
 @click.option("--cdp-port", default=None, type=int, help="CDP port to connect to")
 @click.option("--target-id", default=None, help="CDP target ID to drive")
 @click.option("--session", "session_id", default=None, help="Session ID")
@@ -45,6 +45,7 @@ def run(
     model: str | None,
     headless: bool,
     attached: bool,
+    browser_type: str,
     cdp_port: int | None,
     target_id: str | None,
     session_id: str | None,
@@ -63,19 +64,44 @@ def run(
                 console.print("[bold red]Error:[/bold red] No task prompt provided.")
             sys.exit(1)
 
+    is_attached = attached or browser_type.lower() in ("chrome", "edge", "brave")
     resolved_cdp = None
     if cdp_port:
         resolved_cdp = f"http://127.0.0.1:{cdp_port}"
-    elif attached:
+    elif is_attached:
         resolved_cdp = "http://127.0.0.1:9222"
 
     async def _execute():
         from browser_use import Agent, BrowserProfile, BrowserSession, Tools
         from deep_browser.bridge.server import _create_llm
+        from browser_use.browser.chrome import find_browser_executable
+        import subprocess
+        import httpx
 
         if ndjson:
-            sys.stdout.write(json.dumps({"type": "thinking", "text": f"Initializing Deep-Browser agent with {provider}..."}) + "\n")
+            sys.stdout.write(json.dumps({"type": "thinking", "text": f"Initializing Deep-Browser agent with {provider} ({browser_type})..."}) + "\n")
             sys.stdout.flush()
+
+        # If attached mode selected (e.g. Edge or Chrome) and not yet listening, auto-launch
+        if is_attached and resolved_cdp:
+            port = cdp_port or 9222
+            is_running = False
+            try:
+                async with httpx.AsyncClient(timeout=1.5) as client:
+                    res = await client.get(f"{resolved_cdp}/json/version")
+                    if res.status_code == 200:
+                        is_running = True
+            except Exception:
+                is_running = False
+
+            if not is_running:
+                b_bin = find_browser_executable(browser_type if browser_type != "bundled" else "chrome")
+                if b_bin:
+                    try:
+                        subprocess.Popen([b_bin, f"--remote-debugging-port={port}"])
+                        await asyncio.sleep(2.0)
+                    except Exception:
+                        pass
 
         profile = BrowserProfile(
             headless=headless,

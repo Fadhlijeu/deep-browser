@@ -37,8 +37,72 @@ def _chrome_user_data_dir_for_executable(executable_path: str | None) -> Path | 
 
 def find_chrome_executable() -> str | None:
 	"""Find Chrome/Chromium executable on the system."""
+	return find_browser_executable("chrome")
+
+
+def find_edge_executable() -> str | None:
+	"""Find Microsoft Edge executable on the system."""
+	return find_browser_executable("edge")
+
+
+def find_brave_executable() -> str | None:
+	"""Find Brave Browser executable on the system."""
+	return find_browser_executable("brave")
+
+
+def find_browser_executable(browser_type: str = "chrome") -> str | None:
+	"""Find specific browser executable on the system (chrome, edge, brave, chromium)."""
+	b_type = (browser_type or "chrome").lower()
 	system = platform.system()
 
+	if b_type in ("edge", "msedge"):
+		if system == 'Darwin':
+			for path in (
+				'/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+				'/Applications/Microsoft Edge Canary.app/Contents/MacOS/Microsoft Edge Canary',
+			):
+				if os.path.exists(path):
+					return path
+		elif system == 'Linux':
+			for cmd in ('microsoft-edge', 'microsoft-edge-stable', 'microsoft-edge-dev'):
+				try:
+					result = subprocess.run(['which', cmd], capture_output=True, text=True)
+					if result.returncode == 0:
+						return result.stdout.strip()
+				except Exception:
+					pass
+		elif system == 'Windows':
+			for path in (
+				os.path.expandvars(r'%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe'),
+				os.path.expandvars(r'%ProgramFiles%\Microsoft\Edge\Application\msedge.exe'),
+				os.path.expandvars(r'%LocalAppData%\Microsoft\Edge\Application\msedge.exe'),
+			):
+				if os.path.exists(path):
+					return path
+
+	elif b_type in ("brave", "brave-browser"):
+		if system == 'Darwin':
+			for path in ('/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',):
+				if os.path.exists(path):
+					return path
+		elif system == 'Linux':
+			for cmd in ('brave-browser', 'brave'):
+				try:
+					result = subprocess.run(['which', cmd], capture_output=True, text=True)
+					if result.returncode == 0:
+						return result.stdout.strip()
+				except Exception:
+					pass
+		elif system == 'Windows':
+			for path in (
+				os.path.expandvars(r'%ProgramFiles%\BraveSoftware\Brave-Browser\Application\brave.exe'),
+				os.path.expandvars(r'%ProgramFiles(x86)%\BraveSoftware\Brave-Browser\Application\brave.exe'),
+				os.path.expandvars(r'%LocalAppData%\BraveSoftware\Brave-Browser\Application\brave.exe'),
+			):
+				if os.path.exists(path):
+					return path
+
+	# Default: Chrome / Chromium
 	if system == 'Darwin':
 		for path in (
 			'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',

@@ -43,6 +43,7 @@ export interface AgentSession {
   cachedInputTokens?: number;
   costSource?: 'exact' | 'estimated';
   browserMode?: 'MANAGED' | 'ATTACHED';
+  browserType?: 'bundled' | 'edge' | 'chrome' | 'brave';
   browserId?: string;
   tabId?: string | number;
 }

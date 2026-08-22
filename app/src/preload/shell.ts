@@ -230,7 +230,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   sessions: {
     create: (
-      promptOrPayload: string | { prompt: string; attachments?: Array<{ name: string; mime: string; bytes: Uint8Array }>; engine?: string; browserMode?: 'MANAGED' | 'ATTACHED' },
+      promptOrPayload: string | { prompt: string; attachments?: Array<{ name: string; mime: string; bytes: Uint8Array }>; engine?: string; browserMode?: 'MANAGED' | 'ATTACHED'; browserType?: string },
     ): Promise<string> => ipcRenderer.invoke('sessions:create', promptOrPayload),
     start: (id: string): Promise<void> => ipcRenderer.invoke('sessions:start', id),
     cancel: (id: string): Promise<void> => ipcRenderer.invoke('sessions:cancel', id),

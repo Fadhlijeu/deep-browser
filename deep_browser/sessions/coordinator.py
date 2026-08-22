@@ -69,20 +69,23 @@ class SessionCoordinator:
 
     async def attach_system_chrome(
         self,
-        name: str = "Current Chrome",
+        name: Optional[str] = None,
         cdp_port: int = 9222,
         cdp_url: Optional[str] = None,
+        browser_type: str = "chrome",
     ) -> SessionViewModel:
-        """Connect to an existing user Chrome running with --remote-debugging-port, auto-launching if needed."""
+        """Connect to an existing user browser (Chrome/Edge/Brave) running with --remote-debugging-port, auto-launching if needed."""
         import uuid
         import subprocess
         import httpx
-        from browser_use.browser.chrome import find_chrome_executable
+        from browser_use.browser.chrome import find_browser_executable
 
+        browser_label = "Microsoft Edge" if browser_type in ("edge", "msedge") else "Brave" if browser_type == "brave" else "Google Chrome"
+        session_name = name or f"{browser_label} (Attached)"
         target_cdp = cdp_url or f"http://127.0.0.1:{cdp_port}"
         session_id = f"session_attached_{uuid.uuid4().hex[:8]}"
 
-        # 1. Probe if Chrome CDP endpoint is already reachable
+        # 1. Probe if CDP endpoint is already reachable
         is_running = False
         try:
             async with httpx.AsyncClient(timeout=1.5) as client:
@@ -92,16 +95,16 @@ class SessionCoordinator:
         except Exception:
             is_running = False
 
-        # 2. If not reachable, auto-launch Chrome with --remote-debugging-port
+        # 2. If not reachable, auto-launch browser with --remote-debugging-port
         if not is_running:
-            chrome_bin = find_chrome_executable()
-            if chrome_bin:
+            bin_path = find_browser_executable(browser_type)
+            if bin_path:
                 try:
-                    logger.info(f"Auto-launching Chrome with --remote-debugging-port={cdp_port} from {chrome_bin}")
-                    subprocess.Popen([chrome_bin, f"--remote-debugging-port={cdp_port}"])
+                    logger.info(f"Auto-launching {browser_label} with --remote-debugging-port={cdp_port} from {bin_path}")
+                    subprocess.Popen([bin_path, f"--remote-debugging-port={cdp_port}"])
                     await asyncio.sleep(2.0)
                 except Exception as e:
-                    logger.warning(f"Could not auto-launch Chrome: {e}")
+                    logger.warning(f"Could not auto-launch {browser_label}: {e}")
 
         # 3. Create BrowserSession
         profile = BrowserProfile(
@@ -117,13 +120,14 @@ class SessionCoordinator:
             await session.start()
             status = "connected"
         except Exception as e:
-            logger.warning(f"Attached Chrome connection failed ({e}), falling back to Managed Browser.")
+            logger.warning(f"Attached {browser_label} connection failed ({e}), falling back to Managed Browser.")
             return await self.create_managed_session(name="Managed Chromium")
 
         self._sessions[session_id] = session
         self._session_metadata[session_id] = {
-            "name": name,
+            "name": session_name,
             "mode": "attached",
+            "browser_type": browser_type,
             "status": status,
             "error_message": error_msg,
         }

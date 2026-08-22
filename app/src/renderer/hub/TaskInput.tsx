@@ -37,6 +37,7 @@ export interface TaskInputSubmission {
   attachments: TaskInputAttachment[];
   engine: string;
   browserMode?: 'MANAGED' | 'ATTACHED';
+  browserType?: BrowserTarget;
 }
 
 interface TaskInputProps {
@@ -57,6 +58,16 @@ function loadStoredEngine(): string {
     return DEFAULT_ENGINE;
   }
 }
+export type BrowserTarget = 'bundled' | 'edge' | 'chrome' | 'brave';
+
+const BROWSER_TARGET_INFO: Record<BrowserTarget, { label: string; mode: 'MANAGED' | 'ATTACHED'; tooltip: string }> = {
+  bundled: { label: '🌐 Bundled', mode: 'MANAGED', tooltip: 'Browser: Bundled Chromium (Isolated session)' },
+  edge: { label: '🌊 Edge', mode: 'ATTACHED', tooltip: 'Browser: Microsoft Edge (Attached mode)' },
+  chrome: { label: '⚡ Chrome', mode: 'ATTACHED', tooltip: 'Browser: Google Chrome (Attached mode)' },
+  brave: { label: '🦁 Brave', mode: 'ATTACHED', tooltip: 'Browser: Brave Browser (Attached mode)' },
+};
+
+const BROWSER_TARGET_STORAGE_KEY = 'deep_browser:last_browser_target';
 
 export interface TaskInputHandle {
   addFiles: (files: FileList | File[]) => Promise<void>;
@@ -92,12 +103,14 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [engine, setEngine] = useState<string>(() => loadStoredEngine());
-  const [browserMode, setBrowserMode] = useState<'MANAGED' | 'ATTACHED'>(() => {
+  const [browserTarget, setBrowserTarget] = useState<BrowserTarget>(() => {
     try {
-      const v = localStorage.getItem(BROWSER_MODE_STORAGE_KEY);
-      return v === 'ATTACHED' ? 'ATTACHED' : 'MANAGED';
+      const v = localStorage.getItem(BROWSER_TARGET_STORAGE_KEY) as BrowserTarget;
+      if (v && BROWSER_TARGET_INFO[v]) return v;
+      const oldMode = localStorage.getItem(BROWSER_MODE_STORAGE_KEY);
+      return oldMode === 'ATTACHED' ? 'edge' : 'bundled';
     } catch {
-      return 'MANAGED';
+      return 'bundled';
     }
   });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -191,23 +204,32 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
   const submit = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed && attachments.length === 0) return;
-    console.log('[TaskInput] submit', { promptLength: trimmed.length, attachmentCount: attachments.length, browserMode });
-    onSubmit({ prompt: trimmed, attachments, engine: lockedEngine ?? engine, browserMode });
+    const targetInfo = BROWSER_TARGET_INFO[browserTarget] ?? BROWSER_TARGET_INFO.bundled;
+    console.log('[TaskInput] submit', { promptLength: trimmed.length, attachmentCount: attachments.length, browserTarget, browserMode: targetInfo.mode });
+    onSubmit({
+      prompt: trimmed,
+      attachments,
+      engine: lockedEngine ?? engine,
+      browserMode: targetInfo.mode,
+      browserType: browserTarget,
+    });
     setValue('');
     setAttachments([]);
     setErrorMsg(null);
     textareaRef.current?.focus();
-  }, [value, attachments, engine, lockedEngine, browserMode, onSubmit]);
+  }, [value, attachments, engine, lockedEngine, browserTarget, onSubmit]);
 
   const onEngineChange = useCallback((id: string) => {
     setEngine(id);
     try { localStorage.setItem(ENGINE_STORAGE_KEY, id); } catch { /* ignore */ }
   }, []);
 
-  const toggleBrowserMode = useCallback(() => {
-    setBrowserMode((prev) => {
-      const next = prev === 'MANAGED' ? 'ATTACHED' : 'MANAGED';
-      try { localStorage.setItem(BROWSER_MODE_STORAGE_KEY, next); } catch { /* ignore */ }
+  const cycleBrowserTarget = useCallback(() => {
+    const targets: BrowserTarget[] = ['bundled', 'edge', 'chrome', 'brave'];
+    setBrowserTarget((prev) => {
+      const idx = targets.indexOf(prev);
+      const next = targets[(idx + 1) % targets.length];
+      try { localStorage.setItem(BROWSER_TARGET_STORAGE_KEY, next); } catch { /* ignore */ }
       return next;
     });
   }, []);
@@ -268,6 +290,8 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
     }
   }, []);
 
+  const currentBrowserInfo = BROWSER_TARGET_INFO[browserTarget] ?? BROWSER_TARGET_INFO.bundled;
+
   return (
     <div className="task-input">
       <div
@@ -323,8 +347,8 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
           <button
             type="button"
             className="browser-mode-picker-btn has-tooltip"
-            onClick={toggleBrowserMode}
-            data-tooltip={browserMode === 'MANAGED' ? 'Browser: Bundled Chromium (Click to toggle Existing Chrome)' : 'Browser: Existing Chrome (Port 9222)'}
+            onClick={cycleBrowserTarget}
+            data-tooltip={`${currentBrowserInfo.tooltip} (Click to switch Browser)`}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -334,12 +358,12 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
               fontSize: '11px',
               fontWeight: 500,
               cursor: 'pointer',
-              background: browserMode === 'ATTACHED' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              border: browserMode === 'ATTACHED' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
-              color: browserMode === 'ATTACHED' ? '#60a5fa' : 'inherit',
+              background: currentBrowserInfo.mode === 'ATTACHED' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+              border: currentBrowserInfo.mode === 'ATTACHED' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+              color: currentBrowserInfo.mode === 'ATTACHED' ? '#60a5fa' : 'inherit',
             }}
           >
-            <span>{browserMode === 'MANAGED' ? '🌐 Bundled' : '⚡ Chrome 9222'}</span>
+            <span>{currentBrowserInfo.label}</span>
           </button>
           <input
             ref={fileInputRef}

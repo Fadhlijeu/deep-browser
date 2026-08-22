@@ -52,7 +52,8 @@ active_tasks: Dict[str, Dict[str, Any]] = {}
 class CreateTaskRequest(BaseModel):
     task: str
     session_id: Optional[str] = None
-    browser_mode: str = Field(default="ATTACHED", description="ATTACHED (user's current Chrome) or MANAGED")
+    browser_mode: str = Field(default="ATTACHED", description="ATTACHED (user's current Chrome/Edge) or MANAGED")
+    browser_type: str = Field(default="chrome", description="chrome, edge, brave, or bundled")
     browser_id: Optional[str] = "chrome_9222"
     tab_id: Optional[Union[str, int]] = None
     model_provider: str = Field(default="gemini", description="gemini, openai, anthropic, or ollama")
@@ -224,7 +225,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
         if not session:
             # Create according to request mode
             if is_attached:
-                view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port)
+                view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, browser_type=req.browser_type)
                 session_id = view.id
                 session = coordinator.get_session(session_id)
             else:

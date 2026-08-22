@@ -153,21 +153,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderSessionSelect(sessions, activeId) {
+        const savedVal = sessionSelect.value || 'attached_edge';
         sessionSelect.innerHTML = '';
         
-        // Always present Current Chrome Attached as first-class option
-        const currentOpt = document.createElement('option');
-        currentOpt.value = 'attached_current';
-        currentOpt.textContent = '⚡ Current Chrome (Attached)';
-        currentOpt.selected = true;
-        sessionSelect.appendChild(currentOpt);
+        const defaultOptions = [
+            { value: 'attached_edge', label: '🌊 Edge (Attached)' },
+            { value: 'attached_chrome', label: '⚡ Chrome (Attached)' },
+            { value: 'attached_brave', label: '🦁 Brave (Attached)' },
+            { value: 'managed_bundled', label: '🌐 Bundled Chromium' },
+        ];
+
+        defaultOptions.forEach((opt) => {
+            const el = document.createElement('option');
+            el.value = opt.value;
+            el.textContent = opt.label;
+            if (opt.value === savedVal) el.selected = true;
+            sessionSelect.appendChild(el);
+        });
 
         sessions.forEach((s) => {
-            if (s.id === 'attached_current') return;
+            if (defaultOptions.some(d => d.value === s.id)) return;
             const opt = document.createElement('option');
             opt.value = s.id;
             const mode = s.mode === 'attached' ? '[Attached]' : '[Managed]';
             opt.textContent = `${s.name || s.id} ${mode}`;
+            if (s.id === savedVal) opt.selected = true;
             sessionSelect.appendChild(opt);
         });
     }
@@ -409,7 +419,27 @@ document.addEventListener('DOMContentLoaded', () => {
         setAgentState('RUNNING');
         challengeBanner.classList.add('hidden');
 
-        const selectedSid = sessionSelect.value === 'attached_current' ? undefined : sessionSelect.value;
+        const selVal = sessionSelect.value || 'attached_edge';
+        let bMode = 'ATTACHED';
+        let bType = 'edge';
+        let selectedSid = undefined;
+
+        if (selVal === 'attached_edge') {
+            bMode = 'ATTACHED';
+            bType = 'edge';
+        } else if (selVal === 'attached_chrome') {
+            bMode = 'ATTACHED';
+            bType = 'chrome';
+        } else if (selVal === 'attached_brave') {
+            bMode = 'ATTACHED';
+            bType = 'brave';
+        } else if (selVal === 'managed_bundled') {
+            bMode = 'MANAGED';
+            bType = 'bundled';
+        } else {
+            selectedSid = selVal;
+        }
+
         const selectedModel = modelSelect.value;
 
         try {
@@ -419,8 +449,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     task: goal,
                     session_id: selectedSid,
-                    browser_mode: 'ATTACHED',
-                    browser_id: 'chrome_9222',
+                    browser_mode: bMode,
+                    browser_type: bType,
+                    browser_id: `${bType}_9222`,
                     tab_id: currentTab ? currentTab.id : undefined,
                     model_provider: 'gemini',
                     model_name: selectedModel,

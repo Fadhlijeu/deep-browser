@@ -1323,6 +1323,7 @@ app.whenReady().then(async () => {
     let attachmentsRaw: unknown;
     let engineRaw: unknown;
     let browserModeRaw: unknown;
+    let browserTypeRaw: unknown;
     if (typeof payload === 'string') {
       promptRaw = payload;
     } else if (payload && typeof payload === 'object') {
@@ -1330,25 +1331,28 @@ app.whenReady().then(async () => {
       attachmentsRaw = (payload as { attachments?: unknown }).attachments;
       engineRaw = (payload as { engine?: unknown }).engine;
       browserModeRaw = (payload as { browserMode?: unknown }).browserMode;
+      browserTypeRaw = (payload as { browserType?: unknown }).browserType;
     } else {
-      throw new Error('sessions:create payload must be a string or { prompt, attachments?, engine?, browserMode? }');
+      throw new Error('sessions:create payload must be a string or { prompt, attachments?, engine?, browserMode?, browserType? }');
     }
     const validatedPrompt = assertString(promptRaw, 'prompt', 10000);
     const attachments = assertAttachments(attachmentsRaw);
     const engineId = engineRaw == null ? DEFAULT_ENGINE_ID : assertString(engineRaw, 'engine', 50);
     const browserMode: 'MANAGED' | 'ATTACHED' = browserModeRaw === 'ATTACHED' ? 'ATTACHED' : 'MANAGED';
+    const browserType: string = typeof browserTypeRaw === 'string' ? browserTypeRaw : (browserMode === 'ATTACHED' ? 'edge' : 'bundled');
     mainLogger.info('main.sessions:create', {
       promptLength: validatedPrompt.length,
       attachmentCount: attachments.length,
       engineId,
       browserMode,
+      browserType,
       attachmentMeta: attachments.map((a) => ({ name: a.name, mime: a.mime, size: a.bytes.byteLength })),
     });
     const initialAttachmentTurnIndex = attachments.length > 0 ? 0 : undefined;
     const id = sessionManager.createSession(validatedPrompt, {
       attachmentTurnIndex: initialAttachmentTurnIndex,
       browserMode,
-      browserId: browserMode === 'ATTACHED' ? 'chrome_9222' : 'bundled_chromium',
+      browserId: browserMode === 'ATTACHED' ? `${browserType}_9222` : 'bundled_chromium',
     });
     sessionManager.setSessionEngine(id, engineId);
     if (attachments.length > 0) {
