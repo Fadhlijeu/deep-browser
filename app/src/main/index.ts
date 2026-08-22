@@ -122,6 +122,7 @@ import { registerChromeImportHandlers } from './chrome-import/ipc';
 import { mainLogger } from './logger';
 import { registerRendererLogIpc } from './rendererLogIpc';
 import { createLocalTaskServer } from './localTaskServer';
+import { startCompanionBridge } from './companionBridge';
 import {
   resolveUserDataDir,
   resolveCdpPort,
@@ -1246,10 +1247,24 @@ app.whenReady().then(async () => {
       }
     },
   });
+  const companionBridge = await startCompanionBridge({
+    port: 8765,
+    sessionManager,
+    startSessionWithAgent,
+  }).catch((err) => {
+    mainLogger.warn('main.companionBridge.startFailed', { error: (err as Error).message });
+    return null;
+  });
+
   app.once('before-quit', () => {
     void localTaskServer.close().catch((err) => {
       mainLogger.warn('main.localTaskServer.closeFailed', { error: (err as Error).message });
     });
+    if (companionBridge) {
+      void companionBridge.close().catch((err: unknown) => {
+        mainLogger.warn('main.companionBridge.closeFailed', { error: (err as Error).message });
+      });
+    }
   });
 
   // Chat-side browser preview via CDP screencast. Renderer starts/stops per

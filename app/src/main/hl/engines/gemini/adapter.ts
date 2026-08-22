@@ -46,8 +46,15 @@ const geminiAdapter: EngineAdapter = {
 
   buildSpawnArgs(ctx: SpawnContext): string[] {
     const model = ctx.model || DEFAULT_GEMINI_MODEL;
-    const args = ['-m', 'deep_browser.cli', 'run', '--model', model, '--provider', 'gemini'];
-    if (ctx.resumeSessionId) args.push('--session', ctx.resumeSessionId);
+    const args = [
+      '-m', 'deep_browser.cli', 'run',
+      '--provider', 'gemini',
+      '--cdp-port', String(ctx.cdpPort),
+      '--target-id', ctx.targetId,
+      '--ndjson',
+    ];
+    if (model) args.push('--model', model);
+    if (ctx.sessionId) args.push('--session', ctx.sessionId);
     return args;
   },
 
