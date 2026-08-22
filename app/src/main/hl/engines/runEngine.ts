@@ -89,14 +89,16 @@ export async function runEngine(opts: RunEngineOptions): Promise<void> {
   }
 
   // 1. Resolve CDP target for the session's browser view.
-  let targetId: string;
-  try {
-    targetId = await resolveTargetIdForWebContents(opts.webContents);
-  } catch (err) {
-    const msg = `Failed to resolve CDP target id: ${(err as Error).message}`;
-    engineLogger.error('engines.run.resolveTarget.failed', { engineId: opts.engineId, error: msg });
-    opts.onEvent({ type: 'error', message: msg });
-    return;
+  let targetId = opts.targetId ?? 'default';
+  if (opts.webContents) {
+    try {
+      targetId = await resolveTargetIdForWebContents(opts.webContents);
+    } catch (err) {
+      const msg = `Failed to resolve CDP target id: ${(err as Error).message}`;
+      engineLogger.error('engines.run.resolveTarget.failed', { engineId: opts.engineId, error: msg });
+      opts.onEvent({ type: 'error', message: msg });
+      return;
+    }
   }
 
   // 2. Prepare uploads/ + outputs/ dirs, write attachments to disk.

@@ -131,7 +131,8 @@ export interface RunEngineOptions {
   engineId: string;
   prompt: string;
   sessionId: string;
-  webContents: WebContents;
+  webContents?: WebContents;
+  targetId?: string;
   cdpPort: number;
   harnessDir: string;
   attachments?: Array<{ name: string; mime: string; bytes: Buffer | Uint8Array }>;

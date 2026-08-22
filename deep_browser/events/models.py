@@ -41,6 +41,9 @@ class DeepBrowserEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: f"evt_{int(time.time() * 1000)}")
     task_id: str
     session_id: Optional[str] = None
+    browser_mode: str = Field(default="MANAGED")  # "MANAGED" | "ATTACHED"
+    browser_id: Optional[str] = None
+    tab_id: Optional[str] = None
     event_type: EventType
     timestamp: float = Field(default_factory=time.time)
     data: dict[str, Any] = Field(default_factory=dict)

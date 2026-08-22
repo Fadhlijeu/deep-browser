@@ -198,7 +198,14 @@ export class SessionManager extends EventEmitter {
 
   // -- public API -----------------------------------------------------------
 
-  createSession(prompt: string, opts?: { originChannel?: string; originConversationId?: string; attachmentTurnIndex?: number }): string {
+  createSession(prompt: string, opts?: {
+    originChannel?: string;
+    originConversationId?: string;
+    attachmentTurnIndex?: number;
+    browserMode?: 'MANAGED' | 'ATTACHED';
+    browserId?: string;
+    tabId?: string | number;
+  }): string {
     const id = randomUUID();
     const now = Date.now();
     const session: AgentSession = {
@@ -209,11 +216,20 @@ export class SessionManager extends EventEmitter {
       output: [],
       originChannel: opts?.originChannel,
       originConversationId: opts?.originConversationId,
+      browserMode: opts?.browserMode ?? (opts?.originChannel === 'chrome-extension' ? 'ATTACHED' : 'MANAGED'),
+      browserId: opts?.browserId ?? (opts?.browserMode === 'ATTACHED' || opts?.originChannel === 'chrome-extension' ? 'chrome_9222' : 'bundled_chromium'),
+      tabId: opts?.tabId,
     };
     this.sessions.set(id, session);
     this.db.insertSession({ id, prompt, status: 'draft', createdAt: now, originChannel: opts?.originChannel, originConversationId: opts?.originConversationId });
     this.appendUserInputToLog(id, prompt, { emit: false, attachmentTurnIndex: opts?.attachmentTurnIndex });
-    mainLogger.info('SessionManager.createSession', { id, promptLength: prompt.length, originChannel: opts?.originChannel ?? null });
+    mainLogger.info('SessionManager.createSession', {
+      id,
+      promptLength: prompt.length,
+      originChannel: opts?.originChannel ?? null,
+      browserMode: session.browserMode,
+      browserId: session.browserId,
+    });
     this.emitEvent('session-created', { ...session });
     return id;
   }

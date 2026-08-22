@@ -1153,27 +1153,36 @@ app.whenReady().then(async () => {
       const abortController = sessionManager.startSession(id);
       mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'startSession', ms: Date.now() - t0 });
 
-      view = browserPool.create(id, t0);
-      await browserPool.markSessionActive(id);
-      mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'poolCreate', ms: Date.now() - t0 });
-      if (!view) {
-        sessionManager.failSession(id, `Browser pool full (max ${browserPool.activeCount}), session queued`);
-        mainLogger.warn('main.startSessionWithAgent.poolFull', { id, stats: browserPool.getStats() });
-        return;
-      }
+      const session = sessionManager.getSession(id);
+      const isAttached = session?.browserMode === 'ATTACHED';
+      let cdpPort = resolvedCdp.port;
 
-      if (shellWindow && !shellWindow.isDestroyed()) {
-        // Detach existing views — only one session is visible at a time.
-        // We DON'T attach here: main doesn't know the exact pane rect.
-        // The renderer (AgentPane) is authoritative for bounds and will call
-        // sessions:view-attach with the exact .pane__output getBoundingClientRect.
-        browserPool.detachAll(shellWindow);
-        mainLogger.info('main.startSessionWithAgent.detachedAwaitingRenderer', { id });
-      }
-      mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'attach', ms: Date.now() - t0 });
+      if (isAttached) {
+        cdpPort = 9222;
+        mainLogger.info('main.startSessionWithAgent.attachedMode', { id, cdpPort });
+      } else {
+        view = browserPool.create(id, t0);
+        await browserPool.markSessionActive(id);
+        mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'poolCreate', ms: Date.now() - t0 });
+        if (!view) {
+          sessionManager.failSession(id, `Browser pool full (max ${browserPool.activeCount}), session queued`);
+          mainLogger.warn('main.startSessionWithAgent.poolFull', { id, stats: browserPool.getStats() });
+          return;
+        }
 
-      await view.webContents.loadURL('about:blank');
-      mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'loadBlank', ms: Date.now() - t0 });
+        if (shellWindow && !shellWindow.isDestroyed()) {
+          // Detach existing views — only one session is visible at a time.
+          // We DON'T attach here: main doesn't know the exact pane rect.
+          // The renderer (AgentPane) is authoritative for bounds and will call
+          // sessions:view-attach with the exact .pane__output getBoundingClientRect.
+          browserPool.detachAll(shellWindow);
+          mainLogger.info('main.startSessionWithAgent.detachedAwaitingRenderer', { id });
+        }
+        mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'attach', ms: Date.now() - t0 });
+
+        await view.webContents.loadURL('about:blank');
+        mainLogger.info('main.startSessionWithAgent.timing', { id, step: 'loadBlank', ms: Date.now() - t0 });
+      }
 
       const attachmentsForRun = sessionManager.loadAttachmentsForRun(id);
       if (attachmentsForRun.length > 0) {
@@ -1187,8 +1196,8 @@ app.whenReady().then(async () => {
         sessionId: id,
         prompt: sessionManager.getInitialPrompt(id) ?? sessionManager.getSession(id)!.prompt,
         attachments: attachmentsForRun.map((a) => ({ name: a.name, mime: a.mime, bytes: a.bytes })),
-        webContents: view.webContents,
-        cdpPort: resolvedCdp.port,
+        webContents: view?.webContents,
+        cdpPort,
         signal: abortController.signal,
         onRunControl: bindRunControl(id, runId),
         onSessionId: (sid) => sessionManager.setEngineSessionId(id, sid),
@@ -1310,26 +1319,34 @@ app.whenReady().then(async () => {
     let promptRaw: unknown;
     let attachmentsRaw: unknown;
     let engineRaw: unknown;
+    let browserModeRaw: unknown;
     if (typeof payload === 'string') {
       promptRaw = payload;
     } else if (payload && typeof payload === 'object') {
       promptRaw = (payload as { prompt?: unknown }).prompt;
       attachmentsRaw = (payload as { attachments?: unknown }).attachments;
       engineRaw = (payload as { engine?: unknown }).engine;
+      browserModeRaw = (payload as { browserMode?: unknown }).browserMode;
     } else {
-      throw new Error('sessions:create payload must be a string or { prompt, attachments?, engine? }');
+      throw new Error('sessions:create payload must be a string or { prompt, attachments?, engine?, browserMode? }');
     }
     const validatedPrompt = assertString(promptRaw, 'prompt', 10000);
     const attachments = assertAttachments(attachmentsRaw);
     const engineId = engineRaw == null ? DEFAULT_ENGINE_ID : assertString(engineRaw, 'engine', 50);
+    const browserMode: 'MANAGED' | 'ATTACHED' = browserModeRaw === 'ATTACHED' ? 'ATTACHED' : 'MANAGED';
     mainLogger.info('main.sessions:create', {
       promptLength: validatedPrompt.length,
       attachmentCount: attachments.length,
       engineId,
+      browserMode,
       attachmentMeta: attachments.map((a) => ({ name: a.name, mime: a.mime, size: a.bytes.byteLength })),
     });
     const initialAttachmentTurnIndex = attachments.length > 0 ? 0 : undefined;
-    const id = sessionManager.createSession(validatedPrompt, { attachmentTurnIndex: initialAttachmentTurnIndex });
+    const id = sessionManager.createSession(validatedPrompt, {
+      attachmentTurnIndex: initialAttachmentTurnIndex,
+      browserMode,
+      browserId: browserMode === 'ATTACHED' ? 'chrome_9222' : 'bundled_chromium',
+    });
     sessionManager.setSessionEngine(id, engineId);
     if (attachments.length > 0) {
       const turnIndex = initialAttachmentTurnIndex ?? sessionManager.getNextAttachmentTurnIndex(id);

@@ -110,14 +110,26 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
       // 3. Create task (dispatch to Desktop SessionManager)
       if (pathname === '/api/tasks' && req.method === 'POST') {
         const raw = await readBody(req);
-        const payload = JSON.parse(raw) as { task?: string; prompt?: string; engine?: string };
+        const payload = JSON.parse(raw) as {
+          task?: string;
+          prompt?: string;
+          engine?: string;
+          browser_mode?: 'MANAGED' | 'ATTACHED';
+          browser_id?: string;
+          tab_id?: string | number;
+        };
         const prompt = payload.task ?? payload.prompt ?? '';
         if (!prompt.trim()) {
           sendJson(res, 400, { error: 'Task prompt cannot be empty' });
           return;
         }
 
-        const sessionId = sessionManager.createSession(prompt, { originChannel: 'chrome-extension' });
+        const sessionId = sessionManager.createSession(prompt, {
+          originChannel: 'chrome-extension',
+          browserMode: payload.browser_mode ?? 'ATTACHED',
+          browserId: payload.browser_id ?? 'chrome_9222',
+          tabId: payload.tab_id,
+        });
         opts.setActiveSessionId?.(sessionId);
 
         // Start execution asynchronously
@@ -129,6 +141,9 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
           status: 'created',
           task_id: sessionId,
           session_id: sessionId,
+          browser_mode: payload.browser_mode ?? 'ATTACHED',
+          browser_id: payload.browser_id ?? 'chrome_9222',
+          tab_id: payload.tab_id ?? null,
           message: 'Task submitted to Deep-Browser runtime',
         });
         return;
@@ -136,24 +151,36 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
 
       // 4. Attach Chrome / Create Managed Session
       if (pathname === '/api/sessions/attach' && req.method === 'POST') {
-        const sessionId = sessionManager.createSession('Attached Chrome Session', { originChannel: 'chrome-extension' });
+        const sessionId = sessionManager.createSession('Attached Chrome Session', {
+          originChannel: 'chrome-extension',
+          browserMode: 'ATTACHED',
+          browserId: 'chrome_9222',
+        });
         opts.setActiveSessionId?.(sessionId);
         sendJson(res, 200, {
           id: sessionId,
           name: 'Current Chrome',
-          mode: 'attached',
+          mode: 'ATTACHED',
+          browser_mode: 'ATTACHED',
+          browser_id: 'chrome_9222',
           status: 'idle',
         });
         return;
       }
 
       if (pathname === '/api/sessions/managed' && req.method === 'POST') {
-        const sessionId = sessionManager.createSession('New Browser Session', { originChannel: 'chrome-extension' });
+        const sessionId = sessionManager.createSession('New Browser Session', {
+          originChannel: 'chrome-extension',
+          browserMode: 'MANAGED',
+          browserId: 'bundled_chromium',
+        });
         opts.setActiveSessionId?.(sessionId);
         sendJson(res, 200, {
           id: sessionId,
           name: 'Managed Session',
-          mode: 'managed',
+          mode: 'MANAGED',
+          browser_mode: 'MANAGED',
+          browser_id: 'bundled_chromium',
           status: 'idle',
         });
         return;
@@ -176,7 +203,10 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
           session_id: activeId ?? null,
           url: session?.lastUrl ?? null,
           title: session?.primarySite ?? 'Deep-Browser Workspace',
-          is_attached: true,
+          browser_mode: session?.browserMode ?? 'ATTACHED',
+          browser_id: session?.browserId ?? 'chrome_9222',
+          tab_id: session?.tabId ?? null,
+          is_attached: session?.browserMode === 'ATTACHED',
         });
         return;
       }
@@ -240,11 +270,15 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
 
     // Send initial status event
     const activeId = opts.getActiveSessionId?.() ?? sessionManager.listSessions()[0]?.id ?? 'default';
+    const activeSession = sessionManager.getSession(activeId);
     ws.send(
       JSON.stringify({
         event_id: `evt_${Date.now()}`,
         task_id: activeId,
         session_id: activeId,
+        browser_mode: activeSession?.browserMode ?? 'ATTACHED',
+        browser_id: activeSession?.browserId ?? 'chrome_9222',
+        tab_id: activeSession?.tabId ?? null,
         event_type: 'SESSION_ATTACHED',
         timestamp: Date.now() / 1000,
         message: 'Connected to Deep-Browser Runtime',
@@ -268,6 +302,9 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
       event_id: `evt_${Date.now()}`,
       task_id: session.id,
       session_id: session.id,
+      browser_mode: session.browserMode ?? 'MANAGED',
+      browser_id: session.browserId ?? 'bundled_chromium',
+      tab_id: session.tabId ?? null,
       event_type: 'TASK_CREATED',
       timestamp: Date.now() / 1000,
       message: `Task created: ${session.prompt?.slice(0, 80) ?? 'Session'}`,
@@ -285,6 +322,9 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
       event_id: `evt_${Date.now()}`,
       task_id: session.id,
       session_id: session.id,
+      browser_mode: session.browserMode ?? 'MANAGED',
+      browser_id: session.browserId ?? 'bundled_chromium',
+      tab_id: session.tabId ?? null,
       event_type: evtType,
       timestamp: Date.now() / 1000,
       message: `Session ${session.id.slice(0, 8)} status: ${session.status}`,
@@ -293,6 +333,7 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
   });
 
   sessionManager.on('session-output', (sessionId, event) => {
+    const session = sessionManager.getSession(sessionId);
     let evtType = 'OBSERVATION';
     if (event.type === 'tool_call') evtType = 'ACTION_REQUESTED';
     else if (event.type === 'tool_result') evtType = 'ACTION_EXECUTED';
@@ -302,6 +343,9 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
       event_id: `evt_${Date.now()}`,
       task_id: sessionId,
       session_id: sessionId,
+      browser_mode: session?.browserMode ?? 'MANAGED',
+      browser_id: session?.browserId ?? 'bundled_chromium',
+      tab_id: session?.tabId ?? null,
       event_type: evtType,
       timestamp: Date.now() / 1000,
       message: event.type === 'thinking' ? event.text : `${event.type}`,
@@ -314,6 +358,9 @@ export async function startCompanionBridge(opts: CompanionBridgeOptions): Promis
       event_id: `evt_${Date.now()}`,
       task_id: session.id,
       session_id: session.id,
+      browser_mode: session.browserMode ?? 'MANAGED',
+      browser_id: session.browserId ?? 'bundled_chromium',
+      tab_id: session.tabId ?? null,
       event_type: 'FAILED',
       timestamp: Date.now() / 1000,
       message: session.error ?? 'Session failed',

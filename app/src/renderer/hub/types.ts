@@ -42,6 +42,9 @@ export interface AgentSession {
   outputTokens?: number;
   cachedInputTokens?: number;
   costSource?: 'exact' | 'estimated';
+  browserMode?: 'MANAGED' | 'ATTACHED';
+  browserId?: string;
+  tabId?: string | number;
 }
 
 export interface ToolResult {

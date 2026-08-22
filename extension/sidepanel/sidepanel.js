@@ -382,7 +382,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const goal = goalInput.value.trim();
         if (!goal) return;
 
-        appendFeed(`🚀 Starting: ${goal}`);
+        if (connectionPill.textContent === 'OFFLINE') {
+            appendFeed(`❌ Current browser runtime is unavailable. Ensure Deep-Browser Desktop is running.`, true);
+            setAgentState('FAILED');
+            return;
+        }
+
+        appendFeed(`🚀 Starting in Current Chrome: ${goal}`);
         setAgentState('RUNNING');
 
         const selectedSid = sessionSelect.value || undefined;
@@ -394,11 +400,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     task: goal,
                     session_id: selectedSid,
+                    browser_mode: 'ATTACHED',
+                    browser_id: 'chrome_9222',
+                    tab_id: currentTab ? currentTab.id : undefined,
                     safe_mode: true,
                 })
             });
             const data = await res.json();
             activeTaskId = data.task_id;
+            appendFeed(`⚡ Attached to Current Chrome tab: ${currentTab ? (currentTab.title || currentTab.url) : 'active'}`);
         } catch (e) {
             appendFeed(`❌ Error: ${e.message}`, true);
             setAgentState('FAILED');

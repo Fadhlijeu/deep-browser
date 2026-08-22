@@ -36,23 +36,17 @@ export interface TaskInputSubmission {
   prompt: string;
   attachments: TaskInputAttachment[];
   engine: string;
+  browserMode?: 'MANAGED' | 'ATTACHED';
 }
 
 interface TaskInputProps {
   onSubmit: (input: TaskInputSubmission) => void;
-  /** Optional content rendered inside the input box, above the textarea
-   *  and below the chips row. Used by the chat composer to host the quoted-
-   *  text preview so it visually extends the box rather than floating
-   *  awkwardly above it. */
   topSlot?: React.ReactNode;
-  /** When supplied, the engine picker is hidden and submissions report this
-   *  engine id. Used by the chat composer on existing sessions because the
-   *  backend's resume path is hard-locked to `getSessionEngine(id)` — showing
-   *  a picker would imply you could switch mid-session, which you cannot. */
   lockedEngine?: string;
 }
 
 const ENGINE_STORAGE_KEY = 'hub.selectedEngine';
+const BROWSER_MODE_STORAGE_KEY = 'hub.selectedBrowserMode';
 const DEFAULT_ENGINE = 'gemini';
 
 function loadStoredEngine(): string {
@@ -98,6 +92,14 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [engine, setEngine] = useState<string>(() => loadStoredEngine());
+  const [browserMode, setBrowserMode] = useState<'MANAGED' | 'ATTACHED'>(() => {
+    try {
+      const v = localStorage.getItem(BROWSER_MODE_STORAGE_KEY);
+      return v === 'ATTACHED' ? 'ATTACHED' : 'MANAGED';
+    } catch {
+      return 'MANAGED';
+    }
+  });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -189,17 +191,25 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
   const submit = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed && attachments.length === 0) return;
-    console.log('[TaskInput] submit', { promptLength: trimmed.length, attachmentCount: attachments.length });
-    onSubmit({ prompt: trimmed, attachments, engine: lockedEngine ?? engine });
+    console.log('[TaskInput] submit', { promptLength: trimmed.length, attachmentCount: attachments.length, browserMode });
+    onSubmit({ prompt: trimmed, attachments, engine: lockedEngine ?? engine, browserMode });
     setValue('');
     setAttachments([]);
     setErrorMsg(null);
     textareaRef.current?.focus();
-  }, [value, attachments, engine, lockedEngine, onSubmit]);
+  }, [value, attachments, engine, lockedEngine, browserMode, onSubmit]);
 
   const onEngineChange = useCallback((id: string) => {
     setEngine(id);
     try { localStorage.setItem(ENGINE_STORAGE_KEY, id); } catch { /* ignore */ }
+  }, []);
+
+  const toggleBrowserMode = useCallback(() => {
+    setBrowserMode((prev) => {
+      const next = prev === 'MANAGED' ? 'ATTACHED' : 'MANAGED';
+      try { localStorage.setItem(BROWSER_MODE_STORAGE_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
   }, []);
 
   const onKeyDown = useCallback(
@@ -310,6 +320,27 @@ export const TaskInput = forwardRef<TaskInputHandle, TaskInputProps>(function Ta
             )
             : <EnginePicker value={engine} onChange={onEngineChange} />
           }
+          <button
+            type="button"
+            className="browser-mode-picker-btn has-tooltip"
+            onClick={toggleBrowserMode}
+            data-tooltip={browserMode === 'MANAGED' ? 'Browser: Bundled Chromium (Click to toggle Existing Chrome)' : 'Browser: Existing Chrome (Port 9222)'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              background: browserMode === 'ATTACHED' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+              border: browserMode === 'ATTACHED' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+              color: browserMode === 'ATTACHED' ? '#60a5fa' : 'inherit',
+            }}
+          >
+            <span>{browserMode === 'MANAGED' ? '🌐 Bundled' : '⚡ Chrome 9222'}</span>
+          </button>
           <input
             ref={fileInputRef}
             type="file"

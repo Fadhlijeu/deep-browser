@@ -156,11 +156,10 @@ export const AgentSessionSchema = z.object({
   cachedInputTokens: z.number().optional(),
   costSource: z.enum(['exact', 'estimated']).optional(),
   authMode: z.enum(['apiKey', 'subscription']).optional(),
-  // Subscription tier label when authMode === 'subscription'. For Claude Code
-  // this is the OAuth credential's subscriptionType ("max" | "pro"). For Codex
-  // we use 'chatgpt' as a generic label since the CLI does not expose the
-  // plan tier locally.
   subscriptionType: z.string().optional(),
+  browserMode: z.enum(['MANAGED', 'ATTACHED']).optional(),
+  browserId: z.string().optional(),
+  tabId: z.union([z.string(), z.number()]).optional(),
 });
 
 export type AgentSession = z.infer<typeof AgentSessionSchema>;
