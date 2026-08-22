@@ -1,16 +1,16 @@
-// Deep-Browser Chrome Extension SidePanel — Compact DeepDOM-Style Co-Pilot Script
+// Deep-Browser Chrome Extension SidePanel — Compact In-Browser Co-Pilot Script
 
 document.addEventListener('DOMContentLoaded', () => {
     // Header & State
     const connectionPill = document.getElementById('connection-pill');
     const agentStatePill = document.getElementById('agent-state-pill');
-    const sessionSelect = document.getElementById('session-select');
+    const sessionDisplay = document.getElementById('session-display');
     const modelSelect = document.getElementById('model-select');
 
     // Context & Active Tab
     const tabTitle = document.getElementById('tab-title');
     const tabUrl = document.getElementById('tab-url');
-    const handoffBtn = document.getElementById('handoff-btn');
+    const btnSendToWorkspace = document.getElementById('btn-send-to-workspace');
 
     // Challenge Banner
     const challengeBanner = document.getElementById('challenge-banner');
@@ -32,15 +32,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmationModal = document.getElementById('confirmation-modal');
     const modalActionText = document.getElementById('modal-action-text');
     const modalTargetText = document.getElementById('modal-target-text');
-    const modalReasonText = document.getElementById('modal-reason-text');
     const btnConfirmAction = document.getElementById('btn-confirm-action');
     const btnRejectAction = document.getElementById('btn-reject-action');
 
     let currentTab = null;
-    let activeConfirmation = null;
+    let activeExtSessionId = `EXT-${Math.floor(100 + Math.random() * 900)}`;
     let activeTaskId = null;
     let ws = null;
     let isConnected = false;
+
+    if (sessionDisplay) {
+        sessionDisplay.textContent = `${activeExtSessionId} · Current Tab`;
+    }
 
     // --- 1. Active Tab Resolution ---
     function updateActiveTab() {
@@ -48,13 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs && tabs[0]) {
                     currentTab = tabs[0];
-                    tabTitle.textContent = currentTab.title || 'Untitled Tab';
-                    tabUrl.textContent = currentTab.url || 'about:blank';
+                    if (tabTitle) tabTitle.textContent = currentTab.title || 'Untitled Tab';
+                    if (tabUrl) tabUrl.textContent = currentTab.url || 'about:blank';
                 }
             });
         } else {
-            tabTitle.textContent = 'Chrome Tab (Active)';
-            tabUrl.textContent = 'http://localhost';
+            if (tabTitle) tabTitle.textContent = 'Chrome Tab (Active)';
+            if (tabUrl) tabUrl.textContent = 'http://localhost';
         }
     }
 
@@ -64,59 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.onUpdated.addListener(updateActiveTab);
     }
 
-    handoffBtn.addEventListener('click', () => {
-        const url = tabUrl.textContent;
-        const title = tabTitle.textContent;
-        goalInput.value = `Navigate to ${url} and summarize the page content.`;
-        goalInput.focus();
-    });
-
-    btnFocusTab.addEventListener('click', () => {
-        if (currentTab && typeof chrome !== 'undefined' && chrome.tabs) {
-            chrome.tabs.update(currentTab.id, { active: true });
-        }
-    });
-
-    const btnSendToWorkspace = document.getElementById('btn-send-to-workspace');
-    if (btnSendToWorkspace) {
-        btnSendToWorkspace.addEventListener('click', async () => {
-            const sid = activeTaskId || sessionSelect.value;
-            btnSendToWorkspace.disabled = true;
-            btnSendToWorkspace.textContent = '⏳ Sending...';
-
-            try {
-                const res = await fetch('http://127.0.0.1:8765/api/handoff', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sid,
-                        to_owner: 'WORKSPACE',
-                    }),
-                });
-
-                if (!res.ok) {
-                    throw new Error(`Server returned ${res.status}`);
-                }
-
-                btnSendToWorkspace.textContent = '✅ Sent to Workspace';
-                btnSendToWorkspace.classList.add('sent');
-
-                appendEventCard({
-                    type: 'verified',
-                    tag: 'HANDOFF',
-                    icon: '🚀',
-                    body: 'Session successfully sent to Desktop Workspace with [EXT] tag.',
-                });
-            } catch (e) {
-                btnSendToWorkspace.disabled = false;
-                btnSendToWorkspace.textContent = '🚀 Send to Workspace';
-                appendEventCard({
-                    type: 'error',
-                    tag: 'HANDOFF ERROR',
-                    icon: '❌',
-                    body: `Could not hand off session: ${e.message}`,
-                    isError: true,
-                });
+    if (btnFocusTab) {
+        btnFocusTab.addEventListener('click', () => {
+            if (currentTab && typeof chrome !== 'undefined' && chrome.tabs) {
+                chrome.tabs.update(currentTab.id, { active: true });
             }
         });
     }
@@ -148,85 +102,48 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isPaused) {
             btnPauseAgent.classList.add('hidden');
             btnResumeAgent.classList.remove('hidden');
-            btnResumeAgent.disabled = false;
         } else {
             btnPauseAgent.classList.remove('hidden');
             btnResumeAgent.classList.add('hidden');
         }
     }
 
-    function connectWs() {
+    function connectWebSocket() {
+        if (ws) {
+            try { ws.close(); } catch (e) {}
+        }
+
         try {
-            ws = new WebSocket('ws://127.0.0.1:8765/ws/extension');
+            ws = new WebSocket('ws://127.0.0.1:8765/ws/timeline');
             ws.onopen = () => {
                 setConnectionStatus(true);
-                fetchSessions();
+            };
+            ws.onmessage = (evt) => {
+                try {
+                    const data = JSON.parse(evt.data);
+                    // Filter: only process events for our session or extension
+                    if (data.owner === 'WORKSPACE') return;
+                    handleAgentEvent(data);
+                } catch (e) {
+                    console.error('Error parsing WS message:', e);
+                }
             };
             ws.onclose = () => {
                 setConnectionStatus(false);
-                setTimeout(connectWs, 3000);
+                setTimeout(connectWebSocket, 3000);
             };
             ws.onerror = () => {
                 setConnectionStatus(false);
             };
-            ws.onmessage = (event) => {
-                try {
-                    const evt = JSON.parse(event.data);
-                    handleAgentEvent(evt);
-                } catch (e) {
-                    console.error('Error parsing event:', e);
-                }
-            };
-        } catch (err) {
-            setConnectionStatus(false);
-            setTimeout(connectWs, 3000);
-        }
-    }
-    connectWs();
-
-    // --- 3. Session Fetching ---
-    async function fetchSessions() {
-        try {
-            const res = await fetch('http://127.0.0.1:8765/api/sessions');
-            if (!res.ok) return;
-            const data = await res.json();
-            renderSessionSelect(data.sessions || [], data.active_session_id);
         } catch (e) {
-            console.debug('Could not fetch sessions:', e);
+            setConnectionStatus(false);
+            setTimeout(connectWebSocket, 3000);
         }
     }
 
-    function renderSessionSelect(sessions, activeId) {
-        const savedVal = sessionSelect.value || 'attached_edge';
-        sessionSelect.innerHTML = '';
-        
-        const defaultOptions = [
-            { value: 'attached_edge', label: '🌊 Edge (Attached)' },
-            { value: 'attached_chrome', label: '⚡ Chrome (Attached)' },
-            { value: 'attached_brave', label: '🦁 Brave (Attached)' },
-            { value: 'managed_bundled', label: '🌐 Bundled Chromium' },
-        ];
+    connectWebSocket();
 
-        defaultOptions.forEach((opt) => {
-            const el = document.createElement('option');
-            el.value = opt.value;
-            el.textContent = opt.label;
-            if (opt.value === savedVal) el.selected = true;
-            sessionSelect.appendChild(el);
-        });
-
-        sessions.forEach((s) => {
-            if (defaultOptions.some(d => d.value === s.id)) return;
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            const mode = s.mode === 'attached' ? '[Attached]' : '[Managed]';
-            opt.textContent = `${s.name || s.id} ${mode}`;
-            if (s.id === savedVal) opt.selected = true;
-            sessionSelect.appendChild(opt);
-        });
-    }
-
-    // --- 4. Event Stream & Action Card Rendering ---
+    // --- 3. Event Stream & Action Card Rendering ---
     function formatTime() {
         const d = new Date();
         return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
@@ -237,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (empty) empty.remove();
     }
 
-    function appendEventCard({ type, tag, icon, body, targetCode, isError = false }) {
+    function appendEventCard({ type = 'event-card', tag, icon, body, targetCode, isError = false }) {
         removeEmptyState();
 
         const card = document.createElement('div');
@@ -297,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'verified',
                 tag: 'APPROVED',
                 icon: '✓',
-                body: 'User approved action. Resuming execution.',
+                body: 'Action confirmed. Resuming execution.',
             });
         } else if (eventType === 'ACTION_REJECTED') {
             setAgentState('RUNNING');
@@ -306,13 +223,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'error',
                 tag: 'REJECTED',
                 icon: '✗',
-                body: 'User rejected action.',
+                body: 'Action rejected by user.',
                 isError: true,
             });
         } else if (eventType === 'CHALLENGE_REQUIRED' || eventType === 'BLOCKED') {
             setAgentState('BLOCKED');
             challengeBanner.classList.remove('hidden');
-            challengeText.textContent = msg || 'Cloudflare is asking for browser verification.';
+            challengeText.textContent = msg || 'Cloudflare verification detected.';
             appendEventCard({
                 type: 'thinking',
                 tag: 'VERIFICATION REQUIRED',
@@ -324,9 +241,9 @@ document.addEventListener('DOMContentLoaded', () => {
             challengeBanner.classList.add('hidden');
             appendEventCard({
                 type: 'verified',
-                tag: 'CHALLENGE RESOLVED',
+                tag: 'RESOLVED',
                 icon: '✅',
-                body: 'Verification detected. Resuming task execution...',
+                body: 'Verification resolved on current tab. Resuming task...',
             });
         } else if (eventType === 'CHALLENGE_TIMEOUT' || eventType === 'WATCHDOG_TIMEOUT') {
             setAgentState('FAILED');
@@ -340,77 +257,77 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } else if (eventType === 'CONTEXT_ATTACHED') {
             setAgentState('THINKING');
-            if (data.url) tabUrl.textContent = data.url;
-            if (data.title) tabTitle.textContent = data.title;
+            if (data.url && tabUrl) tabUrl.textContent = data.url;
+            if (data.title && tabTitle) tabTitle.textContent = data.title;
             appendEventCard({
-                type: 'thinking',
-                tag: 'CONTEXT ATTACHED',
-                icon: '👁️',
-                body: msg || `Attached directly to tab: ${data.title || data.url || 'Active Tab'}`,
+                type: 'action',
+                tag: 'OBSERVE',
+                icon: '👁',
+                body: 'Current tab detected and attached',
                 targetCode: data.url || '',
             });
         } else if (eventType === 'THINKING_STATUS') {
             setAgentState('THINKING');
             appendEventCard({
                 type: 'thinking',
-                tag: 'ANALYZING',
+                tag: 'THINKING',
                 icon: '🧠',
-                body: msg || data.thinking || 'Analyzing page context...',
+                body: msg || data.thinking || 'Analyzing page...',
             });
         } else if (eventType === 'OBSERVATION') {
             setAgentState('THINKING');
-            if (data.url) tabUrl.textContent = data.url;
-            if (data.title) tabTitle.textContent = data.title;
+            if (data.url && tabUrl) tabUrl.textContent = data.url;
+            if (data.title && tabTitle) tabTitle.textContent = data.title;
             if (data.thought) {
                 appendEventCard({
                     type: 'thinking',
                     tag: 'OBSERVING',
-                    icon: '👁️',
+                    icon: '👁',
                     body: data.thought,
                 });
             }
         } else if (eventType === 'NAVIGATE') {
             setAgentState('RUNNING');
             appendEventCard({
-                type: 'action-navigate',
+                type: 'action',
                 tag: 'NAVIGATE',
                 icon: '🌐',
-                body: 'Navigating to',
+                body: 'Navigate to',
                 targetCode: evt.target || data.url || msg,
             });
         } else if (eventType === 'CLICK') {
             setAgentState('RUNNING');
             appendEventCard({
-                type: 'action-click',
+                type: 'action',
                 tag: 'CLICK',
-                icon: '🖱️',
+                icon: '🖱',
                 body: 'Clicking element',
                 targetCode: evt.target || msg,
             });
         } else if (eventType === 'TYPE') {
             setAgentState('RUNNING');
             appendEventCard({
-                type: 'action-type',
+                type: 'action',
                 tag: 'TYPE',
-                icon: '⌨️',
-                body: 'Entering text',
+                icon: '⌨',
+                body: 'Type',
                 targetCode: `"${evt.target || data.text || ''}"`,
             });
         } else if (eventType === 'PRESS_KEY') {
             setAgentState('RUNNING');
             appendEventCard({
-                type: 'action-type',
-                tag: 'PRESS KEY',
-                icon: '⌨️',
-                body: `Pressing key "${evt.target || data.key || ''}"`,
+                type: 'action',
+                tag: 'KEY PRESS',
+                icon: '⌨',
+                body: `Press key "${evt.target || data.key || ''}"`,
             });
         } else if (eventType === 'SCROLL') {
             setAgentState('RUNNING');
             appendEventCard({
-                type: 'action-scroll',
+                type: 'action',
                 tag: 'SCROLL',
                 icon: '📜',
-                body: 'Scrolling page',
+                body: 'Scroll page',
                 targetCode: evt.target || '',
             });
         } else if (eventType === 'WAIT') {
@@ -419,23 +336,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'thinking',
                 tag: 'WAIT',
                 icon: '⏳',
-                body: `Waiting ${evt.target || ''}`,
-            });
-        } else if (eventType === 'TAB_SWITCH') {
-            setAgentState('RUNNING');
-            appendEventCard({
-                type: 'action-navigate',
-                tag: 'TAB SWITCH',
-                icon: '📑',
-                body: 'Switching tab context',
-                targetCode: evt.target || '',
+                body: `Wait ${evt.target || ''}`,
             });
         } else if (eventType === 'VERIFICATION') {
             appendEventCard({
                 type: 'verified',
                 tag: 'VERIFIED',
                 icon: '✅',
-                body: msg || 'DOM state verified successfully.',
+                body: msg || 'Verified',
             });
         } else if (eventType === 'PAUSED') {
             setAgentState('PAUSED');
@@ -452,8 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
             appendEventCard({
                 type: 'verified',
                 tag: 'COMPLETED',
-                icon: '🎉',
-                body: data.result || msg || 'Task completed successfully.',
+                icon: '✅',
+                body: data.result || msg || 'Task completed.',
             });
         } else if (eventType === 'FAILED') {
             setAgentState('FAILED');
@@ -463,64 +371,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'error',
                 tag: 'FAILED',
                 icon: '❌',
-                body: msg || 'Task encountered an error.',
+                body: msg || 'Task failed.',
                 isError: true,
             });
-        } else if (eventType && eventType.startsWith('SESSION_')) {
-            fetchSessions();
         }
     }
 
-    // --- 5. Submit Task Flow ---
+    // --- 4. Submit Task Flow ---
     submitGoalBtn.addEventListener('click', async () => {
         const goal = goalInput.value.trim();
         if (!goal) return;
 
-        if (!isConnected) {
-            appendEventCard({
-                type: 'error',
-                tag: 'RUNTIME OFFLINE',
-                icon: '❌',
-                body: 'Deep-Browser runtime is offline. Start the desktop app or runtime server.',
-                isError: true,
-            });
-            return;
-        }
-
-        // Add user prompt to feed
+        // Render user prompt card in timeline
         appendEventCard({
-            type: 'user-prompt',
-            tag: 'TASK',
+            type: 'user',
+            tag: 'YOU',
             icon: '👤',
             body: goal,
         });
 
         goalInput.value = '';
-        setAgentState('RUNNING');
+        setAgentState('THINKING');
         challengeBanner.classList.add('hidden');
 
-        const selVal = sessionSelect.value || 'attached_edge';
-        let bMode = 'ATTACHED';
-        let bType = 'edge';
-        let selectedSid = undefined;
-
-        if (selVal === 'attached_edge') {
-            bMode = 'ATTACHED';
-            bType = 'edge';
-        } else if (selVal === 'attached_chrome') {
-            bMode = 'ATTACHED';
-            bType = 'chrome';
-        } else if (selVal === 'attached_brave') {
-            bMode = 'ATTACHED';
-            bType = 'brave';
-        } else if (selVal === 'managed_bundled') {
-            bMode = 'MANAGED';
-            bType = 'bundled';
-        } else {
-            selectedSid = selVal;
-        }
-
-        const selectedModel = modelSelect.value;
+        const selectedModel = modelSelect ? modelSelect.value : 'gemini-3.5-flash-lite';
 
         try {
             const res = await fetch('http://127.0.0.1:8765/api/tasks', {
@@ -528,12 +402,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     task: goal,
-                    session_id: selectedSid,
+                    session_id: activeExtSessionId,
                     session_type: 'EXTENSION',
                     owner: 'EXTENSION',
-                    browser_mode: bMode,
-                    browser_type: bType,
-                    browser_id: `${bType}_9222`,
+                    browser_mode: 'ATTACHED',
+                    browser_type: 'edge',
+                    browser_id: 'edge_9222',
                     tab_id: currentTab ? currentTab.id : undefined,
                     window_id: currentTab ? currentTab.windowId : undefined,
                     url: currentTab ? currentTab.url : undefined,
@@ -546,17 +420,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.detail || `Server returned ${res.status}`);
+                throw new Error(errData.detail || errData.error || `Server returned ${res.status}`);
             }
 
             const data = await res.json();
             activeTaskId = data.task_id;
+            if (data.session_id) {
+                activeExtSessionId = data.session_id;
+                if (sessionDisplay) sessionDisplay.textContent = `${activeExtSessionId} · Current Tab`;
+            }
         } catch (e) {
             appendEventCard({
                 type: 'error',
-                tag: 'SUBMISSION ERROR',
+                tag: 'ERROR',
                 icon: '❌',
-                body: `Could not start task: ${e.message}`,
+                body: `${e.message}`,
                 isError: true,
             });
             setAgentState('FAILED');
@@ -569,6 +447,49 @@ document.addEventListener('DOMContentLoaded', () => {
             submitGoalBtn.click();
         }
     });
+
+    // --- 5. Handoff to Workspace ---
+    if (btnSendToWorkspace) {
+        btnSendToWorkspace.addEventListener('click', async () => {
+            btnSendToWorkspace.disabled = true;
+            btnSendToWorkspace.textContent = '⏳ Sending...';
+
+            try {
+                const res = await fetch('http://127.0.0.1:8765/api/handoff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: activeExtSessionId,
+                        to_owner: 'WORKSPACE',
+                    }),
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Server returned ${res.status}`);
+                }
+
+                btnSendToWorkspace.textContent = '✅ Sent to Workspace';
+                btnSendToWorkspace.classList.add('sent');
+
+                appendEventCard({
+                    type: 'verified',
+                    tag: 'HANDOFF',
+                    icon: '🚀',
+                    body: 'Session sent to Desktop Workspace with [EXT] tag.',
+                });
+            } catch (e) {
+                btnSendToWorkspace.disabled = false;
+                btnSendToWorkspace.textContent = '🚀 Send to Workspace';
+                appendEventCard({
+                    type: 'error',
+                    tag: 'HANDOFF ERROR',
+                    icon: '❌',
+                    body: `Handoff failed: ${e.message}`,
+                    isError: true,
+                });
+            }
+        });
+    }
 
     // --- 6. Agent Controls ---
     btnPauseAgent.addEventListener('click', async () => {
@@ -603,45 +524,44 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="empty-state">
                 <span class="empty-icon">🤖</span>
                 <span class="empty-title">Deep-Browser Ready</span>
-                <span class="empty-desc">Ask a task below to drive your current Chrome browser.</span>
+                <span class="empty-desc">Ask anything on the current active tab.</span>
             </div>
         `;
     });
 
-    // --- 7. Safe Mode Modal ---
     function showConfirmationModal(data) {
-        activeConfirmation = data;
         modalActionText.textContent = data.action || 'Execute action';
-        modalTargetText.textContent = data.target || 'Target element';
-        modalReasonText.textContent = data.reason || 'Protected action category';
+        modalTargetText.textContent = data.target || '-';
         confirmationModal.classList.remove('hidden');
     }
 
     function hideConfirmationModal() {
         confirmationModal.classList.add('hidden');
-        activeConfirmation = null;
     }
 
-    async function sendDecision(decision) {
-        if (!activeConfirmation || !activeConfirmation.confirmation_id) {
-            hideConfirmationModal();
-            return;
-        }
-
-        const confId = activeConfirmation.confirmation_id;
-        hideConfirmationModal();
-
+    btnConfirmAction.addEventListener('click', async () => {
         try {
-            await fetch(`http://127.0.0.1:8765/api/confirmations/${confId}`, {
+            await fetch('http://127.0.0.1:8765/api/confirm', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision: decision }),
+                body: JSON.stringify({ decision: 'CONFIRM' }),
             });
+            hideConfirmationModal();
         } catch (e) {
-            console.error('Failed to submit decision:', e);
+            console.error('Confirm failed:', e);
         }
-    }
+    });
 
-    btnConfirmAction.addEventListener('click', () => sendDecision('CONFIRM'));
-    btnRejectAction.addEventListener('click', () => sendDecision('REJECT'));
+    btnRejectAction.addEventListener('click', async () => {
+        try {
+            await fetch('http://127.0.0.1:8765/api/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ decision: 'REJECT' }),
+            });
+            hideConfirmationModal();
+        } catch (e) {
+            console.error('Reject failed:', e);
+        }
+    });
 });

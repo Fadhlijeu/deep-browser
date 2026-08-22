@@ -224,13 +224,23 @@ async def get_browser_state():
 @app.post("/api/tasks")
 async def create_task(req: CreateTaskRequest):
     task_id = f"task_{int(time.time() * 1000)}"
-    is_attached = (req.browser_mode.upper() == "ATTACHED") or req.attached_mode
+    is_extension = (req.owner == "EXTENSION") or (req.session_type == "EXTENSION")
+    owner = "EXTENSION" if is_extension else "WORKSPACE"
+    is_attached = (req.browser_mode.upper() == "ATTACHED") or req.attached_mode or is_extension
     browser_mode = "ATTACHED" if is_attached else "MANAGED"
     browser_id = req.browser_id or ("chrome_9222" if is_attached else "bundled_chromium")
+    
+    # CRITICAL: Extension tasks MUST NEVER inherit coordinator.active_session_id
+    if is_extension:
+        session_id = req.session_id or f"EXT-{int(time.time() * 1000) % 10000:04d}"
+    else:
+        session_id = req.session_id or coordinator.active_session_id or f"WS-{int(time.time() * 1000) % 10000:04d}"
 
     active_tasks[task_id] = {
         "id": task_id,
         "task": req.task,
+        "session_id": session_id,
+        "owner": owner,
         "browser_mode": browser_mode,
         "browser_id": browser_id,
         "tab_id": req.tab_id,
@@ -242,7 +252,8 @@ async def create_task(req: CreateTaskRequest):
     await broadcaster.broadcast(
         DeepBrowserEvent(
             task_id=task_id,
-            session_id=req.session_id,
+            session_id=session_id,
+            owner=owner,
             browser_mode=browser_mode,
             browser_id=browser_id,
             tab_id=req.tab_id,
@@ -253,21 +264,23 @@ async def create_task(req: CreateTaskRequest):
     )
 
     # Launch in background
-    asyncio.create_task(_run_task_background(task_id, req))
+    asyncio.create_task(_run_task_background(task_id, req, session_id))
     return {
         "task_id": task_id,
         "status": "created",
-        "session_id": req.session_id or f"sess_{task_id}",
+        "session_id": session_id,
+        "owner": owner,
         "browser_mode": browser_mode,
         "browser_id": browser_id,
         "tab_id": req.tab_id,
     }
 
 
-async def _run_task_background(task_id: str, req: CreateTaskRequest):
+async def _run_task_background(task_id: str, req: CreateTaskRequest, session_id: str):
     agent = None
-    session_id = req.session_id or coordinator.active_session_id
-    is_attached = (req.browser_mode.upper() == "ATTACHED") or req.attached_mode
+    is_extension = (req.owner == "EXTENSION") or (req.session_type == "EXTENSION")
+    owner = "EXTENSION" if is_extension else "WORKSPACE"
+    is_attached = (req.browser_mode.upper() == "ATTACHED") or req.attached_mode or is_extension
     browser_mode = "ATTACHED" if is_attached else "MANAGED"
     browser_id = req.browser_id or ("chrome_9222" if is_attached else "bundled_chromium")
     tab_id = req.tab_id
@@ -279,7 +292,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
 
         if not session:
             # For Extension: MUST connect to existing Chrome/Edge CDP, NEVER launch bundled Chromium
-            if req.owner == "EXTENSION" or is_attached:
+            if is_extension or is_attached:
                 import httpx
                 is_running = False
                 try:
@@ -299,7 +312,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                         DeepBrowserEvent(
                             task_id=task_id,
                             session_id=session_id,
-                            owner=req.owner,
+                            owner=owner,
                             browser_mode=browser_mode,
                             browser_id=browser_id,
                             tab_id=tab_id,
@@ -312,7 +325,7 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                     )
                     return
 
-                view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, browser_type=req.browser_type, owner=req.owner)
+                view = await coordinator.attach_system_chrome(session_id=session_id, cdp_port=req.cdp_port, browser_type=req.browser_type, owner=owner)
                 session_id = view.id
                 session = coordinator.get_session(session_id)
             else:

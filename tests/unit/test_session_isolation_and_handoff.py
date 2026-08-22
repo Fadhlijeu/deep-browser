@@ -233,8 +233,62 @@ def test_extension_task_creation_with_active_tab_context():
     assert data["status"] == "created"
     assert data["tab_id"] == 12345
     assert data["browser_mode"] == "ATTACHED"
+    assert data["session_id"].startswith("EXT-")
 
     # Workspace session list remains 0
     res_ws = client.get("/api/sessions?owner=WORKSPACE")
     assert len(res_ws.json().get("sessions", [])) == 0
+
+
+def test_extension_task_does_not_use_workspace_active_session():
+    """CRITICAL REGRESSION TEST: Extension task without session_id must NEVER inherit Workspace active_session_id."""
+    client = TestClient(app)
+
+    # 1. Arrange: Workspace sets an active session WS-001
+    mock_ws_session = MagicMock(spec=BrowserSession)
+    mock_ws_session.id = "WS-001"
+    mock_ws_session.is_cdp_connected = True
+    coordinator.register_existing_session(mock_ws_session, name="Workspace Active Tab", owner="WORKSPACE")
+    assert coordinator.active_session_id == "WS-001"
+
+    # 2. Extension creates task without session_id
+    res = client.post("/api/tasks", json={
+        "task": "Kerjakan halaman ini",
+        "owner": "EXTENSION",
+        "session_type": "EXTENSION",
+        "browser_mode": "ATTACHED",
+        "browser_type": "edge",
+        "tab_id": 777,
+        "url": "https://example.com",
+    })
+
+    assert res.status_code == 200
+    ext_data = res.json()
+    
+    # 3. Assert Extension session != WS-001
+    assert ext_data["session_id"] != "WS-001"
+    assert ext_data["session_id"].startswith("EXT-")
+    assert ext_data["owner"] == "EXTENSION"
+
+    # 4. Assert Workspace active session remains WS-001 untouched!
+    assert coordinator.active_session_id == "WS-001"
+
+
+def test_extension_events_are_not_workspace_events():
+    """Verify events emitted for Extension tasks carry owner=EXTENSION."""
+    event = DeepBrowserEvent(
+        task_id="task_ext_1",
+        session_id="EXT-101",
+        owner="EXTENSION",
+        browser_mode="ATTACHED",
+        browser_id="edge_9222",
+        tab_id=123,
+        event_type=EventType.CONTEXT_ATTACHED,
+        message="Attached to active tab",
+    )
+
+    assert event.owner == "EXTENSION"
+    assert event.session_id == "EXT-101"
+    assert event.event_type == EventType.CONTEXT_ATTACHED
+
 

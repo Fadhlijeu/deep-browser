@@ -8,14 +8,11 @@
 </head>
 <body>
     <div class="sidepanel-container">
-        <!-- Header -->
+        <!-- Top Bar -->
         <header class="sidepanel-header">
             <div class="brand">
                 <span class="logo-icon">🌐</span>
-                <div class="brand-text">
-                    <span class="title">DEEP-BROWSER</span>
-                    <span class="subtitle">AI Co-Pilot</span>
-                </div>
+                <span class="brand-name">Deep-Browser</span>
             </div>
             <div class="header-pills">
                 <span id="agent-state-pill" class="pill state-idle">IDLE</span>
@@ -23,57 +20,48 @@
             </div>
         </header>
 
-        <!-- Session & Model Bar -->
-        <div class="context-bar">
+        <!-- Session & Context Bar -->
+        <div class="context-card">
             <div class="context-row">
-                <div class="select-group">
-                    <label for="session-select">BROWSER</label>
-                    <select id="session-select">
-                        <option value="attached_edge" selected>🌊 Edge (Attached)</option>
-                        <option value="attached_chrome">⚡ Chrome (Attached)</option>
-                        <option value="attached_brave">🦁 Brave (Attached)</option>
-                        <option value="managed_bundled">🌐 Bundled Chromium</option>
-                    </select>
+                <div class="context-item">
+                    <span class="context-label">SESSION</span>
+                    <span id="session-display" class="context-value">EXT-001 · Current Tab</span>
                 </div>
-                <div class="select-group">
-                    <label for="model-select">MODEL</label>
-                    <select id="model-select">
-                        <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash Lite</option>
+                <div class="context-item model-item">
+                    <span class="context-label">MODEL</span>
+                    <select id="model-select" class="compact-select">
+                        <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash</option>
                     </select>
                 </div>
             </div>
-            
-            <!-- Active Tab Summary -->
-            <div class="tab-context-chip">
+
+            <div class="tab-chip">
                 <span class="tab-icon">📍</span>
-                <div class="tab-info">
-                    <span id="tab-title" class="tab-title-text">Loading tab...</span>
+                <div class="tab-details">
+                    <span id="tab-title" class="tab-title-text">Loading active tab...</span>
                     <span id="tab-url" class="tab-url-text">-</span>
                 </div>
-                <button id="handoff-btn" class="btn btn-xs btn-chip" title="Copy current URL into prompt">⚡ Use Tab</button>
-                <button id="btn-send-to-workspace" class="btn btn-xs btn-chip btn-workspace" title="Handoff session to Desktop Workspace">🚀 Send to Workspace</button>
+                <div class="tab-actions">
+                    <button id="btn-send-to-workspace" class="btn-handoff" title="Handoff session to Desktop Workspace">🚀 Send to Workspace</button>
+                </div>
             </div>
         </div>
 
-        <!-- Challenge Banner (Appears when Cloudflare / Verification is detected) -->
+        <!-- Challenge Banner -->
         <div id="challenge-banner" class="challenge-banner hidden">
             <div class="challenge-header">
                 <span class="challenge-icon">🛡️</span>
-                <div class="challenge-title">Verification Required</div>
+                <span class="challenge-title">Verification Required</span>
             </div>
-            <div id="challenge-text" class="challenge-desc">Cloudflare is asking for browser verification.</div>
-            <div class="challenge-actions">
-                <button id="btn-focus-tab" class="btn btn-sm btn-challenge">🔍 Focus Tab</button>
-                <span class="challenge-status">Waiting for user interaction...</span>
-            </div>
+            <div id="challenge-text" class="challenge-desc">Cloudflare verification detected.</div>
+            <button id="btn-focus-tab" class="btn btn-sm btn-challenge">🔍 Focus Tab</button>
         </div>
 
-        <!-- Safe Mode Interactive Gateway Modal -->
+        <!-- Safe Mode Modal -->
         <div id="confirmation-modal" class="confirmation-modal hidden">
             <div class="modal-card">
                 <div class="modal-badge">⚠️ SAFE MODE GATEWAY</div>
-                <h3>Sensitive action confirmation</h3>
-                
+                <h3>Action Confirmation</h3>
                 <div class="modal-field">
                     <span class="field-label">Action:</span>
                     <span id="modal-action-text" class="field-val">-</span>
@@ -82,11 +70,6 @@
                     <span class="field-label">Target:</span>
                     <span id="modal-target-text" class="field-val highlight">-</span>
                 </div>
-                <div class="modal-field">
-                    <span class="field-label">Reason:</span>
-                    <span id="modal-reason-text" class="field-val muted">-</span>
-                </div>
-
                 <div class="modal-actions">
                     <button id="btn-confirm-action" class="btn btn-confirm">Confirm</button>
                     <button id="btn-reject-action" class="btn btn-reject">Reject</button>
@@ -94,31 +77,28 @@
             </div>
         </div>
 
-        <!-- Real-Time Activity & Action Timeline -->
+        <!-- Real-Time Chat & Action Timeline Feed -->
         <div class="timeline-container">
-            <div class="timeline-header">
-                <span>ACTION & REASONING TIMELINE</span>
-                <button id="btn-clear-timeline" class="btn-clear" title="Clear timeline">Clear</button>
-            </div>
             <div id="sidepanel-feed" class="sidepanel-feed">
                 <div class="empty-state">
                     <span class="empty-icon">🤖</span>
                     <span class="empty-title">Deep-Browser Ready</span>
-                    <span class="empty-desc">Ask a task below to drive your current Chrome browser.</span>
+                    <span class="empty-desc">Ask anything on the current active tab.</span>
                 </div>
             </div>
         </div>
 
-        <!-- Composer & Agent Controls -->
+        <!-- Composer & Controls -->
         <div class="composer-section">
-            <div class="input-wrapper">
-                <textarea id="sidepanel-goal" placeholder="Ask the agent to navigate, search, or automate..." rows="2"></textarea>
-            </div>
             <div class="controls-bar">
-                <button id="submit-goal-btn" class="btn btn-primary btn-run">▶ RUN</button>
-                <button id="btn-pause-agent" class="btn btn-secondary btn-sm" disabled>⏸ PAUSE</button>
-                <button id="btn-resume-agent" class="btn btn-secondary btn-sm hidden">⏯ RESUME</button>
-                <button id="btn-stop-agent" class="btn btn-danger btn-sm" disabled>⏹ STOP</button>
+                <button id="btn-pause-agent" class="btn btn-secondary btn-xs" disabled>⏸ Pause</button>
+                <button id="btn-resume-agent" class="btn btn-secondary btn-xs hidden">⏯ Resume</button>
+                <button id="btn-stop-agent" class="btn btn-danger btn-xs" disabled>⏹ Stop</button>
+                <button id="btn-clear-timeline" class="btn btn-secondary btn-xs" title="Clear chat">🗑️ Clear</button>
+            </div>
+            <div class="input-wrapper">
+                <textarea id="sidepanel-goal" placeholder="Ask the agent... (e.g. Kerjakan halaman ini)" rows="2"></textarea>
+                <button id="submit-goal-btn" class="btn btn-primary btn-send">▶</button>
             </div>
         </div>
     </div>

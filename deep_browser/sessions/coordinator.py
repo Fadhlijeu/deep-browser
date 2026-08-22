@@ -74,6 +74,7 @@ class SessionCoordinator:
 
     async def attach_system_chrome(
         self,
+        session_id: Optional[str] = None,
         name: Optional[str] = None,
         cdp_port: int = 9222,
         cdp_url: Optional[str] = None,
@@ -89,20 +90,20 @@ class SessionCoordinator:
         browser_label = "Microsoft Edge" if browser_type in ("edge", "msedge") else "Brave" if browser_type == "brave" else "Google Chrome"
         session_name = name or f"{browser_label} (Attached)"
         target_cdp = cdp_url or f"http://127.0.0.1:{cdp_port}"
-        session_id = f"session_attached_{uuid.uuid4().hex[:8]}"
+        target_sid = session_id or (f"EXT-{uuid.uuid4().hex[:6]}" if owner == "EXTENSION" else f"WS-{uuid.uuid4().hex[:6]}")
 
         # 1. Probe if CDP endpoint is already reachable
         is_running = False
         try:
-            async with httpx.AsyncClient(timeout=1.5) as client:
+            async with httpx.AsyncClient(timeout=1.0) as client:
                 res = await client.get(f"{target_cdp}/json/version")
                 if res.status_code == 200:
                     is_running = True
         except Exception:
             is_running = False
 
-        # 2. If not reachable, auto-launch browser with --remote-debugging-port
-        if not is_running:
+        # 2. If not reachable and Workspace mode, auto-launch browser with --remote-debugging-port
+        if not is_running and owner == "WORKSPACE":
             bin_path = find_browser_executable(browser_type)
             if bin_path:
                 try:
@@ -125,23 +126,28 @@ class SessionCoordinator:
             await session.start()
             status = "connected"
         except Exception as e:
-            logger.warning(f"Initial CDP connection probe failed: {e}. Falling back to clean managed instance for {browser_label}...")
-            bin_path = find_browser_executable(browser_type)
-            profile = BrowserProfile(
-                headless=False,
-                executable_path=bin_path,
-            )
-            session = BrowserSession(browser_profile=profile)
-            try:
-                await session.start()
-                status = "connected"
-            except Exception as e2:
-                logger.error(f"Fallback browser launch failed: {e2}")
+            if owner == "EXTENSION":
+                logger.error(f"CDP connection failed for Extension: {e}")
                 status = "error"
-                error_msg = str(e2)
+                error_msg = f"Connection failed to {browser_label} on port {cdp_port}. Please launch {browser_label} with '--remote-debugging-port={cdp_port}'."
+            else:
+                logger.warning(f"Initial CDP connection probe failed: {e}. Falling back to clean managed instance for {browser_label}...")
+                bin_path = find_browser_executable(browser_type)
+                profile = BrowserProfile(
+                    headless=False,
+                    executable_path=bin_path,
+                )
+                session = BrowserSession(browser_profile=profile)
+                try:
+                    await session.start()
+                    status = "connected"
+                except Exception as e2:
+                    logger.error(f"Fallback browser launch failed: {e2}")
+                    status = "error"
+                    error_msg = str(e2)
 
-        self._sessions[session_id] = session
-        self._session_metadata[session_id] = {
+        self._sessions[target_sid] = session
+        self._session_metadata[target_sid] = {
             "name": session_name,
             "mode": "attached",
             "status": status,
@@ -153,10 +159,11 @@ class SessionCoordinator:
             "error_message": error_msg,
         }
 
-        if not self._active_session_id:
-            self._active_session_id = session_id
+        # ONLY update global active session if Workspace
+        if owner == "WORKSPACE" and not self._active_session_id:
+            self._active_session_id = target_sid
 
-        return await self.get_session_view(session_id)
+        return await self.get_session_view(target_sid)
 
     async def create_managed_session(
         self,
@@ -164,12 +171,12 @@ class SessionCoordinator:
         headless: bool = False,
         user_data_dir: Optional[str] = None,
         profile_directory: Optional[str] = None,
-        owner: Literal["WORKSPACE", "EXTENSION"] = "EXTENSION",
+        owner: Literal["WORKSPACE", "EXTENSION"] = "WORKSPACE",
     ) -> SessionViewModel:
         """Create a dedicated, managed BrowserSession with isolated user data."""
         import uuid
 
-        session_id = f"session_managed_{uuid.uuid4().hex[:8]}"
+        session_id = f"WS-M_{uuid.uuid4().hex[:6]}"
         session_name = name or f"Managed Session #{len(self._sessions) + 1}"
 
         profile = BrowserProfile(
@@ -202,7 +209,7 @@ class SessionCoordinator:
             "error_message": error_msg,
         }
 
-        if not self._active_session_id:
+        if owner == "WORKSPACE" and not self._active_session_id:
             self._active_session_id = session_id
 
         return await self.get_session_view(session_id)
@@ -215,7 +222,7 @@ class SessionCoordinator:
         owner: Literal["WORKSPACE", "EXTENSION"] = "WORKSPACE",
     ) -> str:
         """Register an already created BrowserSession."""
-        session_id = session.id or f"session_{int(time.time())}"
+        session_id = session.id or (f"EXT-{int(time.time() * 1000) % 10000:04d}" if owner == "EXTENSION" else f"WS-{int(time.time() * 1000) % 10000:04d}")
         self._sessions[session_id] = session
         self._session_metadata[session_id] = {
             "name": name,
@@ -228,7 +235,7 @@ class SessionCoordinator:
             "tag": None,
             "error_message": None,
         }
-        if not self._active_session_id:
+        if owner == "WORKSPACE" and not self._active_session_id:
             self._active_session_id = session_id
         return session_id
 
