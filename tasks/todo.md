@@ -15,4 +15,4 @@
 - [x] Task 5.1: Build Workstation Agent IDE Web UI (`src/deep_browser/web/`)
 - [x] Task 6.1: Build and run Unit & Integration test suite (16 passing tests)
 - [x] Task 7.1: Verify local browser execution
-- [ ] Task 8.1: Create GitHub repository and push initial scaffold
+- [x] Task 8.1: Create GitHub repository and push initial scaffold (https://github.com/Fadhlijeu/deep-browser)
