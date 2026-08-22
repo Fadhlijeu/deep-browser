@@ -72,47 +72,29 @@ def run(
                 console.print("[bold red]Error:[/bold red] No task prompt provided.")
             sys.exit(1)
 
-    is_attached = attached or browser_type.lower() in ("chrome", "edge", "brave")
+    executable_path = None
     resolved_cdp = None
     if cdp_port:
         resolved_cdp = f"http://127.0.0.1:{cdp_port}"
-    elif is_attached:
+    elif attached:
         resolved_cdp = "http://127.0.0.1:9222"
 
     async def _execute():
         from browser_use import Agent, BrowserProfile, BrowserSession, Tools
         from deep_browser.bridge.server import _create_llm
         from browser_use.browser.chrome import find_browser_executable
-        import subprocess
-        import httpx
+
+        nonlocal executable_path
+        if not resolved_cdp and browser_type.lower() in ("edge", "chrome", "brave"):
+            executable_path = find_browser_executable(browser_type.lower())
 
         if ndjson:
             sys.stdout.write(json.dumps({"type": "thinking", "text": f"Initializing Deep-Browser agent with {provider} ({browser_type})..."}) + "\n")
             sys.stdout.flush()
 
-        # If attached mode selected (e.g. Edge or Chrome) and not yet listening, auto-launch
-        if is_attached and resolved_cdp:
-            port = cdp_port or 9222
-            is_running = False
-            try:
-                async with httpx.AsyncClient(timeout=1.5) as client:
-                    res = await client.get(f"{resolved_cdp}/json/version")
-                    if res.status_code == 200:
-                        is_running = True
-            except Exception:
-                is_running = False
-
-            if not is_running:
-                b_bin = find_browser_executable(browser_type if browser_type != "bundled" else "chrome")
-                if b_bin:
-                    try:
-                        subprocess.Popen([b_bin, f"--remote-debugging-port={port}"])
-                        await asyncio.sleep(2.0)
-                    except Exception:
-                        pass
-
         profile = BrowserProfile(
             headless=headless,
+            executable_path=executable_path,
             cdp_url=resolved_cdp,
         )
         session = BrowserSession(browser_profile=profile)
