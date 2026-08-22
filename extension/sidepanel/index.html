@@ -20,14 +20,14 @@
             </div>
         </header>
 
-        <!-- Session & Context Bar -->
+        <!-- Session Identity & Current Tab -->
         <div class="context-card">
             <div class="context-row">
                 <div class="context-item">
                     <span class="context-label">SESSION</span>
-                    <span id="session-display" class="context-value">EXT-001 · Current Tab</span>
+                    <span id="session-display" class="context-value mono">EXT-001</span>
                 </div>
-                <div class="context-item model-item">
+                <div class="context-item">
                     <span class="context-label">MODEL</span>
                     <select id="model-select" class="compact-select">
                         <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash</option>
@@ -35,32 +35,32 @@
                 </div>
             </div>
 
+            <!-- Current Active Tab (auto-detected, read-only) -->
             <div class="tab-chip">
-                <span class="tab-icon">📍</span>
+                <span class="tab-favicon" id="tab-favicon">📄</span>
                 <div class="tab-details">
-                    <span id="tab-title" class="tab-title-text">Loading active tab...</span>
-                    <span id="tab-url" class="tab-url-text">-</span>
+                    <span id="tab-title" class="tab-title-text">Detecting active tab...</span>
+                    <span id="tab-url" class="tab-url-text">–</span>
                 </div>
-                <div class="tab-actions">
-                    <button id="btn-send-to-workspace" class="btn-handoff" title="Handoff session to Desktop Workspace">🚀 Send to Workspace</button>
-                </div>
+                <button id="btn-send-to-workspace" class="btn-handoff" title="Hand off this session to Desktop Workspace">
+                    🚀 Send to Workspace
+                </button>
             </div>
         </div>
 
         <!-- Challenge Banner -->
         <div id="challenge-banner" class="challenge-banner hidden">
             <div class="challenge-header">
-                <span class="challenge-icon">🛡️</span>
-                <span class="challenge-title">Verification Required</span>
+                <span>🛡️</span>
+                <span class="challenge-title">Verification Required on Current Tab</span>
             </div>
-            <div id="challenge-text" class="challenge-desc">Cloudflare verification detected.</div>
-            <button id="btn-focus-tab" class="btn btn-sm btn-challenge">🔍 Focus Tab</button>
+            <div id="challenge-text" class="challenge-desc">Complete the verification in the current tab to continue.</div>
         </div>
 
         <!-- Safe Mode Modal -->
         <div id="confirmation-modal" class="confirmation-modal hidden">
             <div class="modal-card">
-                <div class="modal-badge">⚠️ SAFE MODE GATEWAY</div>
+                <div class="modal-badge">⚠️ SAFE MODE</div>
                 <h3>Action Confirmation</h3>
                 <div class="modal-field">
                     <span class="field-label">Action:</span>
@@ -77,13 +77,13 @@
             </div>
         </div>
 
-        <!-- Real-Time Chat & Action Timeline Feed -->
+        <!-- Real-Time Action & Reasoning Timeline -->
         <div class="timeline-container">
             <div id="sidepanel-feed" class="sidepanel-feed">
                 <div class="empty-state">
                     <span class="empty-icon">🤖</span>
-                    <span class="empty-title">Deep-Browser Ready</span>
-                    <span class="empty-desc">Ask anything on the current active tab.</span>
+                    <span class="empty-title">Ready to work on current tab</span>
+                    <span class="empty-desc">Type a task below. The agent operates directly on the open page.</span>
                 </div>
             </div>
         </div>
@@ -94,7 +94,7 @@
                 <button id="btn-pause-agent" class="btn btn-secondary btn-xs" disabled>⏸ Pause</button>
                 <button id="btn-resume-agent" class="btn btn-secondary btn-xs hidden">⏯ Resume</button>
                 <button id="btn-stop-agent" class="btn btn-danger btn-xs" disabled>⏹ Stop</button>
-                <button id="btn-clear-timeline" class="btn btn-secondary btn-xs" title="Clear chat">🗑️ Clear</button>
+                <button id="btn-clear-timeline" class="btn btn-secondary btn-xs">🗑</button>
             </div>
             <div class="input-wrapper">
                 <textarea id="sidepanel-goal" placeholder="Ask the agent... (e.g. Kerjakan halaman ini)" rows="2"></textarea>
