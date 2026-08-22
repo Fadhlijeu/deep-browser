@@ -29,27 +29,43 @@ class VerificationEngine:
             "type_text": InputVerificationRule(),
         }
 
-    async def capture_state(self, browser_session: Any) -> Dict[str, Any]:
-        """Captures a lightweight deterministic snapshot of current browser state."""
+    async def capture_state(self, target_obj: Any) -> Dict[str, Any]:
+        """Captures a lightweight deterministic snapshot of current browser or agent state."""
+        url = ""
+        ready_state = "unknown"
+        dom_summary = ""
+
         try:
-            url = ""
-            ready_state = "unknown"
-            if hasattr(browser_session, "get_current_page"):
-                page = await browser_session.get_current_page()
-                if page:
-                    url = page.url
-                    ready_state = await page.evaluate("document.readyState")
-            elif hasattr(browser_session, "url"):
-                url = browser_session.url
+            # Check if target_obj is Agent with history
+            if hasattr(target_obj, "history") and hasattr(target_obj.history, "urls"):
+                urls = target_obj.history.urls()
+                if urls:
+                    url = urls[-1]
+                    ready_state = "complete"
 
-            dom_summary = ""
-            if hasattr(browser_session, "get_dom_service"):
-                dom_svc = await browser_session.get_dom_service()
-                if dom_svc and hasattr(dom_svc, "get_clickable_elements"):
-                    elements = await dom_svc.get_clickable_elements()
-                    dom_summary = f"clickable_count:{len(elements)}"
+            # Check if target_obj is Agent with browser_session
+            session = getattr(target_obj, "browser_session", target_obj)
 
-            dom_hash = hashlib.md5(f"{url}_{dom_summary}".encode()).hexdigest()
+            # Check BrowserSession session_manager targets
+            if not url and hasattr(session, "session_manager"):
+                targets = session.session_manager.get_all_page_targets()
+                for target in targets:
+                    if target.url and target.url != "about:blank":
+                        url = target.url
+                        ready_state = "complete"
+                        break
+                if not url and hasattr(session, "agent_focus_target_id") and session.agent_focus_target_id:
+                    focus_target = session.session_manager.get_target(session.agent_focus_target_id)
+                    if focus_target and focus_target.url:
+                        url = focus_target.url
+                        ready_state = "complete"
+
+            # Direct url attribute fallback
+            if not url and hasattr(session, "url") and session.url:
+                url = session.url
+                ready_state = "complete"
+
+            dom_hash = hashlib.md5(f"{url}_{ready_state}_{dom_summary}".encode()).hexdigest()
 
             return {
                 "url": url,
