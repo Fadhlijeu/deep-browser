@@ -698,7 +698,7 @@ export class SessionManager extends EventEmitter {
     });
     return list
       .sort((a, b) => b.createdAt - a.createdAt)
-      .map((s) => ({ ...s, prompt: this.getSnapshotPrompt(s), output: [] }));
+      .map((s): AgentSession => ({ ...s, prompt: this.getSnapshotPrompt(s), output: [] as HlEvent[] }));
   }
 
   /** Store the provider conversation id reported by the engine stream. */
