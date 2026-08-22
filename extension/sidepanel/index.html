@@ -11,83 +11,77 @@
         <!-- Header -->
         <header class="sidepanel-header">
             <div class="brand">
-                <span class="logo">🌐</span>
-                <h2>DEEP-BROWSER</h2>
+                <span class="logo-icon">🌐</span>
+                <div class="brand-text">
+                    <span class="title">DEEP-BROWSER</span>
+                    <span class="subtitle">AI Co-Pilot</span>
+                </div>
             </div>
-            <div class="header-right">
+            <div class="header-pills">
                 <span id="agent-state-pill" class="pill state-idle">IDLE</span>
                 <span id="connection-pill" class="pill status-offline">OFFLINE</span>
             </div>
         </header>
 
-        <!-- Session Control Bar -->
-        <div class="session-bar">
-            <div class="session-select-wrapper">
-                <span class="label">SESSION:</span>
-                <select id="session-select">
-                    <option value="">Loading sessions...</option>
-                </select>
+        <!-- Session & Model Bar -->
+        <div class="context-bar">
+            <div class="context-row">
+                <div class="select-group">
+                    <label for="session-select">SESSION</label>
+                    <select id="session-select">
+                        <option value="attached_current" selected>⚡ Current Chrome (Attached)</option>
+                    </select>
+                </div>
+                <div class="select-group">
+                    <label for="model-select">MODEL</label>
+                    <select id="model-select">
+                        <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                    </select>
+                </div>
             </div>
-            <div class="session-actions">
-                <button id="btn-attach-chrome" class="btn btn-xs" title="Attach to running user Chrome on port 9222">⚡ Attach Chrome</button>
-                <button id="btn-new-managed" class="btn btn-xs" title="Create isolated Chromium session">➕ New Session</button>
-            </div>
-        </div>
-
-        <!-- Active Browser State Card -->
-        <div class="active-tab-box">
-            <div class="tab-header-row">
-                <span class="tab-label">BROWSER CONTEXT</span>
-                <span id="tab-count-badge" class="badge">1 tab</span>
-            </div>
-            <div id="tab-title" class="tab-title">Loading browser context...</div>
-            <div id="tab-url" class="tab-url">-</div>
-            <div class="quick-run-row">
-                <button id="handoff-btn" class="btn btn-primary btn-sm">⚡ HANDOFF TAB TO AGENT</button>
-            </div>
-        </div>
-
-        <!-- Goal Input & Agent Control Surface -->
-        <div class="quick-goal-box">
-            <input type="text" id="sidepanel-goal" placeholder="Describe agent task..." />
-            <div class="agent-controls">
-                <button id="submit-goal-btn" class="btn btn-success btn-sm">▶ RUN</button>
-                <button id="btn-pause-agent" class="btn btn-secondary btn-sm" disabled>⏸ PAUSE</button>
-                <button id="btn-resume-agent" class="btn btn-secondary btn-sm hidden">⏯ RESUME</button>
-                <button id="btn-stop-agent" class="btn btn-danger btn-sm" disabled>⏹ STOP</button>
+            
+            <!-- Active Tab Summary -->
+            <div class="tab-context-chip">
+                <span class="tab-icon">📍</span>
+                <div class="tab-info">
+                    <span id="tab-title" class="tab-title-text">Loading tab...</span>
+                    <span id="tab-url" class="tab-url-text">-</span>
+                </div>
+                <button id="handoff-btn" class="btn btn-xs btn-chip" title="Copy current URL into prompt">⚡ Use Tab</button>
             </div>
         </div>
 
-        <!-- Action Inspector (Read-Only Live Observability) -->
-        <div id="action-inspector" class="action-inspector hidden">
-            <div class="inspector-header">
-                <span class="inspector-title">🔍 ACTION INSPECTOR</span>
-                <span id="inspector-status" class="pill pill-sm">EXECUTED</span>
+        <!-- Challenge Banner (Appears when Cloudflare / Verification is detected) -->
+        <div id="challenge-banner" class="challenge-banner hidden">
+            <div class="challenge-header">
+                <span class="challenge-icon">🛡️</span>
+                <div class="challenge-title">Verification Required</div>
             </div>
-            <div class="inspector-grid">
-                <div class="grid-item"><span class="lbl">Tool:</span> <span id="insp-tool" class="val">-</span></div>
-                <div class="grid-item"><span class="lbl">Target:</span> <span id="insp-target" class="val highlight">-</span></div>
-                <div class="grid-item"><span class="lbl">Verification:</span> <span id="insp-verif" class="val success">PASSED</span></div>
+            <div id="challenge-text" class="challenge-desc">Cloudflare is asking for browser verification.</div>
+            <div class="challenge-actions">
+                <button id="btn-focus-tab" class="btn btn-sm btn-challenge">🔍 Focus Tab</button>
+                <span class="challenge-status">Waiting for user interaction...</span>
             </div>
         </div>
 
-        <!-- Safe Mode Interactive Confirmation Modal -->
+        <!-- Safe Mode Interactive Gateway Modal -->
         <div id="confirmation-modal" class="confirmation-modal hidden">
             <div class="modal-card">
-                <div class="modal-badge">⚠️ SAFE MODE ACTIVE</div>
-                <h3>Sensitive action detected</h3>
+                <div class="modal-badge">⚠️ SAFE MODE GATEWAY</div>
+                <h3>Sensitive action confirmation</h3>
                 
                 <div class="modal-field">
                     <span class="field-label">Action:</span>
-                    <span id="modal-action-text" class="field-val">Submit form</span>
+                    <span id="modal-action-text" class="field-val">-</span>
                 </div>
                 <div class="modal-field">
                     <span class="field-label">Target:</span>
-                    <span id="modal-target-text" class="field-val highlight">Kirim</span>
+                    <span id="modal-target-text" class="field-val highlight">-</span>
                 </div>
                 <div class="modal-field">
                     <span class="field-label">Reason:</span>
-                    <span id="modal-reason-text" class="field-val muted">Form submission detected</span>
+                    <span id="modal-reason-text" class="field-val muted">-</span>
                 </div>
 
                 <div class="modal-actions">
@@ -97,11 +91,31 @@
             </div>
         </div>
 
-        <!-- Live Step Timeline -->
-        <div class="timeline-section">
-            <div class="section-title">AGENT ACTIVITY & VERIFICATION</div>
+        <!-- Real-Time Activity & Action Timeline -->
+        <div class="timeline-container">
+            <div class="timeline-header">
+                <span>ACTION & REASONING TIMELINE</span>
+                <button id="btn-clear-timeline" class="btn-clear" title="Clear timeline">Clear</button>
+            </div>
             <div id="sidepanel-feed" class="sidepanel-feed">
-                <span class="empty-hint">Agent is idle. Select a session and enter a task to begin.</span>
+                <div class="empty-state">
+                    <span class="empty-icon">🤖</span>
+                    <span class="empty-title">Deep-Browser Ready</span>
+                    <span class="empty-desc">Ask a task below to drive your current Chrome browser.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Composer & Agent Controls -->
+        <div class="composer-section">
+            <div class="input-wrapper">
+                <textarea id="sidepanel-goal" placeholder="Ask the agent to navigate, search, or automate..." rows="2"></textarea>
+            </div>
+            <div class="controls-bar">
+                <button id="submit-goal-btn" class="btn btn-primary btn-run">▶ RUN</button>
+                <button id="btn-pause-agent" class="btn btn-secondary btn-sm" disabled>⏸ PAUSE</button>
+                <button id="btn-resume-agent" class="btn btn-secondary btn-sm hidden">⏯ RESUME</button>
+                <button id="btn-stop-agent" class="btn btn-danger btn-sm" disabled>⏹ STOP</button>
             </div>
         </div>
     </div>

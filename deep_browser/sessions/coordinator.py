@@ -187,6 +187,10 @@ class SessionCoordinator:
             return True
         return False
 
+    def set_active_session(self, session_id: str) -> bool:
+        """Alias for switch_active_session."""
+        return self.switch_active_session(session_id)
+
     async def close_session(self, session_id: str) -> bool:
         """Terminate and clean up a BrowserSession."""
         session = self._sessions.pop(session_id, None)

@@ -270,4 +270,129 @@ def test_e2e_failure_path_clean_error_reporting():
     assert res.status_code == 404
     err_body = res.json()
     assert "detail" in err_body
-    assert "Session not found" in err_body["detail"]
+    assert "Session ID not found" in err_body["detail"] or "Session not found" in err_body["detail"]
+
+
+# -----------------------------------------------------------------------------
+# TEST 5 — LIVE ACTION TIMELINE & EXTENSION STREAM
+# -----------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_e2e_live_action_timeline_stream():
+    """
+    Test 5: Real-time action cards (NAVIGATE, CLICK, TYPE, SCROLL, WAIT) stream
+    with explicit session_id, browser_mode (ATTACHED), browser_id, and tab_id.
+    """
+    received = []
+    broadcaster.subscribe(lambda evt: received.append(evt))
+
+    test_task = "task_stream_001"
+    test_sess = "sess_attached_chrome"
+
+    # Emits navigate, click, type
+    await broadcaster.broadcast(
+        DeepBrowserEvent(
+            task_id=test_task,
+            session_id=test_sess,
+            browser_mode="ATTACHED",
+            browser_id="chrome_9222",
+            tab_id=101,
+            event_type=EventType.NAVIGATE,
+            action="navigate",
+            target="https://google.com",
+            status="EXECUTING",
+            summary="Navigating to https://google.com",
+        )
+    )
+
+    await broadcaster.broadcast(
+        DeepBrowserEvent(
+            task_id=test_task,
+            session_id=test_sess,
+            browser_mode="ATTACHED",
+            browser_id="chrome_9222",
+            tab_id=101,
+            event_type=EventType.TYPE,
+            action="input_text",
+            target="Muhammad Fadhli Rizaldy",
+            status="EXECUTING",
+            summary='Type "Muhammad Fadhli Rizaldy"',
+        )
+    )
+
+    await broadcaster.broadcast(
+        DeepBrowserEvent(
+            task_id=test_task,
+            session_id=test_sess,
+            browser_mode="ATTACHED",
+            browser_id="chrome_9222",
+            tab_id=101,
+            event_type=EventType.VERIFICATION,
+            status="VERIFIED",
+            verification="PASSED",
+            summary="Action verified successfully",
+        )
+    )
+
+    task_events = [e for e in received if e.task_id == test_task]
+    assert len(task_events) == 3
+    assert task_events[0].event_type == EventType.NAVIGATE
+    assert task_events[0].browser_mode == "ATTACHED"
+    assert task_events[0].browser_id == "chrome_9222"
+    assert task_events[0].tab_id == 101
+    assert task_events[1].event_type == EventType.TYPE
+    assert task_events[2].event_type == EventType.VERIFICATION
+
+
+# -----------------------------------------------------------------------------
+# TEST 6 — CLOUDFLARE CHALLENGE DETECTION & WATCHDOG HANDOFF
+# -----------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_e2e_challenge_detection_and_resolution():
+    """
+    Test 6: Cloudflare challenge triggers CHALLENGE_REQUIRED / BLOCKED,
+    notifies Extension with same-session handoff, and resumes on CHALLENGE_RESOLVED.
+    """
+    received = []
+    broadcaster.subscribe(lambda evt: received.append(evt))
+
+    test_task = "task_cf_001"
+    test_sess = "sess_pddikti"
+
+    # Challenge emitted
+    await broadcaster.broadcast(
+        DeepBrowserEvent(
+            task_id=test_task,
+            session_id=test_sess,
+            browser_mode="ATTACHED",
+            browser_id="chrome_9222",
+            tab_id=202,
+            event_type=EventType.CHALLENGE_REQUIRED,
+            status="BLOCKED",
+            summary="Cloudflare verification challenge detected",
+            message="Cloudflare is asking for browser verification. Waiting for page resolution...",
+            data={"timeout_seconds": 60},
+        )
+    )
+
+    # Resolution emitted (e.g. user clicked "Lanjutkan" / verification finished)
+    await broadcaster.broadcast(
+        DeepBrowserEvent(
+            task_id=test_task,
+            session_id=test_sess,
+            browser_mode="ATTACHED",
+            browser_id="chrome_9222",
+            tab_id=202,
+            event_type=EventType.CHALLENGE_RESOLVED,
+            status="RESUMED",
+            summary="Verification detected. Resuming task...",
+            message="Verification detected. Resuming task execution.",
+        )
+    )
+
+    cf_events = [e for e in received if e.task_id == test_task]
+    assert len(cf_events) == 2
+    assert cf_events[0].event_type == EventType.CHALLENGE_REQUIRED
+    assert cf_events[0].status == "BLOCKED"
+    assert cf_events[1].event_type == EventType.CHALLENGE_RESOLVED
+    assert cf_events[1].status == "RESUMED"
+

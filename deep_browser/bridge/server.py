@@ -1,14 +1,14 @@
 """
 FastAPI + WebSocket companion bridge server connecting Chrome Extension MV3
-directly to the root browser_use agent core with Safe Mode confirmation gateways
-and full session/agent lifecycle control.
+directly to the root browser_use agent core with Safe Mode confirmation gateways,
+Cloudflare / verification challenge handoff, and full session/agent lifecycle control.
 """
 
 import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -52,14 +52,18 @@ active_tasks: Dict[str, Dict[str, Any]] = {}
 class CreateTaskRequest(BaseModel):
     task: str
     session_id: Optional[str] = None
+    browser_mode: str = Field(default="ATTACHED", description="ATTACHED (user's current Chrome) or MANAGED")
+    browser_id: Optional[str] = "chrome_9222"
+    tab_id: Optional[Union[str, int]] = None
     model_provider: str = Field(default="gemini", description="gemini, openai, anthropic, or ollama")
     model_name: Optional[str] = None
     api_key: Optional[str] = None
-    attached_mode: bool = False
+    attached_mode: bool = True
     cdp_port: int = 9222
     headless: bool = False
     safe_mode: bool = True
     safe_timeout_seconds: float = 60.0
+    challenge_timeout_seconds: float = 60.0
 
 
 class AttachChromeRequest(BaseModel):
@@ -125,135 +129,115 @@ async def list_sessions():
 
 @app.post("/api/sessions/attach")
 async def attach_chrome(req: AttachChromeRequest):
-    view = await coordinator.attach_system_chrome(
-        name=req.name,
-        cdp_port=req.cdp_port,
-        cdp_url=req.cdp_url,
-    )
-    await broadcaster.broadcast(
-        DeepBrowserEvent(
-            task_id="system",
-            session_id=view.id,
-            event_type=EventType.SESSION_ATTACHED,
-            message=f"Attached to Chrome on port {req.cdp_port}",
-            data=view.model_dump(),
-        )
-    )
-    return view.model_dump()
+    try:
+        view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, cdp_url=req.cdp_url)
+        return {"status": "success", "session": view.model_dump()}
+    except Exception as e:
+        logger.error(f"Error attaching to Chrome: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/sessions/managed")
-async def create_managed_session(req: CreateManagedSessionRequest):
-    view = await coordinator.create_managed_session(
-        name=req.name,
-        headless=req.headless,
-        user_data_dir=req.user_data_dir,
-        profile_directory=req.profile_directory,
-    )
-    await broadcaster.broadcast(
-        DeepBrowserEvent(
-            task_id="system",
-            session_id=view.id,
-            event_type=EventType.SESSION_CREATED,
-            message=f"Created managed browser session: {req.name}",
-            data=view.model_dump(),
+async def create_managed(req: CreateManagedSessionRequest):
+    try:
+        view = await coordinator.create_managed_session(
+            name=req.name,
+            headless=req.headless,
+            user_data_dir=req.user_data_dir,
+            profile_directory=req.profile_directory,
         )
-    )
-    return view.model_dump()
+        return {"status": "success", "session": view.model_dump()}
+    except Exception as e:
+        logger.error(f"Error creating managed session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/sessions/{session_id}/switch")
 async def switch_session(session_id: str):
-    success = coordinator.switch_active_session(session_id)
+    success = coordinator.set_active_session(session_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
-    view = await coordinator.get_session_view(session_id)
-    await broadcaster.broadcast(
-        DeepBrowserEvent(
-            task_id="system",
-            session_id=session_id,
-            event_type=EventType.SESSION_SWITCHED,
-            message=f"Switched active session to {session_id}",
-            data=view.model_dump() if view else {},
-        )
-    )
+        raise HTTPException(status_code=404, detail="Session ID not found")
     return {"status": "success", "active_session_id": session_id}
 
 
-@app.delete("/api/sessions/{session_id}")
-async def close_session(session_id: str):
-    await coordinator.close_session(session_id)
-    await broadcaster.broadcast(
-        DeepBrowserEvent(
-            task_id="system",
-            session_id=session_id,
-            event_type=EventType.SESSION_CLOSED,
-            message=f"Closed session {session_id}",
-        )
-    )
-    return {"status": "success", "closed_session_id": session_id}
-
-
 @app.get("/api/browser/state")
-async def get_browser_state(session_id: Optional[str] = None):
-    state = await coordinator.get_browser_state(session_id)
-    return state
+async def get_browser_state():
+    session = coordinator.get_active_session()
+    if not session:
+        return {"status": "no_active_session", "tabs": []}
+
+    try:
+        tabs = await session.get_tabs()
+        return {
+            "status": "connected",
+            "session_id": coordinator.active_session_id,
+            "tabs": [{"id": t.target_id, "url": t.url, "title": t.title} for t in tabs],
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e), "tabs": []}
 
 
-# --- Task Execution & Lifecycle Endpoints ---
-
-@app.get("/api/tasks")
-async def list_tasks():
-    return {"tasks": list(active_tasks.values())}
-
-
-@app.get("/api/tasks/{task_id}")
-async def get_task(task_id: str):
-    task = active_tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
-
+# --- Task Execution Endpoints ---
 
 @app.post("/api/tasks")
 async def create_task(req: CreateTaskRequest):
     task_id = f"task_{int(time.time() * 1000)}"
+    is_attached = (req.browser_mode.upper() == "ATTACHED") or req.attached_mode
+    browser_mode = "ATTACHED" if is_attached else "MANAGED"
+    browser_id = req.browser_id or ("chrome_9222" if is_attached else "bundled_chromium")
+
     active_tasks[task_id] = {
-        "task_id": task_id,
+        "id": task_id,
         "task": req.task,
-        "status": "running",
+        "browser_mode": browser_mode,
+        "browser_id": browser_id,
+        "tab_id": req.tab_id,
+        "status": "created",
         "created_at": time.time(),
-        "attached_mode": req.attached_mode,
-        "safe_mode": req.safe_mode,
     }
 
-    # Broadcast task created
+    # Broadcast task created with full metadata
     await broadcaster.broadcast(
         DeepBrowserEvent(
             task_id=task_id,
+            session_id=req.session_id,
+            browser_mode=browser_mode,
+            browser_id=browser_id,
+            tab_id=req.tab_id,
             event_type=EventType.TASK_CREATED,
             message=f"Task created: {req.task}",
-            data={"task": req.task, "attached_mode": req.attached_mode, "safe_mode": req.safe_mode},
+            data={"task": req.task, "browser_mode": browser_mode, "browser_id": browser_id, "safe_mode": req.safe_mode},
         )
     )
 
     # Launch in background
     asyncio.create_task(_run_task_background(task_id, req))
-    return {"task_id": task_id, "status": "running"}
+    return {
+        "task_id": task_id,
+        "status": "created",
+        "session_id": req.session_id or f"sess_{task_id}",
+        "browser_mode": browser_mode,
+        "browser_id": browser_id,
+        "tab_id": req.tab_id,
+    }
 
 
 async def _run_task_background(task_id: str, req: CreateTaskRequest):
-    try:
-        # Resolve target BrowserSession
-        session = None
-        session_id = req.session_id or coordinator.active_session_id
+    agent = None
+    session_id = req.session_id or coordinator.active_session_id
+    is_attached = (req.browser_mode.upper() == "ATTACHED") or req.attached_mode
+    browser_mode = "ATTACHED" if is_attached else "MANAGED"
+    browser_id = req.browser_id or ("chrome_9222" if is_attached else "bundled_chromium")
+    tab_id = req.tab_id
 
+    try:
+        session = None
         if session_id:
             session = coordinator.get_session(session_id)
 
         if not session:
-            # Fallback: create according to request flags
-            if req.attached_mode:
+            # Create according to request mode
+            if is_attached:
                 view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port)
                 session_id = view.id
                 session = coordinator.get_session(session_id)
@@ -270,23 +254,139 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
         policy = SafeModePolicy(enabled=req.safe_mode, timeout_seconds=req.safe_timeout_seconds)
         tools = SafeTools(safe_policy=policy, broadcaster=broadcaster)
 
-        # Step callback broadcasting observation & action telemetry
+        # Step callback broadcasting observation, thinking, actions & challenges
         async def step_callback(state_summary, agent_output, step_num):
+            url = getattr(state_summary, "url", "")
+            title = getattr(state_summary, "title", "")
+            thinking = getattr(agent_output.current_state, "thinking", None) if agent_output else None
+            next_goal = getattr(agent_output.current_state, "next_goal", None) if agent_output else None
+
+            # 1. Broadcast Observation & High-Level Status Summary
             await broadcaster.broadcast(
                 DeepBrowserEvent(
                     task_id=task_id,
                     session_id=session_id,
+                    browser_mode=browser_mode,
+                    browser_id=browser_id,
+                    tab_id=tab_id,
                     event_type=EventType.OBSERVATION,
-                    message=f"Step {step_num}: {getattr(state_summary, 'url', '')}",
+                    status="OBSERVED",
+                    summary=f"Observing {title or url or 'page'}",
+                    message=f"Step {step_num}: {url}",
                     data={
                         "step": step_num,
-                        "url": getattr(state_summary, "url", ""),
-                        "title": getattr(state_summary, "title", ""),
-                        "thought": getattr(agent_output.current_state, "thinking", None) if agent_output else None,
-                        "next_goal": getattr(agent_output.current_state, "next_goal", None) if agent_output else None,
+                        "url": url,
+                        "title": title,
+                        "thought": thinking,
+                        "next_goal": next_goal,
                     },
                 )
             )
+
+            # 2. Check for Cloudflare / Verification Challenge
+            lower_title = title.lower() if title else ""
+            lower_url = url.lower() if url else ""
+            is_challenge = (
+                "just a moment" in lower_title
+                or "cloudflare" in lower_title
+                or "attention required" in lower_title
+                or "verify you are human" in lower_title
+                or "verifikasi" in lower_title
+                or "challenges.cloudflare.com" in lower_url
+            )
+
+            if is_challenge:
+                await broadcaster.broadcast(
+                    DeepBrowserEvent(
+                        task_id=task_id,
+                        session_id=session_id,
+                        browser_mode=browser_mode,
+                        browser_id=browser_id,
+                        tab_id=tab_id,
+                        event_type=EventType.CHALLENGE_REQUIRED,
+                        status="BLOCKED",
+                        summary="Cloudflare / Verification challenge detected",
+                        message="Verification challenge detected. Waiting for user interaction or page resolution...",
+                        data={"url": url, "title": title, "timeout_seconds": req.challenge_timeout_seconds},
+                    )
+                )
+
+                # Watchdog polling loop
+                start_wait = time.time()
+                while time.time() - start_wait < req.challenge_timeout_seconds:
+                    await asyncio.sleep(1.5)
+                    try:
+                        cur_title = await session.get_title() if hasattr(session, "get_title") else ""
+                        if cur_title and "just a moment" not in cur_title.lower() and "cloudflare" not in cur_title.lower() and "attention required" not in cur_title.lower():
+                            await broadcaster.broadcast(
+                                DeepBrowserEvent(
+                                    task_id=task_id,
+                                    session_id=session_id,
+                                    browser_mode=browser_mode,
+                                    browser_id=browser_id,
+                                    tab_id=tab_id,
+                                    event_type=EventType.CHALLENGE_RESOLVED,
+                                    status="RESUMED",
+                                    summary="Verification detected. Resuming task...",
+                                    message="Verification detected. Resuming task execution.",
+                                )
+                            )
+                            break
+                    except Exception:
+                        pass
+                else:
+                    await broadcaster.broadcast(
+                        DeepBrowserEvent(
+                            task_id=task_id,
+                            session_id=session_id,
+                            browser_mode=browser_mode,
+                            browser_id=browser_id,
+                            tab_id=tab_id,
+                            event_type=EventType.CHALLENGE_TIMEOUT,
+                            status="TIMED_OUT",
+                            summary="Verification challenge timed out",
+                            message=f"Challenge verification timed out after {req.challenge_timeout_seconds}s.",
+                        )
+                    )
+
+            # 3. Broadcast individual discrete actions
+            if agent_output and getattr(agent_output, "action", None):
+                for act in agent_output.action:
+                    act_dump = act.model_dump(exclude_unset=True) if hasattr(act, "model_dump") else {}
+                    for act_name, act_params in act_dump.items():
+                        target_str = ""
+                        evt_type = EventType.ACTION_REQUESTED
+                        if act_name == "navigate":
+                            evt_type = EventType.NAVIGATE
+                            target_str = act_params.get("url", "") if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "click_element":
+                            evt_type = EventType.CLICK
+                            target_str = f"Element #{act_params.get('index', '')}" if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "input_text":
+                            evt_type = EventType.TYPE
+                            target_str = act_params.get("text", "") if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "scroll_page":
+                            evt_type = EventType.SCROLL
+                            target_str = str(act_params)
+                        elif act_name == "wait":
+                            evt_type = EventType.WAIT
+                            target_str = f"{act_params.get('seconds', '')}s" if isinstance(act_params, dict) else str(act_params)
+
+                        await broadcaster.broadcast(
+                            DeepBrowserEvent(
+                                task_id=task_id,
+                                session_id=session_id,
+                                browser_mode=browser_mode,
+                                browser_id=browser_id,
+                                tab_id=tab_id,
+                                event_type=evt_type,
+                                action=act_name,
+                                target=target_str,
+                                status="EXECUTING",
+                                summary=f"{act_name}: {target_str}",
+                                data=act_params if isinstance(act_params, dict) else {},
+                            )
+                        )
 
         agent = Agent(
             task=req.task,
@@ -303,6 +403,9 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             DeepBrowserEvent(
                 task_id=task_id,
                 session_id=session_id,
+                browser_mode=browser_mode,
+                browser_id=browser_id,
+                tab_id=tab_id,
                 event_type=EventType.TASK_STARTED,
                 message="Agent execution started",
             )
@@ -318,6 +421,9 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             DeepBrowserEvent(
                 task_id=task_id,
                 session_id=session_id,
+                browser_mode=browser_mode,
+                browser_id=browser_id,
+                tab_id=tab_id,
                 event_type=EventType.COMPLETED,
                 message="Task completed successfully",
                 data={"result": str(result)},
@@ -334,6 +440,9 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             DeepBrowserEvent(
                 task_id=task_id,
                 session_id=session_id if 'session_id' in locals() else None,
+                browser_mode=browser_mode,
+                browser_id=browser_id,
+                tab_id=tab_id,
                 event_type=EventType.FAILED,
                 message=f"Task failed: {e}",
                 data={"error": str(e)},
@@ -380,7 +489,7 @@ async def pause_agent():
             )
         )
         return {"status": "paused"}
-    raise HTTPException(status_code=400, detail="No active agent running to pause")
+    return {"status": "no_active_agent"}
 
 
 @app.post("/api/agent/resume")
@@ -399,14 +508,14 @@ async def resume_agent():
             )
         )
         return {"status": "resumed"}
-    raise HTTPException(status_code=400, detail="No active paused agent to resume")
+    return {"status": "no_active_agent"}
 
 
 @app.post("/api/agent/stop")
 async def stop_agent():
     success = coordinator.stop_active_agent()
     if not success:
-        for agent in list(active_agents.values()):
+        for agent in active_agents.values():
             agent.stop()
             success = True
     if success:
@@ -418,95 +527,51 @@ async def stop_agent():
             )
         )
         return {"status": "stopped"}
-    raise HTTPException(status_code=400, detail="No active agent to stop")
+    return {"status": "no_active_agent"}
 
 
-@app.post("/api/tasks/{task_id}/stop")
-async def stop_task(task_id: str):
-    agent = active_agents.get(task_id)
-    if agent:
-        try:
-            agent.stop()
-        except Exception as e:
-            logger.warning(f"Error calling agent.stop(): {e}")
-    if task_id in active_tasks:
-        active_tasks[task_id]["status"] = "stopped"
-    await broadcaster.broadcast(
-        DeepBrowserEvent(
-            task_id=task_id,
-            event_type=EventType.STOPPED,
-            message="Task stopped by user",
-        )
-    )
-    return {"status": "stopped"}
+# --- WebSocket Real-Time Event Stream ---
 
-
-# --- WebSocket Bridge Endpoint ---
-
-@app.websocket("/ws")
 @app.websocket("/ws/extension")
-async def websocket_endpoint(websocket: WebSocket):
+async def extension_ws_endpoint(websocket: WebSocket):
     await websocket.accept()
-    queue: asyncio.Queue[DeepBrowserEvent] = asyncio.Queue()
-
-    def listener(event: DeepBrowserEvent):
-        queue.put_nowait(event)
-
-    broadcaster.subscribe(listener)
-
-    async def send_events():
-        while True:
-            event = await queue.get()
-            await websocket.send_text(event.model_dump_json())
-
-    async def receive_messages():
-        while True:
-            data_text = await websocket.receive_text()
-            try:
-                msg = json.loads(data_text)
-                msg_type = msg.get("type") or msg.get("event_type")
-
-                if msg_type == "CONFIRMATION_DECISION":
-                    conf_id = msg.get("confirmation_id")
-                    decision = msg.get("decision", "REJECT")
-                    if conf_id:
-                        resolved = safe_manager.resolve_confirmation(conf_id, decision)
-                        logger.info(f"Resolved confirmation {conf_id} with {decision}: {resolved}")
-
-                elif msg_type == "PAUSE_AGENT":
-                    coordinator.pause_active_agent()
-
-                elif msg_type == "RESUME_AGENT":
-                    coordinator.resume_active_agent()
-
-                elif msg_type == "STOP_AGENT":
-                    coordinator.stop_active_agent()
-
-                elif msg_type == "SWITCH_SESSION":
-                    target_sid = msg.get("session_id")
-                    if target_sid:
-                        coordinator.switch_active_session(target_sid)
-
-                elif msg_type == "PING":
-                    await websocket.send_text(json.dumps({"type": "PONG", "timestamp": time.time()}))
-            except Exception as e:
-                logger.debug(f"Error parsing WebSocket incoming message: {e}")
-
-    send_task = asyncio.create_task(send_events())
-    recv_task = asyncio.create_task(receive_messages())
-
+    queue = await broadcaster.register_client()
     try:
-        done, pending = await asyncio.wait(
-            [send_task, recv_task],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for t in pending:
-            t.cancel()
+        while True:
+            # Check for incoming client messages or forward broadcast events
+            try:
+                receive_task = asyncio.create_task(websocket.receive_text())
+                broadcast_task = asyncio.create_task(queue.get())
+
+                done, pending = await asyncio.wait(
+                    [receive_task, broadcast_task],
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                for task in pending:
+                    task.cancel()
+
+                if receive_task in done:
+                    client_msg = receive_task.result()
+                    try:
+                        msg_data = json.loads(client_msg)
+                        if msg_data.get("type") == "CONFIRMATION_DECISION":
+                            conf_id = msg_data.get("confirmation_id")
+                            dec = msg_data.get("decision")
+                            if conf_id and dec:
+                                safe_manager.resolve_confirmation(conf_id, dec)
+                    except Exception as e:
+                        logger.error(f"Error handling extension client message: {e}")
+
+                if broadcast_task in done:
+                    event: DeepBrowserEvent = broadcast_task.result()
+                    await websocket.send_text(json.dumps(event.model_dump(), default=str))
+
+            except asyncio.CancelledError:
+                break
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.debug(f"WebSocket closed: {e}")
+        logger.error(f"WebSocket error: {e}")
     finally:
-        broadcaster.unsubscribe(listener)
-        send_task.cancel()
-        recv_task.cancel()
+        await broadcaster.unregister_client(queue)
