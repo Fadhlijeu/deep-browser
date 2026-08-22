@@ -13,47 +13,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load active tab
     function updateActiveTab() {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs && tabs[0]) {
-                currentTab = tabs[0];
-                tabTitle.textContent = currentTab.title || 'Untitled';
-                tabUrl.textContent = currentTab.url || 'about:blank';
-            }
-        });
+        if (typeof chrome !== 'undefined' && chrome.tabs) {
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs && tabs[0]) {
+                    currentTab = tabs[0];
+                    tabTitle.textContent = currentTab.title || 'Untitled';
+                    tabUrl.textContent = currentTab.url || 'about:blank';
+                }
+            });
+        }
     }
 
     updateActiveTab();
-    chrome.tabs.onActivated.addListener(updateActiveTab);
-    chrome.tabs.onUpdated.addListener(updateActiveTab);
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+        chrome.tabs.onActivated.addListener(updateActiveTab);
+        chrome.tabs.onUpdated.addListener(updateActiveTab);
+    }
 
-    // Check WS status from background
-    chrome.runtime.sendMessage({ type: 'GET_WS_STATUS' }, (res) => {
-        if (res && res.isConnected) {
-            connectionPill.textContent = 'ONLINE';
-            connectionPill.className = 'pill status-online';
+    // Direct WebSocket connection to Deep-Browser Companion Server
+    let ws = null;
+    function connectWs() {
+        try {
+            ws = new WebSocket('ws://127.0.0.1:8765/ws');
+            ws.onopen = () => {
+                connectionPill.textContent = 'ONLINE';
+                connectionPill.className = 'pill status-online';
+            };
+            ws.onclose = () => {
+                connectionPill.textContent = 'OFFLINE';
+                connectionPill.className = 'pill status-offline';
+                setTimeout(connectWs, 3000);
+            };
+            ws.onerror = () => {
+                connectionPill.textContent = 'OFFLINE';
+                connectionPill.className = 'pill status-offline';
+            };
+            ws.onmessage = (event) => {
+                try {
+                    const evt = JSON.parse(event.data);
+                    handleAgentEvent(evt);
+                } catch (e) {
+                    console.error('Error parsing event:', e);
+                }
+            };
+        } catch (err) {
+            connectionPill.textContent = 'OFFLINE';
+            connectionPill.className = 'pill status-offline';
+            setTimeout(connectWs, 3000);
         }
-    });
+    }
+    connectWs();
 
-    // Listen for events from background worker
-    chrome.runtime.onMessage.addListener((message) => {
-        if (message.type === 'WS_STATUS') {
-            const isOnline = message.status === 'connected';
-            connectionPill.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
-            connectionPill.className = `pill ${isOnline ? 'status-online' : 'status-offline'}`;
-        } else if (message.type === 'AGENT_EVENT') {
-            handleAgentEvent(message.payload);
-        }
-    });
-
-    function handleAgentEvent(payload) {
-        const { event, data } = payload;
-        if (event === 'STEP_PLANNED') {
-            appendFeed(`[Step ${data.step}] ${data.action.tool}: ${data.thought}`);
-        } else if (event === 'ACTION_RECEIPT') {
-            const status = data.receipt.verification.status;
-            appendFeed(`✓ Verification: [${status}] ${data.receipt.verification.actual_state}`, status === 'FAILED');
-        } else if (event === 'TASK_COMPLETED') {
-            appendFeed(`🎉 COMPLETED: ${data.task.result_summary}`);
+    function handleAgentEvent(evt) {
+        const { event_type, message, data } = evt;
+        if (event_type === 'TASK_CREATED' || event_type === 'TASK_STARTED') {
+            appendFeed(`🚀 [${event_type}] ${message || 'Task initiated'}`);
+        } else if (event_type === 'VERIFICATION') {
+            appendFeed(`✓ [VERIFIED] ${message || JSON.stringify(data)}`);
+        } else if (event_type === 'COMPLETED') {
+            appendFeed(`🎉 [COMPLETED] ${message || 'Success'}`);
+        } else if (event_type === 'FAILED') {
+            appendFeed(`❌ [FAILED] ${message || 'Task encountered error'}`, true);
+        } else {
+            appendFeed(`• [${event_type}] ${message || ''}`);
         }
     }
 
@@ -68,45 +90,24 @@ document.addEventListener('DOMContentLoaded', () => {
         feed.scrollTop = feed.scrollHeight;
     }
 
-    // Handoff active tab
-    handoffBtn.addEventListener('click', async () => {
-        if (!currentTab) return;
-        handoffBtn.disabled = true;
-        handoffBtn.textContent = 'HANDING OFF...';
-
-        try {
-            const res = await fetch('http://127.0.0.1:8765/api/extension/handoff', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tab_id: currentTab.id,
-                    url: currentTab.url,
-                    title: currentTab.title
-                })
-            });
-            const data = await res.json();
-            appendFeed(`⚡ Attached to tab: ${currentTab.title}`);
-        } catch (err) {
-            appendFeed(`Error connecting to companion server: ${err.message}`, true);
-        } finally {
-            handoffBtn.disabled = false;
-            handoffBtn.textContent = '⚡ HANDOFF TAB TO AGENT';
-        }
-    });
-
     // Submit quick task
     submitGoalBtn.addEventListener('click', async () => {
         const goal = goalInput.value.trim();
         if (!goal) return;
 
         try {
-            await fetch('http://127.0.0.1:8765/api/tasks', {
+            const res = await fetch('http://127.0.0.1:8765/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ goal, browser_mode: 'attached' })
+                body: JSON.stringify({
+                    task: goal,
+                    attached_mode: true,
+                    safe_mode: true
+                })
             });
+            const data = await res.json();
             goalInput.value = '';
-            appendFeed(`🚀 Task started: ${goal}`);
+            appendFeed(`🚀 Task started: ${goal} (ID: ${data.task_id})`);
         } catch (err) {
             appendFeed(`Failed to start task: ${err.message}`, true);
         }
