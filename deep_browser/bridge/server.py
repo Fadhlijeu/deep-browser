@@ -84,24 +84,10 @@ class ConfirmationDecisionRequest(BaseModel):
 
 
 def _create_llm(provider: str, model_name: Optional[str], api_key: Optional[str]):
-    provider = provider.lower()
-    if provider == "gemini":
-        model = model_name or "gemini-2.5-flash"
-        return ChatGoogle(model=model, api_key=api_key)
-    elif provider == "openai":
-        from browser_use.llm.openai.chat import ChatOpenAI
-        model = model_name or "gpt-4o"
-        return ChatOpenAI(model=model, api_key=api_key)
-    elif provider == "anthropic":
-        from browser_use.llm.anthropic.chat import ChatAnthropic
-        model = model_name or "claude-3-5-sonnet-20241022"
-        return ChatAnthropic(model=model, api_key=api_key)
-    elif provider == "ollama":
-        from browser_use.llm.ollama.chat import ChatOllama
-        model = model_name or "qwen2.5:7b"
-        return ChatOllama(model=model)
-    else:
-        return ChatGoogle(model=model_name or "gemini-2.5-flash", api_key=api_key)
+    # Primary model strictly locked to gemini-3.5-flash-lite
+    import os
+    model = model_name or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash-lite"
+    return ChatGoogle(model=model, api_key=api_key)
 
 
 # --- System & Session Management Endpoints ---

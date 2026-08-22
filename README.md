@@ -38,7 +38,7 @@ Deep-Browser provides a unified experience across two complementary interfaces s
 ## ✨ Features
 
 - **🔒 100% Local-First**: Operates against your local Chromium/Chrome instances without mandatory third-party cloud browser locks.
-- **⚡ Google Gemini Default**: Native integration with Google Gemini (`gemini-2.5-flash`, `gemini-2.5-pro`) using `GOOGLE_API_KEY`.
+- **⚡ Google Gemini Default**: Native integration with Google Gemini (`gemini-3.5-flash-lite`) using `GOOGLE_API_KEY`.
 - **🖥️ Full Desktop Workstation (`app/`)**: Electron + Vite + React desktop software featuring session timelines, logs, and terminal integration.
 - **🧩 In-Browser Companion (`extension/`)**: Manifest V3 SidePanel extension to monitor and control tasks directly in Google Chrome.
 - **🛡️ Interactive Safe Mode**: High-risk browser actions (purchases, destructive deletes, form submissions) require human confirmation before dispatch.
@@ -52,7 +52,7 @@ Deep-Browser provides a unified experience across two complementary interfaces s
 Copy the template `.env.example` to `.env`:
 ```bash
 GOOGLE_API_KEY=your_google_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 ### 2. Launch Desktop Application (Full Version)

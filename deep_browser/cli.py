@@ -85,7 +85,7 @@ def run(
         
         # Resolve API key from environment
         api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-        selected_model = model or os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash"
+        selected_model = model or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash-lite"
         
         llm = _create_llm(provider, selected_model, api_key)
         tools = Tools()

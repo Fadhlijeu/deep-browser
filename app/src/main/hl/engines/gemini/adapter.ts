@@ -20,7 +20,7 @@ const ID = 'gemini';
 const DISPLAY = 'Google Gemini';
 const BIN = 'python';
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
 const geminiAdapter: EngineAdapter = {
   id: ID,
@@ -28,7 +28,7 @@ const geminiAdapter: EngineAdapter = {
   binaryName: BIN,
 
   async probeInstalled(): Promise<InstallProbe> {
-    return { installed: true, version: 'Gemini 2.5' };
+    return { installed: true, version: 'Gemini 3.5' };
   },
 
   async probeAuthed(): Promise<AuthProbe> {
