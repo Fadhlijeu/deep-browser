@@ -31,6 +31,32 @@
             <button id="submit-goal-btn" class="btn btn-secondary">RUN</button>
         </div>
 
+        <!-- Safe Mode Interactive Confirmation Modal -->
+        <div id="confirmation-modal" class="confirmation-modal hidden">
+            <div class="modal-card">
+                <div class="modal-badge">⚠️ SAFE MODE ACTIVE</div>
+                <h3>Sensitive action detected</h3>
+                
+                <div class="modal-field">
+                    <span class="field-label">Action:</span>
+                    <span id="modal-action-text" class="field-val">Submit form</span>
+                </div>
+                <div class="modal-field">
+                    <span class="field-label">Target:</span>
+                    <span id="modal-target-text" class="field-val highlight">Kirim</span>
+                </div>
+                <div class="modal-field">
+                    <span class="field-label">Reason:</span>
+                    <span id="modal-reason-text" class="field-val muted">Form submission detected</span>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="btn-confirm-action" class="btn btn-confirm">Confirm</button>
+                    <button id="btn-reject-action" class="btn btn-reject">Reject</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Live Step Timeline -->
         <div class="timeline-section">
             <div class="section-title">AGENT ACTIVITY & VERIFICATION</div>

@@ -1,0 +1,172 @@
+{
+  "task_id": "smoke_1787391322",
+  "session_id": "sess_1787391322",
+  "status": "COMPLETED",
+  "total_latency_seconds": 12.840926170349121,
+  "events": [
+    {
+      "event_id": "evt_1787391322206",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "TASK_CREATED",
+      "timestamp": 1787391322.2061756,
+      "data": {},
+      "message": "Task created: Search Google for 'Deep-Browser smoke test'"
+    },
+    {
+      "event_id": "evt_1787391322206",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "TASK_STARTED",
+      "timestamp": 1787391322.2062159,
+      "data": {},
+      "message": "Launching real Chromium browser session..."
+    },
+    {
+      "event_id": "evt_1787391324337",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "ACTION_REQUESTED",
+      "timestamp": 1787391324.3374984,
+      "data": {
+        "action": "navigate",
+        "url": "https://www.google.com"
+      },
+      "message": "Navigating to https://www.google.com"
+    },
+    {
+      "event_id": "evt_1787391330293",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "ACTION_EXECUTED",
+      "timestamp": 1787391330.2930515,
+      "data": {
+        "result": "is_done=False success=None judgement=None error=None attachments=None images=None long_term_memory='Navigated to https://www.google.com' extracted_content='\ud83d\udd17 Navigated to https://www.google.com' include_extracted_content_only_once=False metadata=None include_in_memory=False"
+      },
+      "message": "Navigation to https://www.google.com executed"
+    },
+    {
+      "event_id": "evt_1787391330293",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "VERIFICATION",
+      "timestamp": 1787391330.2931046,
+      "data": {
+        "verified": true,
+        "stage": "VERIFIED",
+        "evidence": {
+          "action_type": "navigate",
+          "target_selector": null,
+          "target_index": null,
+          "before_state": {
+            "url": "about:blank",
+            "ready_state": "complete",
+            "dom_hash": "afc3871603573b24f813fb5d1404125d",
+            "dom_summary": ""
+          },
+          "after_state": {
+            "url": "https://www.google.com/",
+            "ready_state": "complete",
+            "dom_hash": "21a7360ba4fa56198d61a1218401ae4e",
+            "dom_summary": ""
+          },
+          "mutations_observed": [
+            "URL changed from 'about:blank' to 'https://www.google.com/'",
+            "Document readyState reached 'complete'"
+          ],
+          "timestamp": 1787391330.293003,
+          "screenshot_path": null
+        },
+        "details": "Navigation to 'https://www.google.com/' verified",
+        "confidence": 1.0
+      },
+      "message": "Navigation verified: Navigation to 'https://www.google.com/' verified"
+    },
+    {
+      "event_id": "evt_1787391330344",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "OBSERVATION",
+      "timestamp": 1787391330.3444145,
+      "data": {
+        "elements_count": 26,
+        "target_input_index": 1
+      },
+      "message": "Observed 26 interactive elements on Google home page. Identified search element index: 1"
+    },
+    {
+      "event_id": "evt_1787391330344",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "ACTION_REQUESTED",
+      "timestamp": 1787391330.3444562,
+      "data": {
+        "action": "input",
+        "index": 1,
+        "text": "Deep-Browser smoke test"
+      },
+      "message": "Typing 'Deep-Browser smoke test' into Google search input"
+    },
+    {
+      "event_id": "evt_1787391331534",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "ACTION_EXECUTED",
+      "timestamp": 1787391331.5347846,
+      "data": {
+        "result": "is_done=False success=None judgement=None error=None attachments=None images=None long_term_memory=\"Typed 'Deep-Browser smoke test'\\n\ud83d\udca1 This is an autocomplete field. Wait for suggestions to appear, then click the correct suggestion instead of pressing Enter.\" extracted_content=\"Typed 'Deep-Browser smoke test'\\n\ud83d\udca1 This is an autocomplete field. Wait for suggestions to appear, then click the correct suggestion instead of pressing Enter.\" include_extracted_content_only_once=False metadata={'input_x': 939.5, 'input_y': 402.0} include_in_memory=False"
+      },
+      "message": "Text typed into search input"
+    },
+    {
+      "event_id": "evt_1787391335045",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "VERIFICATION",
+      "timestamp": 1787391335.0456698,
+      "data": {
+        "verified": true,
+        "stage": "VERIFIED",
+        "evidence": {
+          "action_type": "navigate",
+          "target_selector": null,
+          "target_index": null,
+          "before_state": {
+            "url": "https://www.google.com/",
+            "ready_state": "complete",
+            "dom_hash": "21a7360ba4fa56198d61a1218401ae4e",
+            "dom_summary": ""
+          },
+          "after_state": {
+            "url": "https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3DDeep-Browser%2Bsmoke%2Btest%26sei%3DY22JasS_D4mc4-EPkeDssAk&q=EgQmt5HIGOTapdQGIjBABEXR8mllkbPSGlgbof6RvuVG6TqAJXn9UtDYFdUOwryFtML57UCMqWe8Lau37WIyAVJaAUM",
+            "ready_state": "complete",
+            "dom_hash": "5eed00df09959567f05cc8d42012b09c",
+            "dom_summary": ""
+          },
+          "mutations_observed": [
+            "URL changed from 'https://www.google.com/' to 'https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3DDeep-Browser%2Bsmoke%2Btest%26sei%3DY22JasS_D4mc4-EPkeDssAk&q=EgQmt5HIGOTapdQGIjBABEXR8mllkbPSGlgbof6RvuVG6TqAJXn9UtDYFdUOwryFtML57UCMqWe8Lau37WIyAVJaAUM'",
+            "Document readyState reached 'complete'"
+          ],
+          "timestamp": 1787391335.0456214,
+          "screenshot_path": null
+        },
+        "details": "Navigation to 'https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3DDeep-Browser%2Bsmoke%2Btest%26sei%3DY22JasS_D4mc4-EPkeDssAk&q=EgQmt5HIGOTapdQGIjBABEXR8mllkbPSGlgbof6RvuVG6TqAJXn9UtDYFdUOwryFtML57UCMqWe8Lau37WIyAVJaAUM' verified",
+        "confidence": 1.0
+      },
+      "message": "Search results verified: Navigation to 'https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3DDeep-Browser%2Bsmoke%2Btest%26sei%3DY22JasS_D4mc4-EPkeDssAk&q=EgQmt5HIGOTapdQGIjBABEXR8mllkbPSGlgbof6RvuVG6TqAJXn9UtDYFdUOwryFtML57UCMqWe8Lau37WIyAVJaAUM' verified"
+    },
+    {
+      "event_id": "evt_1787391335045",
+      "task_id": "smoke_1787391322",
+      "session_id": "sess_1787391322",
+      "event_type": "COMPLETED",
+      "timestamp": 1787391335.0456963,
+      "data": {
+        "total_latency_seconds": 12.840926170349121,
+        "events_count": 10
+      },
+      "message": "Live smoke test completed successfully in 12.84s"
+    }
+  ],
+  "verified": true
+}

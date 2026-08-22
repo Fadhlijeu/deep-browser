@@ -8,4 +8,6 @@
 | 2026-08-22 | Milestone 2 (Live End-to-End Task) | Verified live in-process Chromium task execution + DOM state capture + deterministic verification + event stream broadcaster + workspace persistence (`test_end_to_end_agent.py`), 63/63 tests passing | **DONE** (`5a07bcd`) |
 | 2026-08-22 | Workspace Strategy Alignment | Aligned workspace strategy: Browser Use is the sole primary workspace; Milestone 3 custom dashboard put on HOLD | **DONE** (`4857380`) |
 | 2026-08-22 | Milestone 3 (Workstation Web UI) | Standalone dashboard UI | **HOLD / NOT REQUIRED YET** |
-| 2026-08-22 | Milestone 4 (Safe Mode Interactive Gateways) | Chrome Extension SidePanel confirmation dialogs for destructive actions | READY FOR DIRECTION |
+| 2026-08-22 | Milestone 4 Architecture Gate | Verified strict production call chain: `Extension` $\to$ `WS Bridge` $\to$ `Agent` $\to$ `Tools` $\to$ `BrowserSession` $\to$ `CDP` $\to$ `Chromium` (`test_architecture_gate.py`) | **DONE** (`b31d707`) |
+| 2026-08-22 | Live Google Smoke Test | Real smoke test against Google search with 10 emitted timeline events and full workspace task artifact persistence (`live_smoke_test.py`) | **DONE** (`efc6068`) |
+| 2026-08-22 | Milestone 4 (Safe Mode Interactive Gateways) | Implemented Safe Mode product layer: `SafeTools` intercepting `browser_use.Tools`, bidirectional WS confirmation bridge, SidePanel modal (`[ Confirm ]` / `[ Reject ]`), deterministic pause/resume lifecycle, 75/75 tests passing | **DONE** |

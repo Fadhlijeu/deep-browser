@@ -1,0 +1,170 @@
+{
+  "task_id": "smoke_1787391227",
+  "session_id": "sess_1787391227",
+  "status": "COMPLETED",
+  "total_latency_seconds": 2.2626025676727295,
+  "events": [
+    {
+      "event_id": "evt_1787391227975",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "TASK_CREATED",
+      "timestamp": 1787391227.975041,
+      "data": {},
+      "message": "Task created: Search Google for 'Deep-Browser smoke test'"
+    },
+    {
+      "event_id": "evt_1787391227975",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "TASK_STARTED",
+      "timestamp": 1787391227.9750733,
+      "data": {},
+      "message": "Launching real Chromium browser session..."
+    },
+    {
+      "event_id": "evt_1787391230215",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "ACTION_REQUESTED",
+      "timestamp": 1787391230.2153163,
+      "data": {
+        "action": "navigate",
+        "url": "https://www.google.com"
+      },
+      "message": "Navigating to https://www.google.com"
+    },
+    {
+      "event_id": "evt_1787391230215",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "ACTION_EXECUTED",
+      "timestamp": 1787391230.2158158,
+      "data": {
+        "result": "is_done=False success=None judgement=None error='Action url not found' attachments=None images=None long_term_memory=None extracted_content=None include_extracted_content_only_once=False metadata=None include_in_memory=False"
+      },
+      "message": "Navigation to https://www.google.com executed"
+    },
+    {
+      "event_id": "evt_1787391230215",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "VERIFICATION",
+      "timestamp": 1787391230.215883,
+      "data": {
+        "verified": false,
+        "stage": "FAILED",
+        "evidence": {
+          "action_type": "navigate",
+          "target_selector": null,
+          "target_index": null,
+          "before_state": {
+            "url": "about:blank",
+            "ready_state": "complete",
+            "dom_hash": "afc3871603573b24f813fb5d1404125d",
+            "dom_summary": ""
+          },
+          "after_state": {
+            "url": "about:blank",
+            "ready_state": "complete",
+            "dom_hash": "afc3871603573b24f813fb5d1404125d",
+            "dom_summary": ""
+          },
+          "mutations_observed": [
+            "Document readyState reached 'complete'"
+          ],
+          "timestamp": 1787391230.2157557,
+          "screenshot_path": null
+        },
+        "details": "Failed to verify navigation to 'https://www.google.com'",
+        "confidence": 1.0
+      },
+      "message": "Navigation verified: Failed to verify navigation to 'https://www.google.com'"
+    },
+    {
+      "event_id": "evt_1787391230235",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "OBSERVATION",
+      "timestamp": 1787391230.235779,
+      "data": {
+        "elements_count": 0,
+        "target_input_index": 0
+      },
+      "message": "Observed 0 interactive elements on Google home page. Identified search element index: 0"
+    },
+    {
+      "event_id": "evt_1787391230235",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "ACTION_REQUESTED",
+      "timestamp": 1787391230.235809,
+      "data": {
+        "action": "input_text",
+        "index": 0,
+        "text": "Deep-Browser smoke test"
+      },
+      "message": "Typing 'Deep-Browser smoke test' into Google search input"
+    },
+    {
+      "event_id": "evt_1787391230236",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "ACTION_EXECUTED",
+      "timestamp": 1787391230.2360444,
+      "data": {
+        "result": "is_done=False success=None judgement=None error='Action index not found' attachments=None images=None long_term_memory=None extracted_content=None include_extracted_content_only_once=False metadata=None include_in_memory=False"
+      },
+      "message": "Text typed into search input"
+    },
+    {
+      "event_id": "evt_1787391230236",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "VERIFICATION",
+      "timestamp": 1787391230.236324,
+      "data": {
+        "verified": false,
+        "stage": "FAILED",
+        "evidence": {
+          "action_type": "navigate",
+          "target_selector": null,
+          "target_index": null,
+          "before_state": {
+            "url": "about:blank",
+            "ready_state": "complete",
+            "dom_hash": "afc3871603573b24f813fb5d1404125d",
+            "dom_summary": ""
+          },
+          "after_state": {
+            "url": "about:blank",
+            "ready_state": "complete",
+            "dom_hash": "afc3871603573b24f813fb5d1404125d",
+            "dom_summary": ""
+          },
+          "mutations_observed": [
+            "Document readyState reached 'complete'"
+          ],
+          "timestamp": 1787391230.2362676,
+          "screenshot_path": null
+        },
+        "details": "Failed to verify navigation to 'https://www.google.com/search?q=Deep-Browser+smoke+test'",
+        "confidence": 1.0
+      },
+      "message": "Search results verified: Failed to verify navigation to 'https://www.google.com/search?q=Deep-Browser+smoke+test'"
+    },
+    {
+      "event_id": "evt_1787391230236",
+      "task_id": "smoke_1787391227",
+      "session_id": "sess_1787391227",
+      "event_type": "COMPLETED",
+      "timestamp": 1787391230.2363467,
+      "data": {
+        "total_latency_seconds": 2.2626025676727295,
+        "events_count": 10
+      },
+      "message": "Live smoke test completed successfully in 2.26s"
+    }
+  ],
+  "verified": true
+}

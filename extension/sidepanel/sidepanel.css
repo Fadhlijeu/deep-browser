@@ -8,6 +8,8 @@
     --text-muted: #9ca3af;
     --text-dim: #6b7280;
     --danger: #ef4444;
+    --warning: #f59e0b;
+    --warning-glow: rgba(245, 158, 11, 0.2);
     --success: #10b981;
     --radius: 8px;
     --font-mono: 'Courier New', monospace;
@@ -135,6 +137,95 @@ body {
     font-size: 12px;
 }
 
+/* Safe Mode Confirmation Modal */
+.confirmation-modal {
+    background: rgba(12, 15, 23, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--warning);
+    box-shadow: 0 0 20px var(--warning-glow);
+    border-radius: var(--radius);
+    padding: 14px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.confirmation-modal.hidden {
+    display: none;
+}
+
+.modal-badge {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--warning);
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.modal-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #fff;
+}
+
+.modal-field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    gap: 2px;
+}
+
+.field-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.field-val {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.field-val.highlight {
+    color: var(--primary);
+    font-family: var(--font-mono);
+}
+
+.field-val.muted {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.btn-confirm {
+    flex: 1;
+    background: var(--primary);
+    color: #000;
+    font-weight: 700;
+}
+
+.btn-confirm:hover {
+    box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.btn-reject {
+    flex: 1;
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    font-weight: 700;
+}
+
+.btn-reject:hover {
+    background: var(--danger);
+    color: #fff;
+}
+
 .timeline-section {
     flex: 1;
     display: flex;
@@ -158,22 +249,37 @@ body {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-}
-
-.feed-item {
-    background: rgba(0, 0, 0, 0.3);
-    border-left: 2px solid var(--primary);
-    border-radius: 4px;
-    padding: 8px;
+    gap: 6px;
+    font-family: var(--font-mono);
     font-size: 11px;
 }
-
-.feed-item.failed { border-left-color: var(--danger); }
 
 .empty-hint {
     color: var(--text-dim);
-    font-size: 11px;
+    font-style: italic;
     text-align: center;
-    margin-top: 40px;
+    margin-top: auto;
+    margin-bottom: auto;
+}
+
+.feed-item {
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    word-break: break-all;
+}
+
+.feed-item.failed {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.feed-item.warning {
+    color: var(--warning);
+    background: var(--warning-glow);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
 }

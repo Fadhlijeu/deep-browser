@@ -1,6 +1,6 @@
 """
-FastAPI + WebSocket companion bridge server connecting Chrome Extension MV3 and Workstation UI
-directly to the root browser_use agent core.
+FastAPI + WebSocket companion bridge server connecting Chrome Extension MV3
+directly to the root browser_use agent core with Safe Mode confirmation gateways.
 """
 
 import asyncio
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from browser_use import Agent, BrowserProfile, BrowserSession, Tools
 from browser_use.llm import ChatGoogle, ChatOpenAI, ChatAnthropic, ChatOllama
 from deep_browser.events import DeepBrowserEvent, EventBroadcaster, EventType
-from deep_browser.policies.safety import SafeModePolicy
+from deep_browser.policies.safety import SafeModeManager, SafeModePolicy, SafeTools
 from deep_browser.sessions.coordinator import MultiBrowserCoordinator
 from deep_browser.verification.engine import VerificationEngine
 from deep_browser.workspace.manager import WorkspaceManager
@@ -40,12 +40,11 @@ broadcaster = EventBroadcaster.get_instance()
 coordinator = MultiBrowserCoordinator()
 workspace = WorkspaceManager()
 verification = VerificationEngine()
-safety_policy = SafeModePolicy(enabled=True)
+safe_manager = SafeModeManager.get_instance()
 
 # Active tasks state
 active_agents: Dict[str, Agent] = {}
 active_tasks: Dict[str, Dict[str, Any]] = {}
-pending_confirmations: Dict[str, asyncio.Event] = {}
 
 
 class CreateTaskRequest(BaseModel):
@@ -57,6 +56,11 @@ class CreateTaskRequest(BaseModel):
     cdp_port: int = 9222
     headless: bool = False
     safe_mode: bool = True
+    safe_timeout_seconds: float = 60.0
+
+
+class ConfirmationDecisionRequest(BaseModel):
+    decision: str = Field(description="CONFIRM or REJECT")
 
 
 def _create_llm(provider: str, model_name: Optional[str], api_key: Optional[str]):
@@ -103,47 +107,41 @@ async def list_tasks():
 async def get_task(task_id: str):
     task = active_tasks.get(task_id)
     if not task:
-        # Check workspace storage
-        record = await workspace.load_task_record(task_id)
-        if record:
-            return record
         raise HTTPException(status_code=404, detail="Task not found")
-    task["events"] = [e.model_dump() for e in broadcaster.get_history(task_id)]
     return task
 
 
 @app.post("/api/tasks")
 async def create_task(req: CreateTaskRequest):
-    import uuid
-    task_id = f"task_{uuid.uuid4().hex[:8]}"
-    session_id = f"sess_{uuid.uuid4().hex[:8]}"
-
-    task_record = {
-        "id": task_id,
+    import time
+    task_id = f"task_{int(time.time() * 1000)}"
+    active_tasks[task_id] = {
+        "task_id": task_id,
         "task": req.task,
         "status": "running",
-        "session_id": session_id,
-        "model_provider": req.model_provider,
+        "created_at": time.time(),
         "attached_mode": req.attached_mode,
+        "safe_mode": req.safe_mode,
     }
-    active_tasks[task_id] = task_record
 
+    # Broadcast task created
     await broadcaster.broadcast(
         DeepBrowserEvent(
             task_id=task_id,
-            session_id=session_id,
             event_type=EventType.TASK_CREATED,
             message=f"Task created: {req.task}",
-            data=task_record,
+            data={"task": req.task, "attached_mode": req.attached_mode, "safe_mode": req.safe_mode},
         )
     )
 
-    asyncio.create_task(_run_agent_task(task_id, session_id, req))
-    return {"task_id": task_id, "session_id": session_id, "status": "started"}
+    # Launch in background
+    asyncio.create_task(_run_task_background(task_id, req))
+    return {"task_id": task_id, "status": "running"}
 
 
-async def _run_agent_task(task_id: str, session_id: str, req: CreateTaskRequest):
+async def _run_task_background(task_id: str, req: CreateTaskRequest):
     try:
+        session_id = f"session_{task_id}"
         session = await coordinator.create_session(
             session_id=session_id,
             attached_mode=req.attached_mode,
@@ -152,7 +150,10 @@ async def _run_agent_task(task_id: str, session_id: str, req: CreateTaskRequest)
         )
 
         llm = _create_llm(req.model_provider, req.model_name, req.api_key)
-        tools = Tools()
+        
+        # Instantiate SafeTools directly over Browser Use Tools
+        policy = SafeModePolicy(enabled=req.safe_mode, timeout_seconds=req.safe_timeout_seconds)
+        tools = SafeTools(safe_policy=policy, broadcaster=broadcaster)
 
         agent = Agent(
             task=req.task,
@@ -206,6 +207,21 @@ async def _run_agent_task(task_id: str, session_id: str, req: CreateTaskRequest)
         active_agents.pop(task_id, None)
 
 
+@app.post("/api/confirmations/{confirmation_id}")
+async def submit_confirmation_decision(confirmation_id: str, req: ConfirmationDecisionRequest):
+    resolved = safe_manager.resolve_confirmation(confirmation_id, req.decision)
+    if not resolved:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation ID not found, already resolved, or expired."
+        )
+    return {
+        "status": "success",
+        "confirmation_id": confirmation_id,
+        "decision": req.decision.upper(),
+    }
+
+
 @app.post("/api/tasks/{task_id}/stop")
 async def stop_task(task_id: str):
     agent = active_agents.get(task_id)
@@ -227,6 +243,7 @@ async def stop_task(task_id: str):
 
 
 @app.websocket("/ws")
+@app.websocket("/ws/extension")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     queue: asyncio.Queue[DeepBrowserEvent] = asyncio.Queue()
@@ -235,13 +252,46 @@ async def websocket_endpoint(websocket: WebSocket):
         queue.put_nowait(event)
 
     broadcaster.subscribe(listener)
-    try:
+
+    async def send_events():
         while True:
-            # Check for outbound events
             event = await queue.get()
             await websocket.send_text(event.model_dump_json())
+
+    async def receive_messages():
+        while True:
+            data_text = await websocket.receive_text()
+            try:
+                msg = json.loads(data_text)
+                msg_type = msg.get("type") or msg.get("event_type")
+
+                if msg_type == "CONFIRMATION_DECISION":
+                    conf_id = msg.get("confirmation_id")
+                    decision = msg.get("decision", "REJECT")
+                    if conf_id:
+                        resolved = safe_manager.resolve_confirmation(conf_id, decision)
+                        logger.info(f"Resolved confirmation {conf_id} with {decision}: {resolved}")
+
+                elif msg_type == "PING":
+                    await websocket.send_text(json.dumps({"type": "PONG", "timestamp": time.time()}))
+            except Exception as e:
+                logger.debug(f"Error parsing WebSocket incoming message: {e}")
+
+    send_task = asyncio.create_task(send_events())
+    recv_task = asyncio.create_task(receive_messages())
+
+    try:
+        done, pending = await asyncio.wait(
+            [send_task, recv_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
     except WebSocketDisconnect:
-        broadcaster.unsubscribe(listener)
+        pass
     except Exception as e:
         logger.debug(f"WebSocket closed: {e}")
+    finally:
         broadcaster.unsubscribe(listener)
+        send_task.cancel()
+        recv_task.cancel()
