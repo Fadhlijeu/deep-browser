@@ -59,6 +59,9 @@ export function ChatPane({ sessionId, onSwitchToBrowser, onExit }: ChatPaneProps
       inputTokens: number | undefined;
       outputTokens: number | undefined;
       canResume: boolean | undefined;
+      tag: string | undefined;
+      origin: 'WORKSPACE' | 'EXTENSION' | undefined;
+      handoffState: string | undefined;
     } | null => {
       const sess = s.byId[sessionId];
       if (!sess) return null;
@@ -74,6 +77,9 @@ export function ChatPane({ sessionId, onSwitchToBrowser, onExit }: ChatPaneProps
         inputTokens: sess.inputTokens,
         outputTokens: sess.outputTokens,
         canResume: sess.canResume,
+        tag: sess.tag,
+        origin: sess.origin,
+        handoffState: sess.handoffState,
       };
     }),
   );
@@ -304,6 +310,11 @@ export function ChatPane({ sessionId, onSwitchToBrowser, onExit }: ChatPaneProps
       <div className="chat-pane__header">
         <div className="chat-pane__title" aria-hidden="true" />
         <div className="chat-pane__meta">
+          {(header.tag === 'ext' || header.origin === 'EXTENSION') && (
+            <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.35)', letterSpacing: '0.5px' }}>
+              [EXT] Imported from Extension
+            </span>
+          )}
           {header.engine === 'gemini' && (
             <img className="pane__engine-icon" src={geminiLogo} alt="Google Gemini" title="Google Gemini" />
           )}

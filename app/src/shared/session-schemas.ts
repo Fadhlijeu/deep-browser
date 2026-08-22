@@ -161,6 +161,11 @@ export const AgentSessionSchema = z.object({
   browserType: z.string().optional(),
   browserId: z.string().optional(),
   tabId: z.union([z.string(), z.number()]).optional(),
+  owner: z.enum(['WORKSPACE', 'EXTENSION']).optional(),
+  origin: z.enum(['WORKSPACE', 'EXTENSION']).optional(),
+  originSessionId: z.string().optional(),
+  handoffState: z.enum(['ACTIVE', 'HANDOFF_REQUESTED', 'HANDED_OFF', 'CANCELLED', 'FAILED']).optional(),
+  tag: z.string().optional(),
 });
 
 export type AgentSession = z.infer<typeof AgentSessionSchema>;

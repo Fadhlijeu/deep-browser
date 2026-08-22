@@ -46,6 +46,11 @@ export interface AgentSession {
   browserType?: 'bundled' | 'edge' | 'chrome' | 'brave';
   browserId?: string;
   tabId?: string | number;
+  owner?: 'WORKSPACE' | 'EXTENSION';
+  origin?: 'WORKSPACE' | 'EXTENSION';
+  originSessionId?: string;
+  handoffState?: 'ACTIVE' | 'HANDOFF_REQUESTED' | 'HANDED_OFF' | 'CANCELLED' | 'FAILED';
+  tag?: string;
 }
 
 export interface ToolResult {

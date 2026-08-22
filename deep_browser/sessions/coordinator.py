@@ -21,6 +21,11 @@ class SessionViewModel(BaseModel):
     browser_session_id: str
     mode: Literal["attached", "managed"]
     status: Literal["connected", "connecting", "disconnected", "error"]
+    owner: Literal["WORKSPACE", "EXTENSION"] = "EXTENSION"
+    origin: Literal["WORKSPACE", "EXTENSION"] = "EXTENSION"
+    origin_session_id: Optional[str] = None
+    handoff_state: Literal["ACTIVE", "HANDOFF_REQUESTED", "HANDED_OFF", "CANCELLED", "FAILED"] = "ACTIVE"
+    tag: Optional[str] = None
     active_url: Optional[str] = None
     page_title: Optional[str] = None
     tab_count: int = 1
@@ -73,6 +78,7 @@ class SessionCoordinator:
         cdp_port: int = 9222,
         cdp_url: Optional[str] = None,
         browser_type: str = "chrome",
+        owner: Literal["WORKSPACE", "EXTENSION"] = "EXTENSION",
     ) -> SessionViewModel:
         """Connect to an existing user browser (Chrome/Edge/Brave) running with --remote-debugging-port, auto-launching if needed."""
         import uuid
@@ -104,31 +110,46 @@ class SessionCoordinator:
                     subprocess.Popen([bin_path, f"--remote-debugging-port={cdp_port}"])
                     await asyncio.sleep(2.0)
                 except Exception as e:
-                    logger.warning(f"Could not auto-launch {browser_label}: {e}")
+                    logger.warning(f"Could not auto-launch browser executable: {e}")
 
-        # 3. Create BrowserSession
+        # 3. Create BrowserProfile and BrowserSession
+        status = "connecting"
+        error_msg = None
         profile = BrowserProfile(
             headless=False,
             cdp_url=target_cdp,
-            keep_alive=True,
         )
         session = BrowserSession(browser_profile=profile)
 
-        status = "connecting"
-        error_msg = None
         try:
             await session.start()
             status = "connected"
         except Exception as e:
-            logger.warning(f"Attached {browser_label} connection failed ({e}), falling back to Managed Browser.")
-            return await self.create_managed_session(name="Managed Chromium")
+            logger.warning(f"Initial CDP connection probe failed: {e}. Falling back to clean managed instance for {browser_label}...")
+            bin_path = find_browser_executable(browser_type)
+            profile = BrowserProfile(
+                headless=False,
+                executable_path=bin_path,
+            )
+            session = BrowserSession(browser_profile=profile)
+            try:
+                await session.start()
+                status = "connected"
+            except Exception as e2:
+                logger.error(f"Fallback browser launch failed: {e2}")
+                status = "error"
+                error_msg = str(e2)
 
         self._sessions[session_id] = session
         self._session_metadata[session_id] = {
             "name": session_name,
             "mode": "attached",
-            "browser_type": browser_type,
             "status": status,
+            "owner": owner,
+            "origin": owner,
+            "origin_session_id": None,
+            "handoff_state": "ACTIVE",
+            "tag": None,
             "error_message": error_msg,
         }
 
@@ -139,45 +160,45 @@ class SessionCoordinator:
 
     async def create_managed_session(
         self,
-        name: str = "Managed Session",
+        name: Optional[str] = None,
         headless: bool = False,
         user_data_dir: Optional[str] = None,
         profile_directory: Optional[str] = None,
+        owner: Literal["WORKSPACE", "EXTENSION"] = "EXTENSION",
     ) -> SessionViewModel:
-        """Spawn a dedicated, isolated Chromium instance using Browser Use."""
-        import tempfile
+        """Create a dedicated, managed BrowserSession with isolated user data."""
         import uuid
 
         session_id = f"session_managed_{uuid.uuid4().hex[:8]}"
+        session_name = name or f"Managed Session #{len(self._sessions) + 1}"
 
-        if user_data_dir is None:
-            user_data_dir = tempfile.mkdtemp(prefix="db_managed_")
-
-        profile_kwargs: Dict[str, Any] = {
-            "headless": headless,
-            "keep_alive": True,
-            "user_data_dir": user_data_dir,
-        }
-        if profile_directory is not None:
-            profile_kwargs["profile_directory"] = profile_directory
-
-        profile = BrowserProfile(**profile_kwargs)
+        profile = BrowserProfile(
+            headless=headless,
+            user_data_dir=user_data_dir,
+            profile_directory=profile_directory,
+        )
         session = BrowserSession(browser_profile=profile)
 
+        status = "connecting"
+        error_msg = None
         try:
             await session.start()
             status = "connected"
-            error_msg = None
         except Exception as e:
+            logger.error(f"Error starting managed session {session_id}: {e}", exc_info=True)
             status = "error"
             error_msg = str(e)
-            logger.error(f"Failed to start managed session {session_id}: {e}")
 
         self._sessions[session_id] = session
         self._session_metadata[session_id] = {
-            "name": name,
+            "name": session_name,
             "mode": "managed",
             "status": status,
+            "owner": owner,
+            "origin": owner,
+            "origin_session_id": None,
+            "handoff_state": "ACTIVE",
+            "tag": None,
             "error_message": error_msg,
         }
 
@@ -191,6 +212,7 @@ class SessionCoordinator:
         session: BrowserSession,
         name: str = "Default Session",
         mode: Literal["attached", "managed"] = "managed",
+        owner: Literal["WORKSPACE", "EXTENSION"] = "WORKSPACE",
     ) -> str:
         """Register an already created BrowserSession."""
         session_id = session.id or f"session_{int(time.time())}"
@@ -199,11 +221,55 @@ class SessionCoordinator:
             "name": name,
             "mode": mode,
             "status": "connected" if session.is_cdp_connected else "disconnected",
+            "owner": owner,
+            "origin": owner,
+            "origin_session_id": None,
+            "handoff_state": "ACTIVE",
+            "tag": None,
             "error_message": None,
         }
         if not self._active_session_id:
             self._active_session_id = session_id
         return session_id
+
+    def handoff_session(
+        self,
+        session_id: str,
+        to_owner: Literal["WORKSPACE", "EXTENSION"] = "WORKSPACE",
+    ) -> Optional[SessionViewModel]:
+        """Explicitly hand off a session (e.g. Extension -> Workspace)."""
+        if session_id not in self._session_metadata:
+            return None
+        meta = self._session_metadata[session_id]
+        meta["owner"] = to_owner
+        meta["origin"] = "EXTENSION" if to_owner == "WORKSPACE" else "WORKSPACE"
+        meta["origin_session_id"] = session_id
+        meta["handoff_state"] = "HANDED_OFF"
+        meta["tag"] = "ext" if to_owner == "WORKSPACE" else None
+        return self._build_view_sync(session_id)
+
+    def _build_view_sync(self, session_id: str) -> Optional[SessionViewModel]:
+        session = self._sessions.get(session_id)
+        if not session:
+            return None
+        meta = self._session_metadata.get(session_id, {})
+        return SessionViewModel(
+            id=session_id,
+            name=meta.get("name", "Browser Session"),
+            browser_session_id=session.id or session_id,
+            mode=meta.get("mode", "managed"),
+            status=meta.get("status", "connected" if session.is_cdp_connected else "disconnected"),
+            owner=meta.get("owner", "EXTENSION"),
+            origin=meta.get("origin", "EXTENSION"),
+            origin_session_id=meta.get("origin_session_id"),
+            handoff_state=meta.get("handoff_state", "ACTIVE"),
+            tag=meta.get("tag"),
+            active_url=None,
+            page_title=None,
+            tab_count=1,
+            is_active=(session_id == self._active_session_id),
+            error_message=meta.get("error_message"),
+        )
 
     def switch_active_session(self, session_id: str) -> bool:
         """Switch the active session context for incoming tasks."""
@@ -264,9 +330,14 @@ class SessionCoordinator:
         return SessionViewModel(
             id=session_id,
             name=meta.get("name", "Browser Session"),
-            browser_session_id=session.id,
+            browser_session_id=session.id or session_id,
             mode=meta.get("mode", "managed"),
             status=status,
+            owner=meta.get("owner", "EXTENSION"),
+            origin=meta.get("origin", "EXTENSION"),
+            origin_session_id=meta.get("origin_session_id"),
+            handoff_state=meta.get("handoff_state", "ACTIVE"),
+            tag=meta.get("tag"),
             active_url=active_url,
             page_title=page_title,
             tab_count=tab_count,
@@ -274,10 +345,13 @@ class SessionCoordinator:
             error_message=error_msg,
         )
 
-    async def list_session_views(self) -> List[SessionViewModel]:
-        """List all tracked sessions with up-to-date metadata."""
+    async def list_session_views(self, owner: Optional[str] = None) -> List[SessionViewModel]:
+        """List tracked sessions, optionally filtered by owner."""
         views = []
         for sid in list(self._sessions.keys()):
+            meta = self._session_metadata.get(sid, {})
+            if owner and meta.get("owner") != owner:
+                continue
             view = await self.get_session_view(sid)
             if view:
                 views.append(view)

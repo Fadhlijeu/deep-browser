@@ -235,7 +235,14 @@ function SessionRow({
           )}
           <span className="sidebar__row-dot" style={{ background: dot.color }} aria-label={dot.label} />
         </span>
-        <span className="sidebar__row-title">{s.prompt}</span>
+        <span className="sidebar__row-title">
+          {(s.tag === 'ext' || s.origin === 'EXTENSION') && (
+            <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', background: 'rgba(59, 130, 246, 0.25)', color: '#60a5fa', marginRight: '6px', letterSpacing: '0.5px' }}>
+              EXT
+            </span>
+          )}
+          {s.prompt}
+        </span>
         <span className="sidebar__row-time">{formatRelative(last)}</span>
       </button>
 
@@ -304,7 +311,14 @@ function TabChip({
         )}
         <span className="tabstrip__chip-dot" style={{ background: dot.color }} aria-label={dot.label} />
       </span>
-      <span className="tabstrip__chip-title">{s.prompt}</span>
+      <span className="tabstrip__chip-title">
+        {(s.tag === 'ext' || s.origin === 'EXTENSION') && (
+          <span style={{ fontSize: '9px', fontWeight: 700, padding: '0 4px', borderRadius: '3px', background: 'rgba(59, 130, 246, 0.25)', color: '#60a5fa', marginRight: '4px' }}>
+            EXT
+          </span>
+        )}
+        {s.prompt}
+      </span>
     </button>
   );
 }

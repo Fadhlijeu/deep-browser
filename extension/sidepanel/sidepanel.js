@@ -77,6 +77,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const btnSendToWorkspace = document.getElementById('btn-send-to-workspace');
+    if (btnSendToWorkspace) {
+        btnSendToWorkspace.addEventListener('click', async () => {
+            const sid = activeTaskId || sessionSelect.value;
+            btnSendToWorkspace.disabled = true;
+            btnSendToWorkspace.textContent = '⏳ Sending...';
+
+            try {
+                const res = await fetch('http://127.0.0.1:8765/api/handoff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sid,
+                        to_owner: 'WORKSPACE',
+                    }),
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Server returned ${res.status}`);
+                }
+
+                btnSendToWorkspace.textContent = '✅ Sent to Workspace';
+                btnSendToWorkspace.classList.add('sent');
+
+                appendEventCard({
+                    type: 'verified',
+                    tag: 'HANDOFF',
+                    icon: '🚀',
+                    body: 'Session successfully sent to Desktop Workspace with [EXT] tag.',
+                });
+            } catch (e) {
+                btnSendToWorkspace.disabled = false;
+                btnSendToWorkspace.textContent = '🚀 Send to Workspace';
+                appendEventCard({
+                    type: 'error',
+                    tag: 'HANDOFF ERROR',
+                    icon: '❌',
+                    body: `Could not hand off session: ${e.message}`,
+                    isError: true,
+                });
+            }
+        });
+    }
+
     // --- 2. WebSocket & Health Connection ---
     function setConnectionStatus(online) {
         isConnected = online;
@@ -449,6 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     task: goal,
                     session_id: selectedSid,
+                    owner: 'EXTENSION',
                     browser_mode: bMode,
                     browser_type: bType,
                     browser_id: `${bType}_9222`,

@@ -1818,20 +1818,29 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.handle('sessions:list', () => {
-    const list = sessionManager.listSessions().map((s) => ({
+  ipcMain.handle('sessions:list', (_event, filterOwner?: 'WORKSPACE' | 'EXTENSION' | 'ALL') => {
+    const list = sessionManager.listSessions(filterOwner ?? 'WORKSPACE').map((s) => ({
       ...s,
       hasBrowser: !!browserPool.getWebContents(s.id),
     }));
-    mainLogger.info('main.sessions:list', { returning: list.length, ids: list.map((s) => s.id) });
+    mainLogger.info('main.sessions:list', { filterOwner: filterOwner ?? 'WORKSPACE', returning: list.length, ids: list.map((s) => s.id) });
     return list;
   });
 
   ipcMain.handle('sessions:list-all', () => {
-    return sessionManager.listSessions().map((s) => ({
+    return sessionManager.listSessions('ALL').map((s) => ({
       ...s,
       hasBrowser: !!browserPool.getWebContents(s.id),
     }));
+  });
+
+  ipcMain.handle('sessions:import-from-extension', (_event, extSession: unknown) => {
+    if (!extSession || typeof extSession !== 'object') {
+      throw new Error('Invalid extension session payload');
+    }
+    const id = sessionManager.importFromExtension(extSession as any);
+    mainLogger.info('main.sessions:import-from-extension', { id });
+    return { status: 'success', id };
   });
 
   ipcMain.handle('sessions:get', (_event, id: string) => {

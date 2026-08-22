@@ -87,6 +87,7 @@ interface ElectronSessionAPI {
   previewStop: (id: string, ownerToken: string) => Promise<void>;
   list: () => Promise<import('./hub/types').AgentSession[]>;
   listAll: () => Promise<import('./hub/types').AgentSession[]>;
+  importFromExtension: (extSession: Partial<import('./hub/types').AgentSession> & { prompt: string }) => Promise<{ status: string; id: string }>;
   get: (id: string) => Promise<import('./hub/types').AgentSession | null>;
   viewAttach: (id: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>;
   viewDetach: (id: string) => Promise<boolean>;

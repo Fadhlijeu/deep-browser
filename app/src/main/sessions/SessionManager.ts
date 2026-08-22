@@ -206,9 +206,15 @@ export class SessionManager extends EventEmitter {
     browserType?: string;
     browserId?: string;
     tabId?: string | number;
+    owner?: 'WORKSPACE' | 'EXTENSION';
+    origin?: 'WORKSPACE' | 'EXTENSION';
+    originSessionId?: string;
+    handoffState?: 'ACTIVE' | 'HANDOFF_REQUESTED' | 'HANDED_OFF' | 'CANCELLED' | 'FAILED';
+    tag?: string;
   }): string {
     const id = randomUUID();
     const now = Date.now();
+    const owner = opts?.owner ?? (opts?.originChannel === 'chrome-extension' ? 'EXTENSION' : 'WORKSPACE');
     const session: AgentSession = {
       id,
       prompt,
@@ -217,6 +223,11 @@ export class SessionManager extends EventEmitter {
       output: [],
       originChannel: opts?.originChannel,
       originConversationId: opts?.originConversationId,
+      owner,
+      origin: opts?.origin ?? owner,
+      originSessionId: opts?.originSessionId,
+      handoffState: opts?.handoffState ?? 'ACTIVE',
+      tag: opts?.tag,
       browserMode: opts?.browserMode ?? (opts?.originChannel === 'chrome-extension' ? 'ATTACHED' : 'MANAGED'),
       browserType: opts?.browserType,
       browserId: opts?.browserId ?? (opts?.browserMode === 'ATTACHED' || opts?.originChannel === 'chrome-extension' ? 'chrome_9222' : 'bundled_chromium'),
@@ -229,6 +240,9 @@ export class SessionManager extends EventEmitter {
       id,
       promptLength: prompt.length,
       originChannel: opts?.originChannel ?? null,
+      owner: session.owner,
+      origin: session.origin,
+      tag: session.tag,
       browserMode: session.browserMode,
       browserType: session.browserType,
       browserId: session.browserId,
@@ -691,14 +705,57 @@ export class SessionManager extends EventEmitter {
     return this.sessions.get(id)?.status;
   }
 
-  listSessions(): AgentSession[] {
-    const list = Array.from(this.sessions.values());
+  listSessions(filterOwner: 'WORKSPACE' | 'EXTENSION' | 'ALL' = 'WORKSPACE'): AgentSession[] {
+    let list = Array.from(this.sessions.values());
+    if (filterOwner !== 'ALL') {
+      list = list.filter((s) => (s.owner ?? 'WORKSPACE') === filterOwner);
+    }
     mainLogger.info('SessionManager.listSessions', {
+      filterOwner,
       returning: list.length,
     });
     return list
       .sort((a, b) => b.createdAt - a.createdAt)
       .map((s): AgentSession => ({ ...s, prompt: this.getSnapshotPrompt(s), output: [] as HlEvent[] }));
+  }
+
+  /** Import or hand off a session from the Chrome Extension to Workspace. */
+  importFromExtension(extSession: Partial<AgentSession> & { prompt: string }): string {
+    const id = extSession.id ?? randomUUID();
+    const now = Date.now();
+    const existing = this.sessions.get(id);
+    if (existing) {
+      existing.owner = 'WORKSPACE';
+      existing.origin = 'EXTENSION';
+      existing.originSessionId = extSession.originSessionId ?? id;
+      existing.handoffState = 'HANDED_OFF';
+      existing.tag = 'ext';
+      this.emitEvent('session-updated', { ...existing });
+      mainLogger.info('SessionManager.importFromExtension.existing', { id });
+      return id;
+    }
+
+    const session: AgentSession = {
+      id,
+      prompt: extSession.prompt,
+      status: extSession.status ?? 'idle',
+      createdAt: extSession.createdAt ?? now,
+      output: extSession.output ?? [],
+      owner: 'WORKSPACE',
+      origin: 'EXTENSION',
+      originSessionId: extSession.originSessionId ?? id,
+      handoffState: 'HANDED_OFF',
+      tag: 'ext',
+      browserMode: extSession.browserMode ?? 'ATTACHED',
+      browserType: extSession.browserType,
+      browserId: extSession.browserId,
+      tabId: extSession.tabId,
+    };
+    this.sessions.set(id, session);
+    this.db.insertSession({ id, prompt: extSession.prompt, status: session.status, createdAt: session.createdAt });
+    mainLogger.info('SessionManager.importFromExtension.new', { id, prompt: session.prompt });
+    this.emitEvent('session-created', { ...session });
+    return id;
   }
 
   /** Store the provider conversation id reported by the engine stream. */

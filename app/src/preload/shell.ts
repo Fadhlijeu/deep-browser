@@ -303,6 +303,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const raw = await ipcRenderer.invoke('sessions:list-all');
       return validateSessionList(raw);
     },
+    importFromExtension: (extSession: Partial<AgentSession> & { prompt: string }): Promise<{ status: string; id: string }> =>
+      ipcRenderer.invoke('sessions:import-from-extension', extSession),
     get: async (id: string): Promise<AgentSession | null> => {
       const raw = await ipcRenderer.invoke('sessions:get', id);
       if (!raw) return null;

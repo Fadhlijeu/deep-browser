@@ -52,6 +52,7 @@ active_tasks: Dict[str, Dict[str, Any]] = {}
 class CreateTaskRequest(BaseModel):
     task: str
     session_id: Optional[str] = None
+    owner: str = Field(default="EXTENSION", description="WORKSPACE or EXTENSION")
     browser_mode: str = Field(default="ATTACHED", description="ATTACHED (user's current Chrome/Edge) or MANAGED")
     browser_type: str = Field(default="chrome", description="chrome, edge, brave, or bundled")
     browser_id: Optional[str] = "chrome_9222"
@@ -67,10 +68,16 @@ class CreateTaskRequest(BaseModel):
     challenge_timeout_seconds: float = 60.0
 
 
+class HandoffRequest(BaseModel):
+    session_id: Optional[str] = None
+    to_owner: str = "WORKSPACE"
+
+
 class AttachChromeRequest(BaseModel):
     name: str = "Current Chrome"
     cdp_port: int = 9222
     cdp_url: Optional[str] = None
+    owner: str = "EXTENSION"
 
 
 class CreateManagedSessionRequest(BaseModel):
@@ -78,6 +85,7 @@ class CreateManagedSessionRequest(BaseModel):
     headless: bool = False
     user_data_dir: Optional[str] = None
     profile_directory: Optional[str] = None
+    owner: str = "EXTENSION"
 
 
 class ConfirmationDecisionRequest(BaseModel):
@@ -106,8 +114,8 @@ async def health():
 
 
 @app.get("/api/sessions")
-async def list_sessions():
-    views = await coordinator.list_session_views()
+async def list_sessions(owner: Optional[str] = "EXTENSION"):
+    views = await coordinator.list_session_views(owner=owner)
     return {
         "sessions": [v.model_dump() for v in views],
         "active_session_id": coordinator.active_session_id,
@@ -117,7 +125,7 @@ async def list_sessions():
 @app.post("/api/sessions/attach")
 async def attach_chrome(req: AttachChromeRequest):
     try:
-        view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, cdp_url=req.cdp_url)
+        view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, cdp_url=req.cdp_url, owner=req.owner)
         return {"status": "success", "session": view.model_dump()}
     except Exception as e:
         logger.error(f"Error attaching to Chrome: {e}", exc_info=True)
@@ -132,11 +140,54 @@ async def create_managed(req: CreateManagedSessionRequest):
             headless=req.headless,
             user_data_dir=req.user_data_dir,
             profile_directory=req.profile_directory,
+            owner=req.owner,
         )
         return {"status": "success", "session": view.model_dump()}
     except Exception as e:
         logger.error(f"Error creating managed session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sessions/{session_id}/handoff")
+@app.post("/api/handoff")
+async def handoff_session(session_id: Optional[str] = None, req: Optional[HandoffRequest] = None):
+    target_sid = session_id or (req.session_id if req else None)
+    if not target_sid:
+        target_sid = coordinator.active_session_id
+    if not target_sid:
+        raise HTTPException(status_code=400, detail="No session_id specified for handoff")
+
+    to_owner = req.to_owner if req and req.to_owner else "WORKSPACE"
+    view = coordinator.handoff_session(target_sid, to_owner=to_owner)
+    
+    session_data = view.model_dump() if view else {
+        "id": target_sid,
+        "owner": to_owner,
+        "origin": "EXTENSION" if to_owner == "WORKSPACE" else "WORKSPACE",
+        "origin_session_id": target_sid,
+        "tag": "ext" if to_owner == "WORKSPACE" else None,
+        "handoff_state": "HANDED_OFF",
+    }
+
+    # Broadcast explicit handoff event
+    await broadcaster.broadcast(
+        DeepBrowserEvent(
+            task_id=f"handoff_{target_sid}",
+            session_id=target_sid,
+            owner=to_owner,
+            origin="EXTENSION",
+            tag="ext",
+            event_type=EventType.SESSION_HANDOFF_COMPLETED,
+            message=f"Session {target_sid} handed off to {to_owner}",
+            data={"session": session_data},
+        )
+    )
+
+    return {
+        "status": "success",
+        "message": f"Session {target_sid} handed off to {to_owner}",
+        "session": session_data,
+    }
 
 
 @app.post("/api/sessions/{session_id}/switch")
@@ -225,11 +276,11 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
         if not session:
             # Create according to request mode
             if is_attached:
-                view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, browser_type=req.browser_type)
+                view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port, browser_type=req.browser_type, owner=req.owner)
                 session_id = view.id
                 session = coordinator.get_session(session_id)
             else:
-                view = await coordinator.create_managed_session(headless=req.headless)
+                view = await coordinator.create_managed_session(headless=req.headless, owner=req.owner)
                 session_id = view.id
                 session = coordinator.get_session(session_id)
 
