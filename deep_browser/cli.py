@@ -6,12 +6,19 @@ import click
 import uvicorn
 from rich.console import Console
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Ensure repository root is in sys.path
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-console = Console()
+console = Console(highlight=False)
 
 
 @click.group()
@@ -33,12 +40,13 @@ def serve(host: str, port: int):
 @click.argument("task", required=False, default=None)
 @click.option("--provider", default="gemini", help="LLM Provider: gemini, openai, anthropic, ollama")
 @click.option("--model", default=None, help="Model name")
+@click.option("--headless", is_flag=True, default=False, help="Run browser in headless mode")
 @click.option("--attached", is_flag=True, default=False, help="Attach to running browser on port 9222")
 @click.option("--browser", "browser_type", default="bundled", help="Browser selection: bundled, chrome, edge, brave")
 @click.option("--cdp-port", default=None, type=int, help="CDP port to connect to")
 @click.option("--target-id", default=None, help="CDP target ID to drive")
 @click.option("--session", "session_id", default=None, help="Session ID")
-@click.option("--ndjson", is_flag=True, default=True, help="Emit NDJSON stream for IDE integration")
+@click.option("--ndjson", is_flag=True, default=False, help="Emit NDJSON stream for IDE integration")
 def run(
     task: str | None,
     provider: str,
@@ -134,14 +142,15 @@ def run(
             sys.stdout.write(json.dumps({"type": "done", "summary": summary, "iterations": len(agent.history.history)}) + "\n")
             sys.stdout.flush()
         else:
-            console.print(f"[bold green]Task Finished:[/bold green]\n{result}")
+            console.print(f"[bold green]Task Finished:[/bold green]\n{summary}")
 
     try:
         asyncio.run(_execute())
     except Exception as e:
         err_str = str(e)
         if "ConnectError" in type(e).__name__ or "All connection attempts failed" in err_str:
-            err_str = f"Connection failed to Chrome on port 9222. Please start Chrome with '--remote-debugging-port=9222' to use Attached Chrome mode, or use Bundled Chromium."
+            b_label = "Microsoft Edge" if browser_type in ("edge", "msedge") else "Google Chrome" if browser_type == "chrome" else "Brave" if browser_type == "brave" else "Browser"
+            err_str = f"Connection failed to {b_label} on port 9222. Please launch {b_label} with '--remote-debugging-port=9222', or run with '--browser bundled'."
         if ndjson:
             sys.stdout.write(json.dumps({"type": "error", "message": err_str}) + "\n")
             sys.stdout.flush()
