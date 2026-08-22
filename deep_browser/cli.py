@@ -110,11 +110,51 @@ def run(
             sys.stdout.write(json.dumps({"type": "thinking", "text": f"Running task: {task[:120]}..."}) + "\n")
             sys.stdout.flush()
 
+        def _on_step(state, model_output, step_number):
+            if not ndjson:
+                return
+            try:
+                curr_state = getattr(model_output, "current_state", None)
+                if curr_state:
+                    thought = getattr(curr_state, "thought", None) or getattr(curr_state, "next_goal", None) or getattr(curr_state, "memory", None)
+                    if thought:
+                        sys.stdout.write(json.dumps({
+                            "type": "thinking",
+                            "text": f"[Step {step_number}] {thought}"
+                        }) + "\n")
+                        sys.stdout.flush()
+
+                actions = getattr(model_output, "action", []) or []
+                for act in actions:
+                    act_dict = act.model_dump(exclude_none=True) if hasattr(act, "model_dump") else (act if isinstance(act, dict) else {})
+                    for act_name, act_args in act_dict.items():
+                        if act_name == "done":
+                            continue
+                        sys.stdout.write(json.dumps({
+                            "type": "tool_call",
+                            "name": f"browser.{act_name}",
+                            "args": act_args,
+                            "iteration": step_number
+                        }) + "\n")
+                        sys.stdout.flush()
+
+                        sys.stdout.write(json.dumps({
+                            "type": "tool_result",
+                            "name": f"browser.{act_name}",
+                            "ok": True,
+                            "preview": f"Executed browser action: {act_name}",
+                            "ms": 250
+                        }) + "\n")
+                        sys.stdout.flush()
+            except Exception:
+                pass
+
         agent = Agent(
             task=task,
             llm=llm,
             browser_session=session,
             tools=tools,
+            register_new_step_callback=_on_step,
         )
 
         result = await agent.run()

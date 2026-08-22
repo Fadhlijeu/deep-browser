@@ -62,9 +62,9 @@ export type BrowserTarget = 'bundled' | 'edge' | 'chrome' | 'brave';
 
 const BROWSER_TARGET_INFO: Record<BrowserTarget, { label: string; mode: 'MANAGED' | 'ATTACHED'; tooltip: string }> = {
   bundled: { label: '🌐 Bundled', mode: 'MANAGED', tooltip: 'Browser: Bundled Chromium (Isolated session)' },
-  edge: { label: '🌊 Edge', mode: 'ATTACHED', tooltip: 'Browser: Microsoft Edge (Attached mode)' },
-  chrome: { label: '⚡ Chrome', mode: 'ATTACHED', tooltip: 'Browser: Google Chrome (Attached mode)' },
-  brave: { label: '🦁 Brave', mode: 'ATTACHED', tooltip: 'Browser: Brave Browser (Attached mode)' },
+  edge: { label: '🌊 Edge', mode: 'MANAGED', tooltip: 'Browser: Microsoft Edge' },
+  chrome: { label: '⚡ Chrome', mode: 'MANAGED', tooltip: 'Browser: Google Chrome' },
+  brave: { label: '🦁 Brave', mode: 'MANAGED', tooltip: 'Browser: Brave Browser' },
 };
 
 const BROWSER_TARGET_STORAGE_KEY = 'deep_browser:last_browser_target';
