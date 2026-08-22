@@ -231,6 +231,7 @@ export async function runEngine(opts: RunEngineOptions): Promise<void> {
     harnessDir: opts.harnessDir,
     sessionId: opts.sessionId,
     browserMode: opts.browserMode,
+    browserType: opts.browserType,
     targetId,
     cdpPort: opts.cdpPort,
     resumeSessionId: opts.resumeSessionId,

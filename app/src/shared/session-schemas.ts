@@ -158,6 +158,7 @@ export const AgentSessionSchema = z.object({
   authMode: z.enum(['apiKey', 'subscription']).optional(),
   subscriptionType: z.string().optional(),
   browserMode: z.enum(['MANAGED', 'ATTACHED']).optional(),
+  browserType: z.string().optional(),
   browserId: z.string().optional(),
   tabId: z.union([z.string(), z.number()]).optional(),
 });

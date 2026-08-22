@@ -18,6 +18,8 @@ export interface SpawnContext {
   sessionId: string;
   /** Browser mode: MANAGED (bundled Chromium) or ATTACHED (existing Chrome). */
   browserMode?: 'MANAGED' | 'ATTACHED';
+  /** Selected browser: 'bundled', 'edge', 'chrome', 'brave'. */
+  browserType?: string;
   /** CDP target id for the browser view the agent must drive. */
   targetId: string;
   /** Port Electron exposes CDP on. */
@@ -134,6 +136,7 @@ export interface RunEngineOptions {
   prompt: string;
   sessionId: string;
   browserMode?: 'MANAGED' | 'ATTACHED';
+  browserType?: string;
   webContents?: WebContents;
   targetId?: string;
   cdpPort: number;

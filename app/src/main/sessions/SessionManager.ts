@@ -203,6 +203,7 @@ export class SessionManager extends EventEmitter {
     originConversationId?: string;
     attachmentTurnIndex?: number;
     browserMode?: 'MANAGED' | 'ATTACHED';
+    browserType?: string;
     browserId?: string;
     tabId?: string | number;
   }): string {
@@ -217,6 +218,7 @@ export class SessionManager extends EventEmitter {
       originChannel: opts?.originChannel,
       originConversationId: opts?.originConversationId,
       browserMode: opts?.browserMode ?? (opts?.originChannel === 'chrome-extension' ? 'ATTACHED' : 'MANAGED'),
+      browserType: opts?.browserType,
       browserId: opts?.browserId ?? (opts?.browserMode === 'ATTACHED' || opts?.originChannel === 'chrome-extension' ? 'chrome_9222' : 'bundled_chromium'),
       tabId: opts?.tabId,
     };
@@ -228,6 +230,7 @@ export class SessionManager extends EventEmitter {
       promptLength: prompt.length,
       originChannel: opts?.originChannel ?? null,
       browserMode: session.browserMode,
+      browserType: session.browserType,
       browserId: session.browserId,
     });
     this.emitEvent('session-created', { ...session });

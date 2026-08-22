@@ -1077,6 +1077,7 @@ app.whenReady().then(async () => {
       harnessDir: harnessDir(),
       sessionId: validatedId,
       browserMode: resumeSession?.browserMode ?? 'MANAGED',
+      browserType: resumeSession?.browserType ?? (resumeSession?.browserMode === 'ATTACHED' ? 'edge' : 'bundled'),
       prompt: validatedPrompt,
       attachments: resumeAttachments.map((a) => ({ name: a.name, mime: a.mime, bytes: a.bytes })),
       webContents,
@@ -1197,6 +1198,7 @@ app.whenReady().then(async () => {
         harnessDir: harnessDir(),
         sessionId: id,
         browserMode: session?.browserMode ?? 'MANAGED',
+        browserType: session?.browserType ?? (session?.browserMode === 'ATTACHED' ? 'edge' : 'bundled'),
         prompt: sessionManager.getInitialPrompt(id) ?? sessionManager.getSession(id)!.prompt,
         attachments: attachmentsForRun.map((a) => ({ name: a.name, mime: a.mime, bytes: a.bytes })),
         webContents: view?.webContents,
@@ -1352,6 +1354,7 @@ app.whenReady().then(async () => {
     const id = sessionManager.createSession(validatedPrompt, {
       attachmentTurnIndex: initialAttachmentTurnIndex,
       browserMode,
+      browserType,
       browserId: browserMode === 'ATTACHED' ? `${browserType}_9222` : 'bundled_chromium',
     });
     sessionManager.setSessionEngine(id, engineId);
