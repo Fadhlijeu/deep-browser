@@ -225,6 +225,8 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
             # Create according to request mode
             if is_attached:
                 view = await coordinator.attach_system_chrome(cdp_port=req.cdp_port)
+                if view.status == 'error':
+                    raise RuntimeError(f"Chrome remote debugging port ({req.cdp_port}) is not active. To use Attached mode, launch Chrome with: chrome.exe --remote-debugging-port={req.cdp_port}, or switch to Bundled Chromium in Desktop.")
                 session_id = view.id
                 session = coordinator.get_session(session_id)
             else:
@@ -419,9 +421,12 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
 
     except Exception as e:
         logger.error(f"Error in task {task_id}: {e}", exc_info=True)
+        err_msg = str(e)
+        if "ConnectError" in type(e).__name__ or "All connection attempts failed" in err_msg:
+            err_msg = f"Connection failed to Chrome on port {req.cdp_port}. Please start Chrome with '--remote-debugging-port={req.cdp_port}', or switch to Bundled Chromium in Desktop."
         if task_id in active_tasks:
             active_tasks[task_id]["status"] = "failed"
-            active_tasks[task_id]["error"] = str(e)
+            active_tasks[task_id]["error"] = err_msg
         await broadcaster.broadcast(
             DeepBrowserEvent(
                 task_id=task_id,
@@ -430,8 +435,8 @@ async def _run_task_background(task_id: str, req: CreateTaskRequest):
                 browser_id=browser_id,
                 tab_id=tab_id,
                 event_type=EventType.FAILED,
-                message=f"Task failed: {e}",
-                data={"error": str(e)},
+                message=f"Task failed: {err_msg}",
+                data={"error": err_msg},
             )
         )
     finally:

@@ -63,15 +63,15 @@ def run(
                 console.print("[bold red]Error:[/bold red] No task prompt provided.")
             sys.exit(1)
 
+    resolved_cdp = None
+    if cdp_port:
+        resolved_cdp = f"http://127.0.0.1:{cdp_port}"
+    elif attached:
+        resolved_cdp = "http://127.0.0.1:9222"
+
     async def _execute():
         from browser_use import Agent, BrowserProfile, BrowserSession, Tools
         from deep_browser.bridge.server import _create_llm
-
-        resolved_cdp = None
-        if cdp_port:
-            resolved_cdp = f"http://127.0.0.1:{cdp_port}"
-        elif attached:
-            resolved_cdp = "http://127.0.0.1:9222"
 
         if ndjson:
             sys.stdout.write(json.dumps({"type": "thinking", "text": f"Initializing Deep-Browser agent with {provider}..."}) + "\n")
@@ -115,7 +115,7 @@ def run(
     except Exception as e:
         err_str = str(e)
         if "ConnectError" in type(e).__name__ or "All connection attempts failed" in err_str:
-            err_str = f"Connection failed to browser CDP endpoint ({resolved_cdp or 'local'}). If using Attached Chrome mode, ensure Chrome is launched with '--remote-debugging-port=9222'. For standard mode, use Bundled Chromium."
+            err_str = f"Connection failed to Chrome on port 9222. Please start Chrome with '--remote-debugging-port=9222' to use Attached Chrome mode, or use Bundled Chromium."
         if ndjson:
             sys.stdout.write(json.dumps({"type": "error", "message": err_str}) + "\n")
             sys.stdout.flush()
