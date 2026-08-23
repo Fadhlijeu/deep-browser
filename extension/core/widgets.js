@@ -29,11 +29,37 @@
     }
 
     /**
+     * Helper for approval requests.
+     */
+    async requestApproval(proposal) {
+      return this.renderInteraction({
+        type: 'approval',
+        question: `Konfirmasi aksi: ${proposal.action_name}`,
+        action_name: proposal.action_name,
+        parameters: proposal.parameters,
+        interaction_id: 'ix_' + Date.now(),
+      });
+    }
+
+    /**
+     * Helper for choice requests.
+     */
+    async requestChoice(question, options) {
+      return this.renderInteraction({
+        type: 'choice',
+        question,
+        options,
+        interaction_id: 'ix_' + Date.now(),
+      });
+    }
+
+    /**
      * Renders an interaction directly from an Interaction object.
      * @param {Object} interaction
      * @returns {Promise<Object>}
      */
     renderInteraction(interaction) {
+
       this.clear();
       if (!this.container) return Promise.resolve({ approved: true });
 
