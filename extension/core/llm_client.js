@@ -17,16 +17,20 @@
   class LLMClient {
     /**
      * @param {Object} config
-     * @param {string} [config.provider='gemini'] - 'gemini' | 'openai' | 'anthropic' | 'ollama'
+     * @param {string} [config.provider='gemini'] - 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom_openai'
      * @param {string} [config.model='gemini-2.0-flash']
      * @param {string} [config.apiKey='']
+     * @param {string} [config.baseUrl='']
      * @param {string} [config.ollamaHost='http://localhost:11434']
+     * @param {number} [config.temperature=0.1]
      */
     constructor(config = {}) {
       this.provider = config.provider || 'gemini';
       this.model = config.model || 'gemini-2.0-flash';
       this.apiKey = config.apiKey || '';
+      this.baseUrl = config.baseUrl || '';
       this.ollamaHost = config.ollamaHost || 'http://localhost:11434';
+      this.temperature = config.temperature ?? 0.1;
     }
 
     /**
@@ -45,6 +49,7 @@
           rawResponseText = await this._callGemini(systemPrompt, textPrompt, screenshotBase64);
           break;
         case 'openai':
+        case 'custom_openai':
           rawResponseText = await this._callOpenAI(systemPrompt, textPrompt, screenshotBase64);
           break;
         case 'anthropic':
@@ -54,11 +59,13 @@
           rawResponseText = await this._callOllama(systemPrompt, textPrompt, screenshotBase64);
           break;
         default:
-          throw new Error(`Unsupported LLM provider: "${this.provider}"`);
+          rawResponseText = await this._callOpenAI(systemPrompt, textPrompt, screenshotBase64);
+          break;
       }
 
       return this._parseActionJSON(rawResponseText);
     }
+
 
     // ─── Gemini Provider ───────────────────────────────────────────────────────
     async _callGemini(systemPrompt, textPrompt, screenshotBase64) {
@@ -121,14 +128,15 @@
       return text;
     }
 
-    // ─── OpenAI Provider ───────────────────────────────────────────────────────
+    // ─── OpenAI / Custom OpenAI-Compatible Provider ───────────────────────────
     async _callOpenAI(systemPrompt, textPrompt, screenshotBase64) {
-      if (!this.apiKey) {
-        throw new Error('OpenAI API Key belum diisi. Masukkan API Key di pengaturan.');
+      if (!this.apiKey && this.provider !== 'custom_openai') {
+        throw new Error('API Key belum diisi. Masukkan API Key di pengaturan.');
       }
 
       let modelName = this.model;
       if (modelName.startsWith('openai/')) modelName = modelName.slice(7);
+      if (modelName.startsWith('custom/')) modelName = modelName.slice(7);
 
       const userContent = [];
       if (screenshotBase64) {
@@ -145,19 +153,34 @@
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userContent },
         ],
-        temperature: 0.1,
+        temperature: this.temperature ?? 0.1,
         max_tokens: 2048,
         response_format: { type: 'json_object' },
       };
 
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      let endpoint = 'https://api.openai.com/v1/chat/completions';
+      if (this.baseUrl) {
+        let base = this.baseUrl.trim().replace(/\/+$/, '');
+        if (base.endsWith('/chat/completions')) {
+          endpoint = base;
+        } else if (base.endsWith('/v1')) {
+          endpoint = `${base}/chat/completions`;
+        } else {
+          endpoint = `${base}/v1/chat/completions`;
+        }
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (this.apiKey) {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
       });
+
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));

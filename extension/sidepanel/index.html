@@ -4,362 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Deep Browser — AI Copilot</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:         #0d0f12;
-      --surface:    #161a1f;
-      --surface2:   #1e232b;
-      --surface3:   #252b35;
-      --border:     #2a3040;
-      --border2:    #353d4d;
-      --text:       #e8eaf0;
-      --text-2:     #a0a8b8;
-      --text-3:     #606880;
-      --accent:     #6c63ff;
-      --accent-dim: rgba(108, 99, 255, 0.18);
-      --accent-glow:rgba(108, 99, 255, 0.35);
-      --green:      #22c55e;
-      --red:        #ef4444;
-      --amber:      #f59e0b;
-      --blue:       #3b82f6;
-      --radius:     12px;
-      --radius-sm:  8px;
-      --font:       'Inter', system-ui, sans-serif;
-    }
-
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; overflow: hidden; }
-
-    /* ─── Layout ─── */
-    #app { display: flex; flex-direction: column; height: 100vh; position: relative; }
-
-    /* ─── Top Bar ─── */
-    #topbar {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 12px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      user-select: none;
-    }
-    #btn-menu {
-      background: none; border: none; cursor: pointer; color: var(--text-2);
-      padding: 4px 6px; border-radius: var(--radius-sm); transition: all .15s;
-      display: flex; align-items: center; justify-content: center;
-    }
-    #btn-menu:hover { background: var(--surface2); color: var(--text); }
-    #branding { display: flex; align-items: center; gap: 7px; }
-    #status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--text-3); transition: background .3s;
-      flex-shrink: 0;
-    }
-    #status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    #status-dot.offline { background: var(--red); }
-    #brand-name { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
-
-    #btn-new {
-      display: flex; align-items: center; gap: 5px;
-      background: none; border: 1px solid var(--border2); border-radius: var(--radius-sm);
-      color: var(--text-2); font-size: 12px; font-family: var(--font);
-      padding: 4px 10px; cursor: pointer; transition: all .15s;
-    }
-    #btn-new:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
-
-    #topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-
-    #api-badge {
-      display: flex; align-items: center; gap: 5px;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 20px; padding: 3px 10px; cursor: pointer;
-      font-size: 11.5px; color: var(--text-2); transition: all .15s;
-    }
-    #api-badge:hover { border-color: var(--border2); color: var(--text); }
-    #api-indicator { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); flex-shrink: 0; }
-    #api-indicator.set { background: var(--green); }
-
-    #btn-settings {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-2); padding: 4px; border-radius: var(--radius-sm);
-      display: flex; align-items: center; transition: all .15s;
-    }
-    #btn-settings:hover { background: var(--surface2); color: var(--text); }
-    #btn-settings svg { display: block; }
-
-    /* ─── Main Content ─── */
-    #main {
-      flex: 1; overflow-y: auto; overflow-x: hidden;
-      display: flex; flex-direction: column;
-      padding: 0;
-      scroll-behavior: smooth;
-    }
-
-    /* ─── Empty State ─── */
-    #empty-state {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      padding: 24px 20px 16px;
-      gap: 16px;
-    }
-    #compass-icon {
-      width: 64px; height: 64px;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 18px; display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 24px rgba(0,0,0,.4);
-    }
-    #empty-state h1 { font-size: 16px; font-weight: 600; color: var(--text); text-align: center; }
-    #empty-state p { font-size: 12.5px; color: var(--text-2); text-align: center; line-height: 1.6; max-width: 220px; }
-    #quick-prompts { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; }
-    .quick-chip {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 10px 14px;
-      font-size: 12.5px; color: var(--text-2); cursor: pointer;
-      transition: all .15s; text-align: left; width: 100%;
-      font-family: var(--font);
-    }
-    .quick-chip:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
-
-    /* ─── Event Timeline ─── */
-    #timeline {
-      padding: 12px 12px 4px;
-      display: flex; flex-direction: column; gap: 8px;
-    }
-
-    .event-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 10px 12px;
-      animation: cardIn .2s ease;
-    }
-    @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-    .event-card.user { border-left: 3px solid var(--accent); }
-    .event-card.thinking { border-left: 3px solid var(--amber); }
-    .event-card.action { border-left: 3px solid var(--blue); }
-    .event-card.observation { border-left: 3px solid var(--green); }
-    .event-card.error { border-left: 3px solid var(--red); }
-    .event-card.completed { border-left: 3px solid var(--green); background: rgba(34,197,94,.05); }
-
-    .event-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-    .event-tag {
-      font-size: 10px; font-weight: 600; letter-spacing: .5px;
-      color: var(--text-3); text-transform: uppercase;
-    }
-    .event-time { font-size: 10px; color: var(--text-3); margin-left: auto; }
-    .event-body { font-size: 12.5px; color: var(--text-2); line-height: 1.55; word-break: break-word; }
-    .event-body.highlight { color: var(--text); }
-
-    /* Thinking pulse */
-    .thinking-indicator {
-      display: flex; align-items: center; gap: 4px;
-      padding: 8px 12px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius);
-      border-left: 3px solid var(--amber);
-    }
-    .pulse-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); animation: pulse 1.2s infinite; }
-    .pulse-dot:nth-child(2) { animation-delay: .2s; }
-    .pulse-dot:nth-child(3) { animation-delay: .4s; }
-    @keyframes pulse { 0%,80%,100% { opacity:.3; transform:scale(.8); } 40% { opacity:1; transform:scale(1.1); } }
-    .thinking-text { font-size: 12px; color: var(--amber); margin-left: 4px; }
-
-    /* ─── Session Drawer ─── */
-    #session-drawer {
-      position: absolute; left: 0; top: 0; bottom: 0;
-      width: 240px; background: var(--surface);
-      border-right: 1px solid var(--border);
-      z-index: 50; transform: translateX(-100%);
-      transition: transform .22s cubic-bezier(.4,0,.2,1);
-      display: flex; flex-direction: column;
-    }
-    #session-drawer.open { transform: translateX(0); }
-    #drawer-overlay {
-      display: none; position: absolute; inset: 0; background: rgba(0,0,0,.5);
-      z-index: 49;
-    }
-    #drawer-overlay.visible { display: block; }
-    #drawer-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 14px 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    #drawer-header span { font-size: 13px; font-weight: 600; color: var(--text); }
-    #drawer-close { background: none; border: none; color: var(--text-2); cursor: pointer; padding: 2px; }
-    #session-list { flex: 1; overflow-y: auto; padding: 8px; }
-    .session-item {
-      padding: 9px 10px; border-radius: var(--radius-sm); cursor: pointer;
-      border: 1px solid transparent; transition: all .12s;
-      margin-bottom: 4px;
-    }
-    .session-item:hover { background: var(--surface2); border-color: var(--border); }
-    .session-item.active { background: var(--accent-dim); border-color: var(--accent); }
-    .session-name { font-size: 12.5px; color: var(--text); font-weight: 500; }
-    .session-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-    #drawer-footer { padding: 10px 8px; border-top: 1px solid var(--border); }
-    #btn-new-session {
-      width: 100%; padding: 8px; background: var(--accent-dim);
-      border: 1px solid var(--accent); border-radius: var(--radius-sm);
-      color: var(--accent); font-size: 12.5px; font-family: var(--font);
-      cursor: pointer; transition: all .15s;
-    }
-    #btn-new-session:hover { background: var(--accent); color: white; }
-
-    /* ─── Settings Panel ─── */
-    #settings-panel {
-      position: absolute; right: 8px; top: 48px;
-      width: 300px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius);
-      box-shadow: 0 8px 32px rgba(0,0,0,.5);
-      z-index: 60; display: none;
-      overflow: hidden;
-    }
-    #settings-panel.visible { display: block; animation: popIn .15s ease; }
-    @keyframes popIn { from { opacity:0; transform:scale(.96) translateY(-4px); } to { opacity:1; transform:none; } }
-    .panel-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 14px 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .panel-title { font-size: 12.5px; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: .5px; }
-    .panel-close { background: none; border: none; color: var(--text-2); cursor: pointer; padding: 2px; }
-    .panel-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
-    .panel-section:last-child { border-bottom: none; }
-    .panel-label { font-size: 10.5px; font-weight: 700; letter-spacing: .8px; color: var(--text-3); text-transform: uppercase; margin-bottom: 10px; }
-    .radio-group { display: flex; flex-direction: column; gap: 6px; }
-    .radio-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 10px; border-radius: var(--radius-sm);
-      background: var(--surface2); border: 1px solid transparent;
-      cursor: pointer; transition: all .12s;
-    }
-    .radio-item:hover { border-color: var(--border2); }
-    .radio-item.selected { background: var(--accent-dim); border-color: var(--accent); }
-    .radio-left { display: flex; align-items: center; gap: 8px; }
-    .radio-icon { font-size: 14px; }
-    .radio-name { font-size: 12.5px; color: var(--text); }
-    .radio-check { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .radio-item.selected .radio-check { border-color: var(--accent); background: var(--accent); }
-    .radio-item.selected .radio-check::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: white; }
-    .panel-manage {
-      display: flex; align-items: center; gap: 6px;
-      padding: 9px 10px; font-size: 12.5px; color: var(--text-2);
-      cursor: pointer; border-radius: var(--radius-sm); transition: all .12s;
-    }
-    .panel-manage:hover { background: var(--surface2); color: var(--text); }
-
-    /* API Key Settings Panel */
-    #apikey-panel {
-      position: absolute; right: 8px; top: 48px;
-      width: 300px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius);
-      box-shadow: 0 8px 32px rgba(0,0,0,.5);
-      z-index: 60; display: none; overflow: hidden;
-    }
-    #apikey-panel.visible { display: block; animation: popIn .15s ease; }
-    .apikey-section { padding: 14px; }
-    .apikey-label { font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; display: block; }
-    .apikey-input-wrap { position: relative; }
-    .apikey-input {
-      width: 100%; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); color: var(--text); font-size: 12.5px;
-      font-family: var(--font); padding: 9px 36px 9px 10px; outline: none;
-      transition: border-color .15s;
-    }
-    .apikey-input:focus { border-color: var(--accent); }
-    .apikey-toggle {
-      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-      background: none; border: none; color: var(--text-3); cursor: pointer;
-    }
-    .apikey-row { display: flex; gap: 6px; margin-top: 8px; }
-    .apikey-btn {
-      flex: 1; padding: 8px; border-radius: var(--radius-sm);
-      font-size: 12px; font-family: var(--font); cursor: pointer;
-      border: 1px solid var(--border); background: var(--surface2);
-      color: var(--text-2); transition: all .15s;
-    }
-    .apikey-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
-    .apikey-btn:hover { opacity: .85; }
-    .apikey-providers { display: flex; flex-direction: column; gap: 8px; }
-    .provider-row { border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 2px; }
-    .provider-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .provider-name { font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-
-    /* ─── Bottom Bar ─── */
-    #bottom-bar {
-      flex-shrink: 0;
-      padding: 8px 10px 10px;
-      background: var(--bg);
-      border-top: 1px solid var(--border);
-    }
-    #input-row { display: flex; align-items: flex-end; gap: 6px; }
-
-    #btn-attach {
-      background: none; border: 1px solid var(--border);
-      border-radius: var(--radius-sm); color: var(--text-2);
-      width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
-      cursor: pointer; flex-shrink: 0; transition: all .15s;
-    }
-    #btn-attach:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
-
-    #input-wrap { flex: 1; position: relative; }
-    #goal-input {
-      width: 100%; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius);
-      color: var(--text); font-size: 13px; font-family: var(--font);
-      padding: 9px 12px; outline: none; resize: none;
-      min-height: 36px; max-height: 120px; line-height: 1.5;
-      transition: border-color .15s; overflow-y: auto;
-    }
-    #goal-input:focus { border-color: var(--accent); }
-    #goal-input::placeholder { color: var(--text-3); }
-
-    #model-pill {
-      display: flex; align-items: center; gap: 4px;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 20px; padding: 3px 8px 3px 10px;
-      font-size: 11px; color: var(--text-2); cursor: pointer;
-      margin-top: 6px; width: fit-content; transition: all .15s;
-      user-select: none;
-    }
-    #model-pill:hover { border-color: var(--border2); color: var(--text); }
-    #model-pill-name { max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #model-pill svg { flex-shrink: 0; transition: transform .15s; }
-    #model-pill.open svg { transform: rotate(180deg); }
-
-    .controls-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-
-    #btn-mic, #btn-send {
-      width: 34px; height: 34px; border-radius: 50%;
-      border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: all .15s;
-    }
-    #btn-mic { background: var(--surface2); border: 1px solid var(--border); color: var(--text-2); }
-    #btn-mic:hover { background: var(--surface3); color: var(--text); }
-    #btn-send {
-      background: var(--accent); color: white;
-      box-shadow: 0 2px 12px var(--accent-glow);
-    }
-    #btn-send:hover { background: #7c75ff; transform: scale(1.05); }
-    #btn-send:disabled { background: var(--surface2); box-shadow: none; cursor: not-allowed; opacity: .5; }
-    #btn-send.running { background: var(--red); }
-
-    /* Tab info strip */
-    #tab-strip {
-      display: none; align-items: center; gap: 6px;
-      padding: 5px 10px 0;
-      font-size: 11px; color: var(--text-3);
-    }
-    #tab-strip.visible { display: flex; }
-    #tab-favicon { width: 12px; height: 12px; flex-shrink: 0; border-radius: 2px; }
-    #tab-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
-  </style>
+  <link rel="stylesheet" href="sidepanel.css" />
 </head>
 <body>
 <div id="app">
@@ -367,139 +12,225 @@
   <!-- Session Drawer -->
   <div id="drawer-overlay"></div>
   <div id="session-drawer">
-    <div id="drawer-header">
-      <span>Sesi</span>
-      <button id="drawer-close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div id="session-list"></div>
-    <div id="drawer-footer">
-      <button id="btn-new-session">+ Sesi Baru</button>
-    </div>
-  </div>
-
-  <!-- Model/Mode Settings Panel -->
-  <div id="settings-panel">
-    <div class="panel-header">
-      <span class="panel-title">Konfigurasi Model & Mode</span>
-      <button class="panel-close" id="close-settings">
+    <div class="drawer-header">
+      <span style="font-weight:600;font-size:13px">Riwayat Sesi</span>
+      <button class="icon-btn" id="drawer-close" title="Tutup">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <div class="panel-section">
-      <div class="panel-label">Model AI</div>
-      <div class="radio-group" id="model-radio-group"></div>
-    </div>
-    <div class="panel-section">
-      <div class="panel-label">Mode Keputusan</div>
-      <div class="radio-group" id="mode-radio-group"></div>
-    </div>
-    <div class="panel-section" style="padding: 8px 14px;">
-      <div class="panel-manage" id="btn-open-apikey">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-        Kelola Model &amp; API Key...
-      </div>
-    </div>
-  </div>
-
-  <!-- API Key Panel -->
-  <div id="apikey-panel">
-    <div class="panel-header">
-      <span class="panel-title">API Keys</span>
-      <button class="panel-close" id="close-apikey">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    <div class="drawer-body" id="session-list"></div>
+    <div style="padding:10px;border-top:1px solid var(--border)">
+      <button class="btn-secondary" id="btn-new-session" style="width:100%;justify-content:center">
+        + Buat Sesi Baru
       </button>
-    </div>
-    <div class="apikey-section">
-      <div class="apikey-providers" id="apikey-providers"></div>
     </div>
   </div>
 
   <!-- Top Bar -->
   <div id="topbar">
-    <button id="btn-menu" title="Sesi">
+    <button class="icon-btn" id="btn-menu" title="Menu Sesi">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
       </svg>
     </button>
-    <div id="branding">
-      <div id="status-dot" title="Companion server status"></div>
-      <span id="brand-name">Deep Browser</span>
-    </div>
-    <button id="btn-new" title="Sesi baru">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-      Baru
-    </button>
-    <div id="topbar-right">
-      <div id="api-badge" title="Status API Key">
-        <div id="api-indicator"></div>
-        <span id="api-badge-text">No API Key</span>
+    <div id="brand-wrap">
+      <div id="brand-logo">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+        </svg>
       </div>
-      <button id="btn-settings" title="Pengaturan">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-          <circle cx="12" cy="12" r="3"/>
+      <span id="brand-title">Deep Browser</span>
+      <div id="status-pill">
+        <div id="status-dot"></div>
+        <span id="status-text">Siap</span>
+      </div>
+    </div>
+
+    <div id="topbar-actions">
+      <button class="btn-secondary" id="btn-new" title="Sesi baru">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        Sesi
+      </button>
+      <button class="icon-btn" id="btn-open-apikeys" title="Kelola API Key">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-open-settings" title="Mode & Pengaturan">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
     </div>
   </div>
 
-  <!-- Main Content -->
+  <!-- Main Timeline -->
   <div id="main">
     <!-- Empty State -->
     <div id="empty-state">
-      <div id="compass-icon">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6c63ff" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10"/>
-          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+      <div class="empty-icon-box">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
         </svg>
       </div>
-      <div style="text-align:center">
-        <h1>Deep Browser AI Copilot</h1>
-        <p style="margin-top:6px">Navigasi, pencarian data, pengisian form, dan eksplorasi browser secara cerdas.</p>
+      <div>
+        <h2 class="empty-title">Deep Browser Copilot</h2>
+        <p class="empty-desc">Otonom menjelajah, menganalisis data, dan mengeksekusi aksi langsung pada browser Anda.</p>
       </div>
-      <div id="quick-prompts">
-        <button class="quick-chip" data-prompt="Cari informasi PDDikti">Cari informasi PDDikti</button>
-        <button class="quick-chip" data-prompt="Selesaikan halaman ini sampai selesai">Selesaikan halaman ini sampai selesai</button>
-        <button class="quick-chip" data-prompt="Cari dan ringkas artikel terbaru tentang AI">Cari dan ringkas artikel terbaru tentang AI</button>
+      <div class="quick-prompts-grid">
+        <button class="quick-chip" data-prompt="Cari website pddikti yang benar lalu cari nama muhammad fadhli rizaldy lalu ambil informasinya">
+          <span>🔍 Cari data mahasiswa di PDDIKTI</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+        <button class="quick-chip" data-prompt="Jelajahi halaman ini dan rangkum poin-poin pentingnya">
+          <span>📋 Rangkum konten halaman aktif</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+        <button class="quick-chip" data-prompt="Cari artikel terbaru mengenai perkembangan AI di Google">
+          <span>🌐 Cari artikel terbaru AI di Google</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
       </div>
     </div>
-    <!-- Event Timeline -->
+
+    <!-- Timeline cards container -->
     <div id="timeline"></div>
   </div>
 
-  <!-- Bottom Bar -->
+  <!-- Bottom Input Bar -->
   <div id="bottom-bar">
-    <div id="tab-strip">
-      <img id="tab-favicon" src="" alt="" />
-      <span id="tab-title">Tab aktif</span>
+    <div id="active-tab-bar">
+      <img id="tab-icon" src="" alt="" />
+      <span id="tab-name">Tab aktif</span>
     </div>
-    <div id="input-row">
-      <button id="btn-attach" title="Lampirkan media">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-      </button>
-      <div id="input-wrap">
-        <textarea id="goal-input" placeholder="Ketik tugas untuk AI..." rows="1"></textarea>
+
+    <div id="prompt-container">
+      <textarea id="goal-input" placeholder="Perintahkan agent (contoh: Cari data di PDDIKTI)..." rows="1"></textarea>
+      <div class="prompt-footer">
+        <div class="footer-left">
+          <button class="model-select-btn" id="btn-select-model" title="Pilih / Kelola Model">
+            <span id="model-badge-icon">⚡</span>
+            <span id="model-badge-name">Gemini 2.0 Flash</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <button class="btn-secondary" id="btn-select-mode" style="padding:3px 7px;font-size:10.5px" title="Mode Keputusan">
+            <span id="mode-badge-icon">🤖</span>
+            <span id="mode-badge-name">Adaptif</span>
+          </button>
+        </div>
+        <div class="footer-right">
+          <button id="btn-send" disabled title="Kirim Perintah">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
       </div>
     </div>
-    <div class="controls-row">
-      <div id="model-pill" title="Pilih model">
-        <span id="model-pill-name">Auto (Gemini 2.0 Flash)</span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+  </div>
+
+  <!-- Modal: Model Selector & CRUD Manager -->
+  <div class="modal-overlay" id="modal-models">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title" id="models-modal-title">Pilih &amp; Kelola Model</span>
+        <button class="icon-btn" id="close-modal-models">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
-      <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-        <button id="btn-mic" title="Rekam suara">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+
+      <!-- View 1: Model List -->
+      <div class="modal-body" id="model-list-view">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;color:var(--muted-foreground)">Daftar Model Tersedia</span>
+          <button class="btn-primary" id="btn-add-model" style="padding:4px 8px;font-size:11px">
+            + Tambah Model
+          </button>
+        </div>
+        <div class="model-list-group" id="models-container"></div>
+      </div>
+
+      <!-- View 2: Model Edit / Create Form -->
+      <div class="modal-body" id="model-form-view" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Nama Tampilan</label>
+          <input class="form-input" type="text" id="input-model-name" placeholder="Contoh: DeepSeek V3 / Llama 3.3" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Provider</label>
+          <select class="form-select" id="select-model-provider">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic Claude</option>
+            <option value="ollama">Ollama (Local)</option>
+            <option value="custom_openai">Custom OpenAI-Compatible (DeepSeek, vLLM, LM Studio)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Model ID / String</label>
+          <input class="form-input" type="text" id="input-model-id" placeholder="Contoh: gemini-2.0-flash / deepseek-chat" />
+        </div>
+        <div class="form-group" id="group-model-baseurl">
+          <label class="form-label">Base URL (Opsional untuk Custom / Ollama)</label>
+          <input class="form-input" type="text" id="input-model-baseurl" placeholder="https://api.deepseek.com/v1" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Temperature</label>
+          <input class="form-input" type="number" id="input-model-temp" min="0" max="1" step="0.1" value="0.1" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn-primary" id="btn-save-model" style="flex:1">Simpan Model</button>
+          <button class="btn-ghost" id="btn-cancel-model">Batal</button>
+        </div>
+      </div>
+
+      <div class="modal-footer" id="models-modal-footer">
+        <button class="btn-ghost" id="btn-reset-default-models" style="font-size:11px">Reset Default</button>
+        <button class="btn-primary" id="btn-close-models">Selesai</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: API Keys Manager -->
+  <div class="modal-overlay" id="modal-apikeys">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Kelola API Keys</span>
+        <button class="icon-btn" id="close-modal-apikeys">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
-        <button id="btn-send" disabled title="Kirim">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+      <div class="modal-body" id="apikeys-container">
+        <!-- Injected via JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="btn-save-apikeys">Tutup &amp; Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Settings & Mode -->
+  <div class="modal-overlay" id="modal-settings">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">Mode Keputusan Agent</span>
+        <button class="icon-btn" id="close-modal-settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Tingkat Otonomi Agent</label>
+          <div class="model-list-group" id="mode-options-container"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="btn-close-settings">Selesai</button>
       </div>
     </div>
   </div>
 
 </div>
+
+<!-- Core Runtime Modules -->
 <script src="../core/dom_service.js"></script>
 <script src="../core/browser_session.js"></script>
 <script src="../core/tools.js"></script>
@@ -509,4 +240,3 @@
 <script src="sidepanel.js"></script>
 </body>
 </html>
-
