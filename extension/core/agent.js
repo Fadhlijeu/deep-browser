@@ -29,6 +29,7 @@
      */
     constructor(options = {}) {
       if (!options.task) throw new Error('Agent requires a task prompt');
+      this.taskId = options.taskId || 'task_' + Date.now().toString(36);
       this.task = options.task;
       this.browserSession = options.browserSession || new global.BrowserSession();
       this.llmClient = options.llmClient || new global.LLMClient();
@@ -36,6 +37,8 @@
       this.messageManager = new global.MessageManager({ task: this.task });
       this.extractor = new global.Extractor(this.browserSession, this.llmClient);
       this.securityPolicy = global.SecurityPolicy ? new global.SecurityPolicy() : null;
+
+      this.interactionManager = options.interactionManager || (global.InteractionManager ? new global.InteractionManager({ taskId: this.taskId }) : null);
 
       this.maxSteps = options.maxSteps || 25;
       this.mode = options.mode || 'agent_decide';
@@ -47,6 +50,7 @@
       this.isStopped = false;
       this.history = [];
     }
+
 
     /**
      * Emits a typed event to the listener.
@@ -147,25 +151,59 @@
           const actionName = decision.action_name;
           const params = decision.parameters || {};
 
-          // ─── 4. SECURITY POLICY & HITL APPROVAL ──────────────────────────────────
+          // ─── 4. INTERACTIVE WIDGETS & HITL APPROVAL ─────────────────────────────
+          if (actionName === 'ask_user') {
+            this._emit('USER_INPUT_REQUIRED', `User input required: ${params.question || ''}`, {
+              type: params.type,
+              question: params.question,
+              options: params.options,
+            });
+
+            const ixRes = await this.interactionManager.requestInteraction({
+              type: params.type || 'choice',
+              question: params.question,
+              options: params.options,
+              description: params.description,
+            });
+
+            const userVal = ixRes.value;
+            this._emit('USER_RESPONDED', `User answered: ${JSON.stringify(userVal)}`, { value: userVal });
+            this.messageManager.recordStep(
+              this.step,
+              decision.thinking,
+              { name: 'ask_user', parameters: params },
+              { success: true, user_response: userVal }
+            );
+            continue;
+          }
+
           if (this.mode === 'hitl' || (this.securityPolicy && this.securityPolicy.requiresReview(actionName, params))) {
             this._emit('ACTION_PROPOSED', `Proposal Aksi: ${actionName}`, { action_name: actionName, parameters: params });
+            this._emit('USER_APPROVAL_REQUIRED', `Menunggu persetujuan untuk aksi: ${actionName}`, {
+              action_name: actionName,
+              parameters: params,
+            });
 
-            if (this.onApprovalRequired) {
-              this._emit('USER_APPROVAL_REQUIRED', `Menunggu persetujuan untuk aksi: ${actionName}`, {
-                action_name: actionName,
-                parameters: params,
-              });
+            const approvalResult = await this.interactionManager.requestInteraction({
+              type: 'approval',
+              question: `Konfirmasi aksi: ${actionName}`,
+              action_name: actionName,
+              parameters: params,
+            });
 
-              const approvalResult = await this.onApprovalRequired({ action_name: actionName, parameters: params });
-              if (!approvalResult.approved) {
-                const feedback = approvalResult.feedback || 'User rejected the action.';
-                this._emit('RETRY', `Aksi ditolak: ${feedback}. Merencanakan ulang...`, { feedback });
-                this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Rejected by user: ${feedback}` });
-                continue;
-              }
+            if (!approvalResult.approved && approvalResult.value === 'reject') {
+              const feedback = approvalResult.feedback || 'User rejected the action.';
+              this._emit('RETRY', `Aksi ditolak: ${feedback}. Merencanakan ulang...`, { feedback });
+              this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Rejected by user: ${feedback}` });
+              continue;
+            } else if (approvalResult.value === 'edit') {
+              const feedback = approvalResult.feedback || 'User requested modification.';
+              this._emit('RETRY', `Instruksi diubah: ${feedback}. Merencanakan ulang...`, { feedback });
+              this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Modified by user: ${feedback}` });
+              continue;
             }
           }
+
 
           // ─── 5. EMIT SPECIFIC ACTION EVENT ──────────────────────────────────────
           this._emitActionSpecificEvent(actionName, params);

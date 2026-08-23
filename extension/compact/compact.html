@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deep Browser — Mini Agent</title>
+  <link rel="stylesheet" href="compact.css" />
+</head>
+<body>
+<div id="compact-app">
+
+  <!-- Draggable Header -->
+  <div id="compact-header">
+    <div id="compact-brand">
+      <div id="compact-status-dot"></div>
+      <span id="compact-title">Deep Browser</span>
+      <span id="compact-status-text">Siap</span>
+    </div>
+    <div id="compact-header-actions">
+      <button class="compact-btn" id="btn-compact-minimize" title="Minimize">
+        <span class="material-symbols-outlined">remove</span>
+      </button>
+      <button class="compact-btn" id="btn-compact-restore" title="Kembali ke Side Panel">
+        <span class="material-symbols-outlined">dock_to_right</span>
+      </button>
+      <button class="compact-btn" id="btn-compact-close" title="Tutup">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Minimized Bar (Visible when minimized) -->
+  <div id="minimized-pill" style="display:none">
+    <div id="min-status-dot"></div>
+    <span style="font-weight:600">Deep Browser</span>
+    <span id="min-status-label" style="color:var(--muted-foreground)">Siap</span>
+    <button class="compact-btn" id="btn-min-expand" title="Perbesar" style="margin-left:auto">
+      <span class="material-symbols-outlined">expand_less</span>
+    </button>
+  </div>
+
+  <!-- Compact Body -->
+  <div id="compact-body">
+    <!-- Interactive Widget Mount Container -->
+    <div id="compact-widget-container"></div>
+
+    <!-- Active Stream / Latest Events -->
+    <div id="compact-timeline"></div>
+  </div>
+
+  <!-- Compact Footer / Prompt -->
+  <div id="compact-footer">
+    <div id="compact-input-wrap">
+      <input type="text" id="compact-goal-input" placeholder="Perintahkan agent..." />
+      <button id="btn-compact-send" disabled title="Kirim">
+        <span class="material-symbols-outlined" id="compact-send-icon">send</span>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Core Runtime Modules -->
+<script src="../core/interaction_manager.js"></script>
+<script src="../core/dom_service.js"></script>
+<script src="../core/browser_session.js"></script>
+<script src="../core/extractor.js"></script>
+<script src="../core/skills/skill_base.js"></script>
+<script src="../core/skills/research_skill.js"></script>
+<script src="../core/security_policy.js"></script>
+<script src="../core/widgets.js"></script>
+<script src="../core/tools.js"></script>
+<script src="../core/message_manager.js"></script>
+<script src="../core/llm_client.js"></script>
+<script src="../core/agent.js"></script>
+<script src="compact.js"></script>
+</body>
+</html>

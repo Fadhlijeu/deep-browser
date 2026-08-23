@@ -171,6 +171,19 @@ html, body {
   animation: pulse-dot 1.5s infinite;
 }
 
+#status-pill.waiting {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+}
+
+#status-pill.waiting #status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 5px #f59e0b;
+  animation: pulse-dot 1.2s infinite;
+}
+
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(1.2); }

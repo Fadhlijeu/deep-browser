@@ -175,6 +175,30 @@
           },
         },
         {
+          name: 'ask_user',
+          description: 'Ask the user a structured question or request confirmation using an interactive widget.',
+          parameters: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['choice', 'multi_choice', 'confirm', 'text_input', 'number_input', 'waiting'], description: 'Widget type.' },
+              question: { type: 'string', description: 'Question or message to display.' },
+              options: { type: 'array', items: { type: 'string' }, description: 'Options for choice or multi_choice.' },
+            },
+            required: ['type', 'question'],
+          },
+        },
+        {
+          name: 'open_tab',
+          description: 'Open a new tab in Microsoft Edge with the specified URL and switch to it.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'URL to open in a new tab.' },
+            },
+            required: ['url'],
+          },
+        },
+        {
           name: 'done',
           description: 'Conclude the autonomous task when the user goal is completely achieved.',
           parameters: {
@@ -188,6 +212,7 @@
         },
       ];
     }
+
 
     /**
      * Executes a tool action by name with the given parameters.
@@ -253,6 +278,14 @@
             if (!tabId) return { success: false, error: 'switch_tab requires "tab_id"' };
             const res = await this.browserSession.switchTab(tabId);
             return { success: true, message: `Switched to tab ${tabId}`, data: res };
+          }
+
+          case 'open_tab':
+          case 'create_tab':
+          case 'new_tab': {
+            const url = String(params.url || 'https://www.google.com');
+            const res = await this.browserSession.createTab(url);
+            return { success: true, message: `Opened new tab: ${url}`, data: res };
           }
 
           case 'close_tab': {

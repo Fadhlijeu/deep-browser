@@ -615,16 +615,37 @@ async function submitTask() {
     temperature: activeModel.temperature ?? 0.1,
   });
 
+  const interactionManager = new window.InteractionManager({
+    taskId: state.activeSessionId,
+    onStateChange: (newState) => {
+      if (newState === 'WAITING_FOR_USER') {
+        updateStatus('Menunggu Anda', false, true);
+        elBtnSend.disabled = false;
+        elBtnSend.title = 'Menunggu respon interaktif';
+      } else if (newState === 'RUNNING') {
+        updateStatus('Bekerja...', true, false);
+      }
+    },
+    onInteractionEvent: (ixEvt) => {
+      if (ixEvt.event === 'USER_INPUT_REQUIRED') {
+        widgetManager.renderInteraction(ixEvt.interaction);
+      } else if (ixEvt.event === 'INTERACTION_RESOLVED' || ixEvt.event === 'INTERACTION_CANCELLED') {
+        widgetManager.clear();
+      }
+    },
+  });
+
+  widgetManager.setInteractionManager(interactionManager);
+
   const agent = new window.Agent({
+    taskId: state.activeSessionId,
     task: goal,
     browserSession,
     llmClient,
+    interactionManager,
     maxSteps: 25,
     mode: state.selectedMode,
     onEvent: handleAgentEvent,
-    onApprovalRequired: async (proposal) => {
-      return widgetManager.requestApproval(proposal);
-    },
   });
 
   state.currentAgent = agent;
@@ -641,6 +662,7 @@ async function submitTask() {
     updateTabStrip();
   }
 }
+
 
 function stopAgent() {
   if (state.currentAgent) {
@@ -836,14 +858,16 @@ function hideEmptyState() {
   elEmptyState.style.display = 'none';
 }
 
-function updateStatus(text, isRunning) {
+function updateStatus(text, isRunning, isWaiting = false) {
   elStatusText.textContent = text;
+  elStatusPill.classList.remove('running', 'waiting');
   if (isRunning) {
     elStatusPill.classList.add('running');
-  } else {
-    elStatusPill.classList.remove('running');
+  } else if (isWaiting) {
+    elStatusPill.classList.add('waiting');
   }
 }
+
 
 function setAgentRunning(running) {
   state.agentRunning = running;
@@ -902,6 +926,21 @@ function bindEvents() {
   $('drawer-close').addEventListener('click', closeDrawer);
   elDrawerOverlay.addEventListener('click', closeDrawer);
   $('btn-new-session').addEventListener('click', createNewSession);
+
+  const btnPopout = $('btn-popout');
+  if (btnPopout) {
+    btnPopout.addEventListener('click', () => {
+      if (typeof chrome !== 'undefined' && chrome.windows) {
+        chrome.windows.create({
+          url: chrome.runtime.getURL('compact/compact.html'),
+          type: 'popup',
+          width: 360,
+          height: 480,
+        });
+      }
+    });
+  }
+
 
   // Model Modal
   $('btn-select-model').addEventListener('click', () => {

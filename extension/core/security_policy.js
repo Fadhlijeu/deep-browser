@@ -34,16 +34,21 @@
         return true;
       }
 
-      // Check if action touches password / payment fields
+      // Check if action touches sensitive keywords (password, token, secret, pin, credit)
       if (actionName === 'input_text') {
         const text = String(params.text || '').toLowerCase();
-        if (text.includes('password') || text.includes('pin') || text.includes('credit')) {
+        if (text.includes('password') || text.includes('pin') || text.includes('credit') || text.includes('token') || text.includes('secret') || text.includes('key')) {
           return true;
         }
       }
 
+      if (actionName === 'download' || actionName === 'purchase' || actionName === 'delete') {
+        return true;
+      }
+
       return false;
     }
+
 
     /**
      * Checks if an action is strictly blocked.
