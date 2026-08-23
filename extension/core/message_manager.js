@@ -1,0 +1,145 @@
+/**
+ * Deep Browser Extension — Browser Use MessageManager & Prompt Builder
+ * ====================================================================
+ *
+ * Formats the Browser Use system prompt, interactive DOM state representations,
+ * step history, and manages the context window for LLM requests.
+ */
+
+(function(global) {
+  'use strict';
+
+  class MessageManager {
+    /**
+     * @param {Object} options
+     * @param {string} options.task
+     * @param {number} [options.maxHistorySteps=15]
+     */
+    constructor(options = {}) {
+      this.task = options.task || '';
+      this.maxHistorySteps = options.maxHistorySteps || 15;
+      this.history = []; // Array of { step, observation, thinking, action, result }
+    }
+
+    /**
+     * Returns the Browser Use system prompt.
+     */
+    getSystemPrompt() {
+      const toolSchemas = global.Tools.getActionSchemas();
+      const toolsDoc = toolSchemas.map(t => {
+        const paramDoc = Object.entries(t.parameters)
+          .map(([k, v]) => `    - ${k} (${v.type}${v.required ? ', required' : ''}): ${v.description || ''}`)
+          .join('\n');
+        return `* \`${t.name}\`: ${t.description}\n${paramDoc}`;
+      }).join('\n\n');
+
+      return `You are Deep-Browser, an autonomous web agent powered by Browser Use architecture.
+You drive a Chrome browser tab to achieve the user's task accurately, efficiently, and safely.
+
+### INPUT PERCEPTION
+At each step, you receive:
+1. Current webpage URL and title.
+2. The Simplified Interactive DOM Tree, where interactive elements are indexed as \`[index]<tag type="..." name="...">Visible Text</tag>\`.
+3. Page scroll info (pixels above/below viewport).
+4. An optional visual screenshot of the current viewport.
+
+### CORE DIRECTIVES
+1. **Interactive Elements**: Interact with elements ONLY using their 1-based index (e.g. \`[1]\`, \`[2]\`). Look carefully at the index prefix \`[N]\` next to the tag in the DOM tree.
+2. **Form Inputs & Searches**: To search or fill inputs, use \`input_text\` with the target index and text. You can follow with \`send_keys\` (e.g. \`{"keys": "Enter"}\`) or click the search/submit button.
+3. **Navigation**: If the current page does not contain what you need and you need to search or go to a known website, use \`navigate\` (e.g. Google or official portal).
+4. **Scrolling**: If the element or information is not visible yet and pixels_below > 0, use \`scroll_page\` or \`scroll_to_text\`.
+5. **Completion**: As soon as you have gathered the required information or accomplished the user's goal, call the \`done\` action with a clear, complete, and formatted answer in the \`text\` parameter.
+6. **Language**: Respond and provide answers in Indonesian or the language requested by the user.
+
+### AVAILABLE ACTIONS
+${toolsDoc}
+
+### OUTPUT FORMAT
+You MUST always output a SINGLE valid JSON object with the following schema:
+\`\`\`json
+{
+  "thinking": "Brief step-by-step reasoning about the current page state, what you see, and why you are choosing this action.",
+  "action_name": "<one of the action names above, e.g. click_element | input_text | navigate | scroll_page | send_keys | done>",
+  "parameters": {
+    "<param_name>": "<param_value>"
+  }
+}
+\`\`\`
+Do NOT wrap with markdown other than \`\`\`json or raw JSON. Output valid JSON only.`;
+    }
+
+    /**
+     * Builds the prompt payload for the current step.
+     * @param {Object} state - The DOM and browser state from BrowserSession.getState()
+     * @param {number} stepNumber - Current 1-based step counter
+     * @returns {Object} { textPrompt, screenshotBase64, fullHistory }
+     */
+    buildStepPrompt(state, stepNumber = 1) {
+      const historySection = this.formatHistory();
+
+      const stateSection = `### CURRENT BROWSER STATE (Step ${stepNumber})
+* URL: ${state.url || 'about:blank'}
+* Title: ${state.title || 'Untitled'}
+* Viewport: ${state.pageInfo?.viewport_width || 1280}x${state.pageInfo?.viewport_height || 800} (Scroll Y: ${state.pageInfo?.scroll_y || 0})
+* Pixels Above: ${state.pageInfo?.pixels_above || 0}px | Pixels Below: ${state.pageInfo?.pixels_below || 0}px
+
+### SIMPLIFIED INTERACTIVE DOM TREE
+${state.simplifiedTreeText ? state.simplifiedTreeText : '(No interactive elements detected on this view)'}
+`;
+
+      const userGoalSection = `### USER GOAL
+${this.task}
+
+Analyze the current page state above and decide the next best action to accomplish the goal. Return your JSON response.`;
+
+      const textPrompt = [historySection, stateSection, userGoalSection]
+        .filter(Boolean)
+        .join('\n\n');
+
+      return {
+        textPrompt,
+        screenshotBase64: state.screenshot || null,
+        url: state.url,
+        title: state.title,
+      };
+    }
+
+    /**
+     * Formats previous steps into history text.
+     */
+    formatHistory() {
+      if (this.history.length === 0) return '';
+
+      const recent = this.history.slice(-this.maxHistorySteps);
+      const lines = ['### PREVIOUS STEPS HISTORY:'];
+
+      recent.forEach(h => {
+        const actionStr = JSON.stringify(h.action?.parameters || {});
+        const statusStr = h.result?.success ? 'Success' : `Failed (${h.result?.error || 'error'})`;
+        lines.push(
+          `[Step ${h.step}] Action: \`${h.action?.name || 'unknown'}\` ${actionStr} → Result: ${statusStr}`
+        );
+        if (h.thinking) {
+          lines.push(`  Thinking: ${h.thinking.slice(0, 120)}`);
+        }
+      });
+
+      return lines.join('\n');
+    }
+
+    /**
+     * Records a completed step into history.
+     */
+    recordStep(step, thinking, action, result) {
+      this.history.push({
+        step,
+        thinking: String(thinking || ''),
+        action: action || {},
+        result: result || {},
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  global.MessageManager = MessageManager;
+})(typeof window !== 'undefined' ? window : this);
