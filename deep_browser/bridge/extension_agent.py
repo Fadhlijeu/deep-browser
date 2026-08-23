@@ -304,12 +304,22 @@ async def run_extension_agent_loop(
             await ws_send({"type": "GET_DOM_SNAPSHOT", "step": step_num})
 
             try:
-                dom_msg = await ws_recv(timeout=15.0)
+                dom_msg = await ws_recv(timeout=20.0)
             except asyncio.TimeoutError:
-                raise RuntimeError(f"Extension did not respond with DOM snapshot at step {step_num} (15s timeout)")
+                raise RuntimeError(f"Extension did not respond with DOM snapshot at step {step_num} (20s timeout)")
+
+            # Skip non-DOM messages (e.g. stray ACTION_RESULT from previous step)
+            retries = 0
+            while dom_msg.get("type") != "DOM_SNAPSHOT" and retries < 5:
+                retries += 1
+                try:
+                    dom_msg = await ws_recv(timeout=5.0)
+                except asyncio.TimeoutError:
+                    raise RuntimeError(f"Expected DOM_SNAPSHOT but got: {dom_msg.get('type')} (step {step_num})")
 
             if dom_msg.get("type") != "DOM_SNAPSHOT":
-                raise RuntimeError(f"Expected DOM_SNAPSHOT, got: {dom_msg.get('type')}")
+                raise RuntimeError(f"Expected DOM_SNAPSHOT, got: {dom_msg.get('type')} after {retries} retries")
+
 
             dom_snapshot = dom_msg.get("data", {})
             state.url = dom_snapshot.get("url", state.url)

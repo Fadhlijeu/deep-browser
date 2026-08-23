@@ -202,10 +202,17 @@ function connectEventStream() {
 }
 
 function handleServerEvent(evt) {
-  if (evt.task_id && evt.task_id !== state.activeTaskId) return;
+  // Extension ONLY handles its own events — never workspace events
+  if (evt.owner && evt.owner !== 'EXTENSION') return;
+  if (evt.task_id && state.activeTaskId && evt.task_id !== state.activeTaskId) return;
+
   const t = evt.event_type || '';
   const msg = evt.message || evt.summary || '';
   const data = evt.data || {};
+
+  // Skip TASK_CREATED — Extension already shows the user card
+  if (t === 'TASK_CREATED') return;
+
 
   if (t === 'TASK_STARTED') {
     appendCard('action', '🚀', 'AGENT', 'Agent dimulai — menganalisis halaman...');

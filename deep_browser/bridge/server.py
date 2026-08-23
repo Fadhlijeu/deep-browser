@@ -285,14 +285,15 @@ async def create_task(req: CreateTaskRequest):
 
     # Route to correct execution pipeline
     if is_extension:
-        # Pre-create the CDP bridge proxy NOW so it's ready when:
-        # 1. The background task calls wait_for_extension()
-        # 2. Extension JS connects at /ws/cdp-bridge/{task_id}
-        # This eliminates the race condition between HTTP response return and WS connection.
-        get_or_create_cdp_bridge(task_id)
+        # CRITICAL: Create WS queues BEFORE returning the HTTP response.
+        # Extension JS gets task_id from this response, then IMMEDIATELY opens
+        # /ws/ext-agent/{task_id}. If queues don't exist yet, WS endpoint
+        # returns ERROR and closes — causing the "Gagal terhubung" bug.
+        _ext_agent_queues[task_id] = (asyncio.Queue(), asyncio.Queue())
         asyncio.create_task(_run_extension_task_background(task_id, req, session_id))
     else:
         asyncio.create_task(_run_task_background(task_id, req, session_id))
+
     return {
         "task_id": task_id,
         "status": "created",
@@ -356,42 +357,29 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
     try:
         active_tasks[task_id]["status"] = "running"
 
-        # Signal Extension to open /ws/ext-agent/{task_id}
-        await broadcaster.broadcast(
-            DeepBrowserEvent(
-                task_id=task_id,
-                session_id=session_id,
-                owner=owner,
-                browser_mode=browser_mode,
-                browser_id=browser_id,
-                tab_id=tab_id,
-                event_type=EventType.CONTEXT_ATTACHED,
-                status="WAITING",
-                summary=f"Extension agent starting for: {req.title or req.url or 'current tab'}",
-                message=f"Connect to /ws/ext-agent/{task_id}",
-                data={"task_id": task_id, "url": req.url, "title": req.title, "tab_id": tab_id},
+        # Queues were pre-created in create_task() BEFORE the HTTP response was returned.
+        # This guarantees Extension can open /ws/ext-agent/{task_id} immediately
+        # without hitting a "No queues found" error.
+        ext_send_queue, ext_recv_queue = _ext_agent_queues[task_id]
+
+        # Wait for Extension WS to connect and send CONNECTED sentinel
+        # (The /ws/ext-agent endpoint puts {"type":"CONNECTED"} when Extension connects)
+        try:
+            connected_msg = await asyncio.wait_for(ext_recv_queue.get(), timeout=20.0)
+            logger.info(f"[ExtAgent] Extension WS connected for task {task_id}: {connected_msg}")
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                "Extension WS did not connect within 20s. "
+                "Make sure the Deep-Browser Extension sidepanel is open."
             )
-        )
 
-        # Wait for Extension WS connection (Extension opens /ws/ext-agent/{task_id})
-        # Timeout: 15 seconds
-        deadline = asyncio.get_event_loop().time() + 15.0
-        while True:
-            if ext_recv_queue.qsize() > 0:
-                break
-            if asyncio.get_event_loop().time() > deadline:
-                raise RuntimeError(
-                    "Extension did not connect to /ws/ext-agent/ within 15s. "
-                    "Make sure the Deep-Browser Extension is open and the companion server is running."
-                )
-            await asyncio.sleep(0.1)
-
-        # WS callbacks
+        # WS callbacks for agent loop
         async def ws_send(data: dict):
             await ext_send_queue.put(data)
 
         async def ws_recv(timeout: float = 15.0) -> dict:
             return await asyncio.wait_for(ext_recv_queue.get(), timeout=timeout)
+
 
         llm = _create_llm(req.model_provider, req.model_name, req.api_key)
 
