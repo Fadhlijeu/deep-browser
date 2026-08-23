@@ -1,16 +1,19 @@
 /**
- * Deep Browser Extension — Sidepanel Logic
+ * Deep Browser Extension — Sidepanel Client & Browser Transport Adapter
+ * =====================================================================
  *
  * Architecture:
- *   1. User types task → POST /api/tasks (owner=EXTENSION)
- *   2. Backend signals: open /ws/ext-agent/{task_id}
- *   3. Extension opens WebSocket to /ws/ext-agent/{task_id}
- *   4. On GET_DOM_SNAPSHOT → scrape DOM via chrome.scripting → send back
- *   5. On EXECUTE_ACTION  → execute via chrome.scripting → send ACTION_RESULT
- *   6. Display events in timeline
- *
- * Uses Browser Use's reasoning algorithms via backend bridge.
- * Zero connection to Workspace sessions or coordinator.
+ *   1. User submits task → POST /api/tasks (owner=EXTENSION)
+ *   2. Backend launches genuine Browser Use Agent with ExtensionBrowserSession
+ *   3. Extension opens WebSocket to /ws/ext-transport/{task_id}
+ *   4. Extension handles atomic browser commands from ExtensionBrowserSession:
+ *      - GET_STATE    → Scrapes DOM tree + captures tab screenshot
+ *      - NAVIGATE     → chrome.tabs.update()
+ *      - CLICK        → chrome.scripting (scrollIntoView + focus + click)
+ *      - TYPE         → chrome.scripting (value set + input/change events)
+ *      - SCROLL       → chrome.scripting (window.scrollBy)
+ *      - SEND_KEYS    → chrome.scripting (keyboard events)
+ *   5. Presentation UI receives live timeline events from /ws/extension broadcast
  */
 
 'use strict';
@@ -18,31 +21,30 @@
 const SERVER = 'http://127.0.0.1:8765';
 const SERVER_WS = 'ws://127.0.0.1:8765';
 
-// ─── State ───────────────────────────────────────────────────────
+// ─── State ───────────────────────────────────────────────────────────────────
 let state = {
   serverOnline: false,
   currentTab: null,
-  sessions: [],           // local Extension sessions
+  sessions: [],
   activeSessionId: null,
   activeTaskId: null,
-  agentWs: null,          // /ws/ext-agent/{task_id}
-  eventWs: null,          // /ws/extension event stream
+  transportWs: null,      // /ws/ext-transport/{task_id}
+  eventWs: null,          // /ws/extension
   agentRunning: false,
   selectedModel: 'gemini/gemini-2.0-flash',
   selectedMode: 'agent_decide',
-  apiKeys: {},            // provider → key
+  apiKeys: {},
   settingsPanelOpen: false,
   apikeyPanelOpen: false,
   drawerOpen: false,
 };
 
-// ─── Model & Mode Config ─────────────────────────────────────────
+// ─── Model & Mode Config ─────────────────────────────────────────────────────
 const MODELS = [
-  { id: 'gemini/gemini-2.0-flash',      name: 'Auto (Gemini 2.0 Flash Default...)', icon: '✨', provider: 'gemini' },
-  { id: 'gemini/gemini-2.0-flash-001',  name: 'Gemini 2.0 Flash (Default Primary)', icon: '⚡', provider: 'gemini' },
+  { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash (Default Primary)', icon: '⚡', provider: 'gemini' },
   { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite (Fast)',        icon: '🏃', provider: 'gemini' },
-  { id: 'gemini/gemini-1.5-flash',      name: 'Gemini 1.5 Flash',                   icon: '💡', provider: 'gemini' },
   { id: 'gemini/gemini-1.5-pro',        name: 'Gemini 1.5 Pro (Deep Reasoning)',    icon: '🔬', provider: 'gemini' },
+  { id: 'gemini/gemini-1.5-flash',      name: 'Gemini 1.5 Flash',                   icon: '💡', provider: 'gemini' },
   { id: 'openai/gpt-4o',                name: 'GPT-4o',                             icon: '🤖', provider: 'openai' },
   { id: 'openai/gpt-4o-mini',           name: 'GPT-4o Mini (Fast)',                 icon: '⚡', provider: 'openai' },
   { id: 'anthropic/claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',                 icon: '🎭', provider: 'anthropic' },
@@ -50,12 +52,9 @@ const MODELS = [
 ];
 
 const MODES = [
-  { id: 'agent_decide', name: 'Agent Decide (Adaptif)', icon: '🤖',
-    desc: 'Agent memutuskan kapan perlu konfirmasi' },
-  { id: 'auto',         name: 'Always Proceed (Auto)',  icon: '⚡',
-    desc: 'Jalankan semua aksi tanpa konfirmasi' },
-  { id: 'hitl',         name: 'Request Review (HITL)',  icon: '🔵',
-    desc: 'Konfirmasi setiap aksi penting' },
+  { id: 'agent_decide', name: 'Agent Decide (Adaptif)', icon: '🤖' },
+  { id: 'auto',         name: 'Always Proceed (Auto)',  icon: '⚡' },
+  { id: 'hitl',         name: 'Request Review (HITL)',  icon: '🔵' },
 ];
 
 const PROVIDERS = [
@@ -65,29 +64,29 @@ const PROVIDERS = [
   { id: 'ollama',    name: 'Ollama (Local)', placeholder: 'http://localhost:11434' },
 ];
 
-// ─── DOM Refs ────────────────────────────────────────────────────
+// ─── DOM References ──────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const elMain        = $('main');
-const elTimeline    = $('timeline');
-const elEmptyState  = $('empty-state');
-const elGoalInput   = $('goal-input');
-const elBtnSend     = $('btn-send');
-const elStatusDot   = $('status-dot');
-const elApiBadge    = $('api-badge');
-const elApiIndicator= $('api-indicator');
-const elApiBadgeText= $('api-badge-text');
-const elModelPill   = $('model-pill');
+const elMain          = $('main');
+const elTimeline      = $('timeline');
+const elEmptyState    = $('empty-state');
+const elGoalInput     = $('goal-input');
+const elBtnSend       = $('btn-send');
+const elStatusDot     = $('status-dot');
+const elApiBadge      = $('api-badge');
+const elApiIndicator  = $('api-indicator');
+const elApiBadgeText  = $('api-badge-text');
+const elModelPill     = $('model-pill');
 const elModelPillName = $('model-pill-name');
-const elTabStrip    = $('tab-strip');
-const elTabFavicon  = $('tab-favicon');
-const elTabTitle    = $('tab-title');
+const elTabStrip      = $('tab-strip');
+const elTabFavicon    = $('tab-favicon');
+const elTabTitle      = $('tab-title');
 const elSettingsPanel = $('settings-panel');
-const elApikeyPanel = $('apikey-panel');
-const elDrawer      = $('session-drawer');
+const elApikeyPanel   = $('apikey-panel');
+const elDrawer        = $('session-drawer');
 const elDrawerOverlay = $('drawer-overlay');
-const elSessionList = $('session-list');
+const elSessionList   = $('session-list');
 
-// ─── Init ────────────────────────────────────────────────────────
+// ─── Initialization ──────────────────────────────────────────────────────────
 async function init() {
   await loadStorage();
   renderModelRadio();
@@ -102,7 +101,7 @@ async function init() {
   loadSessions();
 }
 
-// ─── Storage ─────────────────────────────────────────────────────
+// ─── Storage ─────────────────────────────────────────────────────────────────
 async function loadStorage() {
   return new Promise(resolve => {
     chrome.storage.local.get([
@@ -122,10 +121,10 @@ async function saveStorage(keys) {
   return new Promise(resolve => chrome.storage.local.set(keys, resolve));
 }
 
-// ─── Server Health ────────────────────────────────────────────────
+// ─── Server Health Monitor ───────────────────────────────────────────────────
 async function checkServerHealth() {
   try {
-    const res = await fetch(`${SERVER}/health`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${SERVER}/api/health`, { signal: AbortSignal.timeout(2000) });
     state.serverOnline = res.ok;
   } catch {
     state.serverOnline = false;
@@ -135,13 +134,18 @@ async function checkServerHealth() {
   setTimeout(checkServerHealth, 5000);
 }
 
-// ─── Current Tab ─────────────────────────────────────────────────
+// ─── Tab Tracking ────────────────────────────────────────────────────────────
 function detectCurrentTab() {
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
     if (tabs?.[0]) setCurrentTab(tabs[0]);
   });
   chrome.tabs.onActivated.addListener(info => {
     chrome.tabs.get(info.tabId, tab => { if (tab) setCurrentTab(tab); });
+  });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (state.currentTab && tabId === state.currentTab.id && changeInfo.title) {
+      setCurrentTab(tab);
+    }
   });
 }
 
@@ -154,7 +158,7 @@ function setCurrentTab(tab) {
   }
 }
 
-// ─── Sessions ────────────────────────────────────────────────────
+// ─── Sessions ────────────────────────────────────────────────────────────────
 function loadSessions() {
   renderSessionList();
 }
@@ -188,7 +192,7 @@ function renderSessionList() {
   });
 }
 
-// ─── Event Stream WS ─────────────────────────────────────────────
+// ─── Broadcast Event Stream (Presentation UI) ────────────────────────────────
 function connectEventStream() {
   if (state.eventWs) try { state.eventWs.close(); } catch {}
   const ws = new WebSocket(`${SERVER_WS}/ws/extension`);
@@ -202,7 +206,7 @@ function connectEventStream() {
 }
 
 function handleServerEvent(evt) {
-  // Extension ONLY handles its own events — never workspace events
+  // Extension ONLY handles its own events — strictly isolated from Workspace
   if (evt.owner && evt.owner !== 'EXTENSION') return;
   if (evt.task_id && state.activeTaskId && evt.task_id !== state.activeTaskId) return;
 
@@ -210,9 +214,7 @@ function handleServerEvent(evt) {
   const msg = evt.message || evt.summary || '';
   const data = evt.data || {};
 
-  // Skip TASK_CREATED — Extension already shows the user card
-  if (t === 'TASK_CREATED') return;
-
+  if (t === 'TASK_CREATED') return; // Handled locally
 
   if (t === 'TASK_STARTED') {
     appendCard('action', '🚀', 'AGENT', 'Agent dimulai — menganalisis halaman...');
@@ -244,12 +246,11 @@ function handleServerEvent(evt) {
   }
 }
 
-// ─── Submit Task ─────────────────────────────────────────────────
+// ─── Task Submission ─────────────────────────────────────────────────────────
 async function submitTask() {
   const goal = elGoalInput.value.trim();
   if (!goal || state.agentRunning) return;
 
-  // Ensure session exists
   if (!state.activeSessionId) createNewSession();
 
   appendCard('user', '👤', 'ANDA', goal);
@@ -258,16 +259,13 @@ async function submitTask() {
   hideEmptyState();
   setAgentRunning(true);
 
-  // Get API key for selected provider
   const providerInfo = MODELS.find(m => m.id === state.selectedModel);
   const provider = providerInfo?.provider || 'gemini';
   const apiKey = state.apiKeys[provider] || '';
 
-  // Parse model name (provider/model → model_name)
   const modelParts = state.selectedModel.split('/');
   const modelName = modelParts[1] || modelParts[0];
 
-  // Submit task — backend will use Browser Use Agent reasoning
   let taskId;
   try {
     const tab = state.currentTab;
@@ -305,68 +303,135 @@ async function submitTask() {
     return;
   }
 
-  // Open WebSocket to agent loop — Extension becomes the browser interface
-  connectAgentWs(taskId);
+  // Connect transport WebSocket to drive browser commands
+  connectTransportWs(taskId);
 }
 
-// ─── Agent WebSocket — Extension as browser interface ────────────
-function connectAgentWs(taskId) {
-  if (state.agentWs) try { state.agentWs.close(); } catch {}
+// ─── Transport Layer: WebSocket Protocol (Chrome Extension as Browser) ───────
+function connectTransportWs(taskId) {
+  if (state.transportWs) try { state.transportWs.close(); } catch {}
 
-  const ws = new WebSocket(`${SERVER_WS}/ws/ext-agent/${taskId}`);
-  state.agentWs = ws;
+  const ws = new WebSocket(`${SERVER_WS}/ws/ext-transport/${taskId}`);
+  state.transportWs = ws;
 
   ws.onopen = () => {
-    appendCard('action', '🔗', 'AGENT WS', 'Terhubung ke agen — siap scrape DOM');
+    loggerLog('Transport WebSocket connected');
   };
 
   ws.onerror = () => {
     setAgentRunning(false);
-    appendCard('error', '❌', 'WS ERROR', 'Gagal terhubung ke agent WebSocket');
+    appendCard('error', '❌', 'TRANSPORT ERROR', 'Gagal menghubungkan transport WebSocket ke server');
   };
 
   ws.onclose = () => {
-    state.agentWs = null;
+    state.transportWs = null;
   };
 
   ws.onmessage = async e => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
-    await handleAgentMessage(msg, ws);
+    if (msg.type === 'TRANSPORT_COMMAND') {
+      await handleTransportCommand(msg, ws);
+    }
   };
 }
 
-async function handleAgentMessage(msg, ws) {
-  const type = msg.type;
+async function handleTransportCommand(msg, ws) {
+  const { request_id, command, params } = msg;
 
-  if (type === 'CONNECTED') {
-    // Backend agent loop ready
-  } else if (type === 'GET_DOM_SNAPSHOT') {
-    // Backend requests DOM — scrape the active tab
-    const snapshot = await scrapeDom();
-    ws.send(JSON.stringify({ type: 'DOM_SNAPSHOT', data: snapshot }));
+  try {
+    if (command === 'GET_STATE') {
+      const stateResult = await captureBrowserState(params?.include_screenshot !== false);
+      ws.send(JSON.stringify({
+        request_id,
+        result: stateResult,
+      }));
+      return;
+    }
 
-  } else if (type === 'EXECUTE_ACTION') {
-    const { action, params, step } = msg;
-    appendCard('action', actionIcon(action), action.toUpperCase(), formatAction(action, params));
-    const result = await executeAction(action, params);
-    ws.send(JSON.stringify({ type: 'ACTION_RESULT', step, success: result.success, error: result.error || '' }));
+    if (command === 'NAVIGATE') {
+      const res = await executeNavigate(params?.url, params?.new_tab);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
 
-  } else if (type === 'AGENT_DONE') {
-    setAgentRunning(false);
-    appendCard('completed', '✅', 'SELESAI', msg.result || 'Tugas selesai');
+    if (command === 'CLICK') {
+      const res = await executeClick(params?.index, params?.xpath);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
 
-  } else if (type === 'ERROR') {
-    setAgentRunning(false);
-    appendCard('error', '❌', 'ERROR', msg.message || 'Terjadi kesalahan');
+    if (command === 'CLICK_COORDINATE') {
+      const res = await executeClickCoordinate(params?.x, params?.y);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'TYPE') {
+      const res = await executeType(params?.index, params?.text, params?.clear, params?.xpath);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'SCROLL') {
+      const res = await executeScroll(params?.direction, params?.amount);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'SCROLL_TO_TEXT') {
+      const res = await executeScrollToText(params?.text);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'SEND_KEYS') {
+      const res = await executeSendKeys(params?.keys);
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'REFRESH') {
+      const res = await executeRefresh();
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'GO_BACK') {
+      const res = await executeGoBack();
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    if (command === 'GO_FORWARD') {
+      const res = await executeGoForward();
+      ws.send(JSON.stringify({ request_id, result: res }));
+      return;
+    }
+
+    // Default error for unhandled commands
+    ws.send(JSON.stringify({
+      request_id,
+      error: `Unknown transport command: ${command}`,
+    }));
+  } catch (err) {
+    ws.send(JSON.stringify({
+      request_id,
+      error: err.message || String(err),
+    }));
   }
 }
 
-// ─── DOM Scraping ─────────────────────────────────────────────────
-async function scrapeDom() {
-  const tab = state.currentTab;
-  if (!tab?.id) return { url: '', title: '', bodyText: '', interactiveElements: [] };
+// ─── Browser Operations via Chrome APIs ──────────────────────────────────────
 
+async function captureBrowserState(includeScreenshot) {
+  const tab = state.currentTab;
+  if (!tab?.id) {
+    return { url: '', title: '', elements: [], tabs: [], screenshot: null };
+  }
+
+  // 1. Scrape DOM interactive elements and page metadata
+  let domData = { elements: [], page_info: {} };
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -377,217 +442,276 @@ async function scrapeDom() {
           let cur = el;
           while (cur && cur.nodeType === Node.ELEMENT_NODE) {
             let idx = 1, sib = cur.previousElementSibling;
-            while (sib) { if (sib.tagName === cur.tagName) idx++; sib = sib.previousElementSibling; }
+            while (sib) {
+              if (sib.tagName === cur.tagName) idx++;
+              sib = sib.previousElementSibling;
+            }
             parts.unshift(cur.tagName.toLowerCase() + (idx > 1 ? '[' + idx + ']' : ''));
             cur = cur.parentElement;
           }
           return '/' + parts.join('/');
         }
-        const sel = [
-          'a[href]','button:not([disabled])','input:not([type="hidden"]):not([disabled])',
-          'select:not([disabled])','textarea:not([disabled])',
-          '[role="button"]','[role="link"]','[role="menuitem"]','[role="tab"]',
-          '[role="checkbox"]','[role="radio"]','[role="combobox"]',
-          '[onclick]','[tabindex]:not([tabindex="-1"])'
+
+        const selector = [
+          'a[href]', 'button:not([disabled])', 'input:not([type="hidden"]):not([disabled])',
+          'select:not([disabled])', 'textarea:not([disabled])',
+          '[role="button"]', '[role="link"]', '[role="menuitem"]', '[role="tab"]',
+          '[role="checkbox"]', '[role="radio"]', '[role="combobox"]',
+          '[onclick]', '[tabindex]:not([tabindex="-1"])'
         ].join(',');
-        const seen = new Set(), elements = [];
-        let idx = 0;
-        document.querySelectorAll(sel).forEach(el => {
+
+        const seen = new Set();
+        const elements = [];
+        let counter = 1;
+
+        document.querySelectorAll(selector).forEach(el => {
           if (seen.has(el)) return;
           seen.add(el);
+
           const r = el.getBoundingClientRect();
           if (r.width === 0 && r.height === 0) return;
-          const text = (el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().slice(0, 120);
+
+          const text = (
+            el.innerText || el.value || el.placeholder ||
+            el.getAttribute('aria-label') || el.getAttribute('title') || ''
+          ).trim().slice(0, 120);
+
           elements.push({
-            index: idx++,
+            index: counter++,
             tag: el.tagName.toLowerCase(),
             type: el.getAttribute('type') || '',
             role: el.getAttribute('role') || '',
-            text, href: el.href || '',
+            text,
+            href: el.href || '',
             name: el.getAttribute('name') || '',
             id: el.id || '',
             placeholder: el.placeholder || '',
-            value: ['INPUT','SELECT','TEXTAREA'].includes(el.tagName) ? el.value : '',
-            xpath: getXPath(el)
+            value: ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) ? el.value : '',
+            xpath: getXPath(el),
           });
         });
+
+        const docEl = document.documentElement;
+        const pageInfo = {
+          viewport_width: window.innerWidth,
+          viewport_height: window.innerHeight,
+          page_width: docEl ? docEl.scrollWidth : window.innerWidth,
+          page_height: docEl ? docEl.scrollHeight : window.innerHeight,
+          scroll_x: window.scrollX,
+          scroll_y: window.scrollY,
+          pixels_above: window.scrollY,
+          pixels_below: docEl ? Math.max(0, docEl.scrollHeight - (window.scrollY + window.innerHeight)) : 0,
+        };
+
         return {
           url: location.href,
           title: document.title,
-          bodyText: document.body ? document.body.innerText.slice(0, 6000) : '',
-          interactiveElements: elements
+          elements,
+          page_info: pageInfo,
         };
       }
     });
-    return results?.[0]?.result || { url: tab.url || '', title: tab.title || '', bodyText: '', interactiveElements: [] };
-  } catch (err) {
-    return { url: tab.url || '', title: tab.title || '', bodyText: `Error: ${err.message}`, interactiveElements: [] };
+
+    if (results?.[0]?.result) {
+      domData = results[0].result;
+    }
+  } catch (e) {
+    loggerLog('DOM scrape error: ' + e.message);
   }
+
+  // 2. Capture screenshot if requested
+  let screenshot = null;
+  if (includeScreenshot) {
+    try {
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+      if (dataUrl && dataUrl.includes(',')) {
+        screenshot = dataUrl.split(',')[1]; // Strip data:image/png;base64, prefix
+      }
+    } catch (e) {
+      loggerLog('Screenshot capture error: ' + e.message);
+    }
+  }
+
+  return {
+    url: domData.url || tab.url || '',
+    title: domData.title || tab.title || '',
+    tabs: [{ url: tab.url, title: tab.title, id: tab.id }],
+    elements: domData.elements || [],
+    screenshot,
+    page_info: domData.page_info || {},
+  };
 }
 
-// ─── Action Execution ─────────────────────────────────────────────
-async function executeAction(action, params) {
+async function executeNavigate(url, newTab) {
+  if (!url) return { success: false, error: 'No URL provided' };
+
+  if (newTab) {
+    const created = await chrome.tabs.create({ url });
+    setCurrentTab(created);
+    return { success: true, url, tab_id: created.id };
+  }
+
   const tab = state.currentTab;
+  await chrome.tabs.update(tab.id, { url });
 
-  try {
-    if (action === 'navigate') {
-      const url = params.url;
-      await chrome.tabs.update(tab.id, { url });
-      // Wait for page load
-      await new Promise(resolve => {
-        const listener = (tabId, changeInfo) => {
-          if (tabId === tab.id && changeInfo.status === 'complete') {
-            chrome.tabs.onUpdated.removeListener(listener);
-            // Update current tab info
-            chrome.tabs.get(tabId, t => { if (t) setCurrentTab(t); });
-            resolve();
-          }
-        };
-        chrome.tabs.onUpdated.addListener(listener);
-        setTimeout(resolve, 8000); // max wait
-      });
-      return { success: true };
-    }
+  // Wait for tab navigation to complete
+  await new Promise(resolve => {
+    const listener = (tabId, changeInfo) => {
+      if (tabId === tab.id && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        chrome.tabs.get(tabId, t => { if (t) setCurrentTab(t); });
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(resolve, 10000); // 10s fallback timeout
+  });
 
-    if (action === 'wait') {
-      await new Promise(r => setTimeout(r, (params.seconds || 2) * 1000));
-      return { success: true };
-    }
-
-    // Actions requiring scripting — need xpath or index
-    const xpath = params.xpath || await getXPathByIndex(tab.id, params.index);
-    if (!xpath && !['scroll'].includes(action)) {
-      return { success: false, error: `Element not found (index=${params.index})` };
-    }
-
-    if (action === 'click') {
-      const res = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (xp) => {
-          const el = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-          if (!el) return { success: false, error: 'Element not found: ' + xp };
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.focus();
-          el.click();
-          return { success: true };
-        },
-        args: [xpath]
-      });
-      return res?.[0]?.result || { success: false, error: 'Script failed' };
-    }
-
-    if (action === 'type') {
-      const text = String(params.text || '');
-      const res = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (xp, txt) => {
-          const el = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-          if (!el) return { success: false, error: 'Element not found: ' + xp };
-          el.focus();
-          el.value = txt;
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          return { success: true };
-        },
-        args: [xpath, text]
-      });
-      return res?.[0]?.result || { success: false, error: 'Script failed' };
-    }
-
-    if (action === 'scroll') {
-      const dir = params.direction || 'down';
-      const amt = params.amount || 400;
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (d, a) => window.scrollBy(0, d === 'down' ? a : -a),
-        args: [dir, amt]
-      });
-      return { success: true };
-    }
-
-    if (action === 'select_option') {
-      const value = String(params.value || '');
-      const res = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (xp, v) => {
-          const el = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-          if (!el) return { success: false, error: 'Element not found' };
-          el.value = v;
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          return { success: true };
-        },
-        args: [xpath, value]
-      });
-      return res?.[0]?.result || { success: false, error: 'Script failed' };
-    }
-
-    if (action === 'press_key') {
-      const key = params.key || 'Enter';
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (k) => {
-          const el = document.activeElement;
-          ['keydown','keypress','keyup'].forEach(evtName => {
-            el.dispatchEvent(new KeyboardEvent(evtName, { key: k, code: 'Key'+k, bubbles: true }));
-          });
-        },
-        args: [key]
-      });
-      return { success: true };
-    }
-
-    return { success: false, error: `Unknown action: ${action}` };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  return { success: true, url };
 }
 
-async function getXPathByIndex(tabId, index) {
-  if (index == null) return null;
-  try {
-    const res = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (idx) => {
-        function getXPath(el) {
-          if (el.id) return '//*[@id="' + el.id.replace(/"/g, '\\"') + '"]';
-          const parts = [];
-          let cur = el;
-          while (cur && cur.nodeType === Node.ELEMENT_NODE) {
-            let i = 1, sib = cur.previousElementSibling;
-            while (sib) { if (sib.tagName === cur.tagName) i++; sib = sib.previousElementSibling; }
-            parts.unshift(cur.tagName.toLowerCase() + (i > 1 ? '[' + i + ']' : ''));
-            cur = cur.parentElement;
+async function executeClick(index, xpath) {
+  const tab = state.currentTab;
+  const res = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (idx, xp) => {
+      let el = null;
+      if (xp) {
+        el = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      }
+      if (!el && idx != null) {
+        const sel = 'a[href], button:not([disabled]), input:not([type="hidden"]), select, textarea, [role="button"], [role="link"], [onclick]';
+        const matches = Array.from(document.querySelectorAll(sel));
+        el = matches[idx - 1];
+      }
+      if (!el) return { success: false, error: `Element not found (index=${idx}, xpath=${xp})` };
+
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+      el.click();
+      return { success: true };
+    },
+    args: [index, xpath || null]
+  });
+
+  return res?.[0]?.result || { success: false, error: 'Click execution failed' };
+}
+
+async function executeClickCoordinate(x, y) {
+  const tab = state.currentTab;
+  const res = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (cx, cy) => {
+      const el = document.elementFromPoint(cx, cy);
+      if (!el) return { success: false, error: `No element at coordinates (${cx}, ${cy})` };
+      el.focus();
+      el.click();
+      return { success: true };
+    },
+    args: [x, y]
+  });
+  return res?.[0]?.result || { success: false, error: 'Coordinate click failed' };
+}
+
+async function executeType(index, text, clear, xpath) {
+  const tab = state.currentTab;
+  const res = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (idx, txt, clr, xp) => {
+      let el = null;
+      if (xp) {
+        el = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      }
+      if (!el && idx != null) {
+        const sel = 'input:not([type="hidden"]), textarea, select';
+        const matches = Array.from(document.querySelectorAll(sel));
+        el = matches[idx - 1];
+      }
+      if (!el) return { success: false, error: `Input element not found (index=${idx})` };
+
+      el.focus();
+      if (clr) el.value = '';
+      el.value = (clr ? '' : (el.value || '')) + String(txt || '');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return { success: true };
+    },
+    args: [index, text, clear !== false, xpath || null]
+  });
+
+  return res?.[0]?.result || { success: false, error: 'Type execution failed' };
+}
+
+async function executeScroll(direction, amount) {
+  const tab = state.currentTab;
+  const amt = amount || 400;
+  const dir = direction || 'down';
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (d, a) => window.scrollBy(0, d === 'down' ? a : -a),
+    args: [dir, amt]
+  });
+  return { success: true };
+}
+
+async function executeScrollToText(text) {
+  const tab = state.currentTab;
+  const res = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (txt) => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.textContent && node.textContent.includes(txt)) {
+          const parent = node.parentElement;
+          if (parent) {
+            parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return { success: true };
           }
-          return '/' + parts.join('/');
         }
-        const sel = [
-          'a[href]','button:not([disabled])','input:not([type="hidden"]):not([disabled])',
-          'select:not([disabled])','textarea:not([disabled])',
-          '[role="button"]','[role="link"]','[role="menuitem"]','[role="tab"]',
-          '[onclick]','[tabindex]:not([tabindex="-1"])'
-        ].join(',');
-        const seen = new Set(), els = [];
-        document.querySelectorAll(sel).forEach(el => {
-          if (seen.has(el)) return;
-          seen.add(el);
-          const r = el.getBoundingClientRect();
-          if (r.width === 0 && r.height === 0) return;
-          els.push(el);
-        });
-        const el = els[idx];
-        return el ? getXPath(el) : null;
-      },
-      args: [index]
-    });
-    return res?.[0]?.result || null;
-  } catch {
-    return null;
-  }
+      }
+      return { success: false, error: `Text "${txt}" not found on page` };
+    },
+    args: [text]
+  });
+  return res?.[0]?.result || { success: false, error: 'Scroll to text failed' };
 }
 
-// ─── UI Helpers ──────────────────────────────────────────────────
+async function executeSendKeys(keys) {
+  const tab = state.currentTab;
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (k) => {
+      const el = document.activeElement || document.body;
+      ['keydown', 'keypress', 'keyup'].forEach(evt => {
+        el.dispatchEvent(new KeyboardEvent(evt, { key: k, code: 'Key' + k, bubbles: true }));
+      });
+    },
+    args: [keys || 'Enter']
+  });
+  return { success: true };
+}
+
+async function executeRefresh() {
+  const tab = state.currentTab;
+  await chrome.tabs.reload(tab.id);
+  return { success: true };
+}
+
+async function executeGoBack() {
+  const tab = state.currentTab;
+  await chrome.tabs.goBack(tab.id);
+  return { success: true };
+}
+
+async function executeGoForward() {
+  const tab = state.currentTab;
+  await chrome.tabs.goForward(tab.id);
+  return { success: true };
+}
+
+// ─── UI Helpers ──────────────────────────────────────────────────────────────
 function appendCard(type, icon, tag, body) {
-  // Hide empty state on first card
   hideEmptyState();
 
   const card = document.createElement('div');
@@ -628,26 +752,15 @@ function setAgentRunning(running) {
   }
 }
 
-function actionIcon(action) {
-  const icons = { navigate: '🌐', click: '🖱️', type: '⌨️', scroll: '📜', select_option: '📋', wait: '⏳', press_key: '⌨️', done: '✅' };
-  return icons[action] || '⚙️';
-}
-
-function formatAction(action, params) {
-  if (action === 'navigate') return params.url || '';
-  if (action === 'click') return `Element [${params.index}]`;
-  if (action === 'type') return `"${String(params.text || '').slice(0, 60)}"`;
-  if (action === 'scroll') return `${params.direction} ${params.amount || 400}px`;
-  if (action === 'select_option') return `[${params.index}] → "${params.value}"`;
-  if (action === 'wait') return `${params.seconds}s`;
-  return JSON.stringify(params).slice(0, 80);
-}
-
 function escHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ─── Model & Mode UI ─────────────────────────────────────────────
+function loggerLog(msg) {
+  console.log('[DeepBrowser Extension]', msg);
+}
+
+// ─── Settings & Configuration UI ─────────────────────────────────────────────
 function renderModelRadio() {
   const group = $('model-radio-group');
   group.innerHTML = '';
@@ -736,7 +849,6 @@ function renderApikeyProviders() {
   });
 }
 
-// ─── Panels & Drawer ─────────────────────────────────────────────
 function toggleSettings() {
   state.settingsPanelOpen = !state.settingsPanelOpen;
   state.apikeyPanelOpen = false;
@@ -775,15 +887,13 @@ function closeDrawer() {
   elDrawerOverlay.classList.remove('visible');
 }
 
-// ─── Textarea auto-resize ─────────────────────────────────────────
 function resizeTextarea() {
   elGoalInput.style.height = 'auto';
   elGoalInput.style.height = Math.min(elGoalInput.scrollHeight, 120) + 'px';
 }
 
-// ─── Event Bindings ───────────────────────────────────────────────
+// ─── Event Bindings ──────────────────────────────────────────────────────────
 function bindEvents() {
-  // Send / Stop button
   elBtnSend.addEventListener('click', () => {
     if (state.agentRunning) {
       stopAgent();
@@ -792,7 +902,6 @@ function bindEvents() {
     }
   });
 
-  // Textarea
   elGoalInput.addEventListener('input', () => {
     resizeTextarea();
     elBtnSend.disabled = !elGoalInput.value.trim() && !state.agentRunning;
@@ -807,13 +916,11 @@ function bindEvents() {
     elBtnSend.disabled = !elGoalInput.value.trim() && !state.agentRunning;
   });
 
-  // Top bar
   $('btn-menu').addEventListener('click', openDrawer);
   $('btn-new').addEventListener('click', () => { createNewSession(); });
   $('btn-settings').addEventListener('click', toggleSettings);
   $('api-badge').addEventListener('click', toggleApikey);
 
-  // Panels close
   $('close-settings').addEventListener('click', closeSettings);
   $('close-apikey').addEventListener('click', closeApikey);
   $('btn-open-apikey').addEventListener('click', () => {
@@ -821,15 +928,11 @@ function bindEvents() {
     setTimeout(() => { state.apikeyPanelOpen = false; toggleApikey(); }, 10);
   });
 
-  // Model pill
   elModelPill.addEventListener('click', toggleSettings);
-
-  // Drawer
   elDrawerOverlay.addEventListener('click', closeDrawer);
   $('drawer-close').addEventListener('click', closeDrawer);
   $('btn-new-session').addEventListener('click', createNewSession);
 
-  // Quick prompts
   document.querySelectorAll('.quick-chip').forEach(btn => {
     btn.addEventListener('click', () => {
       elGoalInput.value = btn.dataset.prompt;
@@ -838,7 +941,6 @@ function bindEvents() {
     });
   });
 
-  // Close panels on outside click
   document.addEventListener('click', e => {
     if (!elSettingsPanel.contains(e.target) && !$('btn-settings').contains(e.target) && !elModelPill.contains(e.target)) {
       closeSettings();
@@ -851,10 +953,10 @@ function bindEvents() {
 
 async function stopAgent() {
   try { await fetch(`${SERVER}/api/agent/stop`, { method: 'POST' }); } catch {}
-  if (state.agentWs) try { state.agentWs.close(); } catch {}
+  if (state.transportWs) try { state.transportWs.close(); } catch {}
   setAgentRunning(false);
   appendCard('thinking', '⏹️', 'BERHENTI', 'Agent dihentikan oleh pengguna');
 }
 
-// ─── Boot ────────────────────────────────────────────────────────
+// ─── Boot ────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);

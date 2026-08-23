@@ -61,11 +61,13 @@ safe_manager = SafeModeManager.get_instance()
 active_agents: Dict[str, Agent] = {}
 active_tasks: Dict[str, Dict[str, Any]] = {}
 
-# Extension agent WS queues: task_id → (send_queue, recv_queue)
-# send_queue: backend → Extension (backend puts, Extension gets)
-# recv_queue: Extension → backend (Extension puts, backend gets)
-from typing import Tuple
-_ext_agent_queues: Dict[str, Tuple[asyncio.Queue, asyncio.Queue]] = {}
+from deep_browser.bridge.extension_session import (
+    ExtensionBrowserSession,
+    ExtensionTransport,
+    get_or_create_extension_transport,
+    get_extension_transport,
+    remove_extension_transport,
+)
 
 
 
@@ -285,11 +287,9 @@ async def create_task(req: CreateTaskRequest):
 
     # Route to correct execution pipeline
     if is_extension:
-        # CRITICAL: Create WS queues BEFORE returning the HTTP response.
-        # Extension JS gets task_id from this response, then IMMEDIATELY opens
-        # /ws/ext-agent/{task_id}. If queues don't exist yet, WS endpoint
-        # returns ERROR and closes — causing the "Gagal terhubung" bug.
-        _ext_agent_queues[task_id] = (asyncio.Queue(), asyncio.Queue())
+        # Pre-allocate ExtensionTransport queues BEFORE returning HTTP response
+        # so Extension can immediately connect WebSocket without race condition.
+        get_or_create_extension_transport(task_id)
         asyncio.create_task(_run_extension_task_background(task_id, req, session_id))
     else:
         asyncio.create_task(_run_task_background(task_id, req, session_id))
@@ -307,27 +307,25 @@ async def create_task(req: CreateTaskRequest):
 
 async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, session_id: str):
     """
-    Extension-native execution path.
+    Extension execution path using the genuine Browser Use Agent + ExtensionBrowserSession adapter.
 
-    EXTENSION = EXTENSION. Completely isolated from Workspace.
-
-    The Extension JS:
-      1. Opens WebSocket to /ws/ext-agent/{task_id}
-      2. Scrapes DOM via chrome.scripting.executeScript()
-      3. Executes actions (navigate, click, type, scroll) via chrome.scripting
-
-    Backend:
-      - Waits for Extension WS connection at /ws/ext-agent/{task_id}
-      - Uses Browser Use LLM for reasoning over DOM snapshots
-      - Sends action commands back to Extension
-      - NEVER touches coordinator, BrowserSession, or port 9222
+    Architecture:
+      Browser Use Agent (browser_use.agent.service.Agent)
+          ↓
+      SafeTools Registry (browser_use.tools.Tools)
+          ↓ Events (NavigateToUrlEvent, ClickElementEvent, TypeTextEvent, etc.)
+      ExtensionBrowserSession (BrowserSession subclass)
+          ↓ Commands (GET_STATE, NAVIGATE, CLICK, TYPE, SCROLL)
+      ExtensionTransport (WebSocket Relay)
+          ↓
+      Chrome Extension (sidepanel.js on active tab)
 
     INVARIANTS:
     - coordinator.active_session_id is NEVER read
     - coordinator.attach_system_chrome() is NEVER called
-    - No BrowserSession, no CDP proxy, no port 9222
+    - No duplicate Agent loop — uses genuine browser_use.Agent
+    - Isolated from Workspace sessions
     """
-    from deep_browser.bridge.extension_agent import run_extension_agent_loop
     from deep_browser.bridge.extension_runner import ExtensionTaskContext, register_extension_task
 
     owner = "EXTENSION"
@@ -343,62 +341,123 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
         window_id=req.window_id,
         url=req.url,
         title=req.title,
-        model=req.model_name or "gemini-3.5-flash-lite",
+        model=req.model_name or "gemini-2.0-flash",
         status="running",
     )
     register_extension_task(ext_ctx)
 
-    # Create asyncio Queue for Extension WebSocket communication
-    # The /ws/ext-agent/{task_id} endpoint puts messages here
-    ext_send_queue: asyncio.Queue = asyncio.Queue()   # backend → Extension
-    ext_recv_queue: asyncio.Queue = asyncio.Queue()   # Extension → backend
-    _ext_agent_queues[task_id] = (ext_send_queue, ext_recv_queue)
+    transport = get_or_create_extension_transport(task_id)
 
     try:
         active_tasks[task_id]["status"] = "running"
 
-        # Queues were pre-created in create_task() BEFORE the HTTP response was returned.
-        # This guarantees Extension can open /ws/ext-agent/{task_id} immediately
-        # without hitting a "No queues found" error.
-        ext_send_queue, ext_recv_queue = _ext_agent_queues[task_id]
-
-        # Wait for Extension WS to connect and send CONNECTED sentinel
-        # (The /ws/ext-agent endpoint puts {"type":"CONNECTED"} when Extension connects)
-        try:
-            connected_msg = await asyncio.wait_for(ext_recv_queue.get(), timeout=20.0)
-            logger.info(f"[ExtAgent] Extension WS connected for task {task_id}: {connected_msg}")
-        except asyncio.TimeoutError:
+        # Wait for Extension WS transport handshake
+        connected = await transport.wait_connected(timeout=20.0)
+        if not connected:
             raise RuntimeError(
-                "Extension WS did not connect within 20s. "
+                "Extension WebSocket transport did not connect within 20s. "
                 "Make sure the Deep-Browser Extension sidepanel is open."
             )
 
-        # WS callbacks for agent loop
-        async def ws_send(data: dict):
-            await ext_send_queue.put(data)
+        logger.info(f"[ExtensionSession] Starting genuine Browser Use Agent for task {task_id}")
 
-        async def ws_recv(timeout: float = 15.0) -> dict:
-            return await asyncio.wait_for(ext_recv_queue.get(), timeout=timeout)
-
-
-        llm = _create_llm(req.model_provider, req.model_name, req.api_key)
-
-        result = await run_extension_agent_loop(
-            task_id=task_id,
-            session_id=session_id,
-            task=req.task,
-            tab_id=tab_id,
-            url=req.url,
-            title=req.title,
-            llm=llm,
-            ws_send=ws_send,
-            ws_recv=ws_recv,
-            broadcaster=broadcaster,
+        # 1. Build ExtensionBrowserSession (implements BrowserSession interface)
+        session = ExtensionBrowserSession(
+            transport=transport,
+            initial_url=req.url,
+            initial_title=req.title,
+            initial_tab_id=req.tab_id,
         )
+
+        # 2. Build LLM and Tools
+        llm = _create_llm(req.model_provider, req.model_name, req.api_key)
+        policy = SafeModePolicy(enabled=req.safe_mode, timeout_seconds=req.safe_timeout_seconds)
+        tools = SafeTools(safe_policy=policy, broadcaster=broadcaster)
+
+        # 3. Step callback for timeline broadcast to presentation UI
+        async def step_callback(state_summary, agent_output, step_num):
+            url = getattr(state_summary, "url", "") or req.url or ""
+            title = getattr(state_summary, "title", "") or req.title or ""
+            thinking = getattr(agent_output.current_state, "thinking", None) if agent_output else None
+            next_goal = getattr(agent_output.current_state, "next_goal", None) if agent_output else None
+
+            await broadcaster.broadcast(
+                DeepBrowserEvent(
+                    task_id=task_id,
+                    session_id=session_id,
+                    owner=owner,
+                    browser_mode=browser_mode,
+                    browser_id=browser_id,
+                    tab_id=tab_id,
+                    event_type=EventType.OBSERVATION,
+                    status="OBSERVED",
+                    summary=f"Observing: {title or url or 'current tab'}",
+                    message=f"Step {step_num}: {url}",
+                    data={"step": step_num, "url": url, "title": title, "thought": thinking, "next_goal": next_goal},
+                )
+            )
+
+            if thinking:
+                await broadcaster.broadcast(
+                    DeepBrowserEvent(
+                        task_id=task_id,
+                        session_id=session_id,
+                        owner=owner,
+                        browser_mode=browser_mode,
+                        browser_id=browser_id,
+                        tab_id=tab_id,
+                        event_type=EventType.THINKING_STATUS,
+                        status="THINKING",
+                        summary="Analyzing page...",
+                        message=str(thinking)[:200],
+                        data={"thinking": thinking},
+                    )
+                )
+
+        # 4. Instantiate genuine Browser Use Agent
+        agent = Agent(
+            task=req.task,
+            llm=llm,
+            browser_session=session,
+            tools=tools,
+            register_new_step_callback=step_callback,
+        )
+
+        active_agents[task_id] = agent
+
+        await broadcaster.broadcast(
+            DeepBrowserEvent(
+                task_id=task_id,
+                session_id=session_id,
+                owner=owner,
+                browser_mode=browser_mode,
+                browser_id=browser_id,
+                tab_id=tab_id,
+                event_type=EventType.TASK_STARTED,
+                message="Browser Use Agent reasoning started on current tab",
+            )
+        )
+
+        # 5. Run genuine Browser Use agent loop
+        result = await agent.run()
 
         ext_ctx.status = "completed"
         active_tasks[task_id]["status"] = "completed"
         active_tasks[task_id]["result"] = str(result)
+
+        await broadcaster.broadcast(
+            DeepBrowserEvent(
+                task_id=task_id,
+                session_id=session_id,
+                owner=owner,
+                browser_mode=browser_mode,
+                browser_id=browser_id,
+                tab_id=tab_id,
+                event_type=EventType.COMPLETED,
+                message="Task completed successfully",
+                data={"result": str(result)},
+            )
+        )
 
     except Exception as e:
         logger.error(f"Extension task {task_id} failed: {e}", exc_info=True)
@@ -421,8 +480,8 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
             )
         )
     finally:
-        _ext_agent_queues.pop(task_id, None)
         active_agents.pop(task_id, None)
+        remove_extension_transport(task_id)
 
 
 
@@ -889,66 +948,44 @@ async def cdp_bridge_ws_endpoint(websocket: WebSocket, task_id: str):
         logger.error(f"[CDP Bridge] Error for task {task_id}: {e}")
 
 
-# --- Extension Agent WebSocket — bidirectional DOM↔Action channel ---
+# --- Extension Transport WebSocket (ExtensionBrowserSession ↔ Chrome Extension) ---
 
+@app.websocket("/ws/ext-transport/{task_id}")
 @app.websocket("/ws/ext-agent/{task_id}")
-async def ext_agent_ws_endpoint(websocket: WebSocket, task_id: str):
+async def ext_transport_ws_endpoint(websocket: WebSocket, task_id: str):
     """
-    Bidirectional WebSocket for Extension JS ↔ ExtensionAgentLoop.
+    Pure transport layer connecting ExtensionBrowserSession to the Chrome Extension.
 
-    Extension JS connects here after receiving task_id from POST /api/tasks.
-    Backend agent loop reads DOM snapshots from Extension, sends action commands.
-
-    Protocol (all messages are JSON):
-      Backend → Extension:
-        { "type": "GET_DOM_SNAPSHOT", "step": N }
-        { "type": "EXECUTE_ACTION", "step": N, "action": "click|type|navigate|scroll|...", "params": {...} }
-        { "type": "AGENT_DONE", "result": "..." }
-
-      Extension → Backend:
-        { "type": "DOM_SNAPSHOT", "data": { "url":..., "title":..., "interactiveElements":[...], "bodyText":"..." } }
-        { "type": "ACTION_RESULT", "success": true|false, "error": "...", "step": N }
+    Relays:
+      - Backend commands (GET_STATE, NAVIGATE, CLICK, TYPE, SCROLL, etc.) → Extension JS
+      - Extension results / DOM snapshots → ExtensionBrowserSession
     """
     await websocket.accept()
-    logger.info(f"[ExtAgent WS] Extension connected for task {task_id}")
+    logger.info(f"[ExtTransport WS] Extension connected for task {task_id}")
 
-    queues = _ext_agent_queues.get(task_id)
-    if not queues:
-        # Task not found or not an Extension task — close gracefully
-        await websocket.send_text(json.dumps({
-            "type": "ERROR",
-            "message": f"No active Extension agent loop for task_id={task_id}. Submit task first via POST /api/tasks."
-        }))
-        await websocket.close()
-        return
-
-    send_queue, recv_queue = queues
-
-    # Put CONNECTED sentinel so _run_extension_task_background can proceed
-    await recv_queue.put({"type": "CONNECTED", "task_id": task_id})
+    transport = get_or_create_extension_transport(task_id)
+    transport.mark_connected()
 
     async def pump_to_extension():
-        """Relay messages from backend agent loop to Extension JS."""
+        """Relay commands from ExtensionBrowserSession to Extension JS."""
         try:
-            while True:
-                msg = await send_queue.get()
-                await websocket.send_text(json.dumps(msg))
-                if msg.get("type") == "AGENT_DONE":
-                    break
+            while not transport._closed:
+                msg = await transport.send_queue.get()
+                await websocket.send_text(json.dumps(msg, default=str))
         except Exception:
             pass
 
     async def pump_from_extension():
-        """Relay messages from Extension JS to backend agent loop."""
+        """Relay responses from Extension JS to ExtensionBrowserSession."""
         try:
-            while True:
+            while not transport._closed:
                 raw = await websocket.receive_text()
                 msg = json.loads(raw)
-                await recv_queue.put(msg)
+                await transport.push_incoming(msg)
         except WebSocketDisconnect:
             pass
         except Exception as e:
-            logger.error(f"[ExtAgent WS] recv error task {task_id}: {e}")
+            logger.error(f"[ExtTransport WS] recv error task {task_id}: {e}")
 
     to_ext_task = asyncio.create_task(pump_to_extension())
     from_ext_task = asyncio.create_task(pump_from_extension())
@@ -963,9 +1000,10 @@ async def ext_agent_ws_endpoint(websocket: WebSocket, task_id: str):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.error(f"[ExtAgent WS] error task {task_id}: {e}")
+        logger.error(f"[ExtTransport WS] error task {task_id}: {e}")
     finally:
-        logger.info(f"[ExtAgent WS] Extension disconnected for task {task_id}")
+        logger.info(f"[ExtTransport WS] Extension disconnected for task {task_id}")
+
 
 
 
