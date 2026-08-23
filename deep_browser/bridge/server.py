@@ -61,6 +61,13 @@ safe_manager = SafeModeManager.get_instance()
 active_agents: Dict[str, Agent] = {}
 active_tasks: Dict[str, Dict[str, Any]] = {}
 
+# Extension agent WS queues: task_id → (send_queue, recv_queue)
+# send_queue: backend → Extension (backend puts, Extension gets)
+# recv_queue: Extension → backend (Extension puts, backend gets)
+from typing import Tuple
+_ext_agent_queues: Dict[str, Tuple[asyncio.Queue, asyncio.Queue]] = {}
+
+
 
 class CreateTaskRequest(BaseModel):
     task: str
@@ -299,23 +306,34 @@ async def create_task(req: CreateTaskRequest):
 
 async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, session_id: str):
     """
-    Extension execution path — attaches to the SAME browser where the Extension is installed.
+    Extension-native execution path.
 
-    The agent connects to the user's running Chrome/Edge at port 9222 (same browser,
-    same tabs, same session). No new browser window is opened.
+    EXTENSION = EXTENSION. Completely isolated from Workspace.
+
+    The Extension JS:
+      1. Opens WebSocket to /ws/ext-agent/{task_id}
+      2. Scrapes DOM via chrome.scripting.executeScript()
+      3. Executes actions (navigate, click, type, scroll) via chrome.scripting
+
+    Backend:
+      - Waits for Extension WS connection at /ws/ext-agent/{task_id}
+      - Uses Browser Use LLM for reasoning over DOM snapshots
+      - Sends action commands back to Extension
+      - NEVER touches coordinator, BrowserSession, or port 9222
 
     INVARIANTS:
-    - coordinator.active_session_id is NEVER read (Extension sessions are isolated)
-    - Session is tagged owner=EXTENSION so Workspace UI filters it out
-    - Falls back to a clear error (not bundled Chromium) if port 9222 is unavailable
+    - coordinator.active_session_id is NEVER read
+    - coordinator.attach_system_chrome() is NEVER called
+    - No BrowserSession, no CDP proxy, no port 9222
     """
+    from deep_browser.bridge.extension_agent import run_extension_agent_loop
+    from deep_browser.bridge.extension_runner import ExtensionTaskContext, register_extension_task
+
     owner = "EXTENSION"
-    cdp_port = req.cdp_port or 9222
-    browser_mode = "ATTACHED"
-    browser_id = f"ext_{req.browser_type or 'chrome'}_{cdp_port}"
+    browser_mode = "EXTENSION_NATIVE"
+    browser_id = f"ext_tab_{req.tab_id or 'current'}"
     tab_id = req.tab_id
 
-    # Build local ExtensionTaskContext — NOT a Workspace session
     ext_ctx = ExtensionTaskContext(
         id=session_id,
         task_id=task_id,
@@ -325,18 +343,20 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
         url=req.url,
         title=req.title,
         model=req.model_name or "gemini-3.5-flash-lite",
-        status="created",
+        status="running",
     )
     register_extension_task(ext_ctx)
 
-    # Create a CDP bridge proxy for this task
-    cdp_bridge = get_or_create_cdp_bridge(task_id)
+    # Create asyncio Queue for Extension WebSocket communication
+    # The /ws/ext-agent/{task_id} endpoint puts messages here
+    ext_send_queue: asyncio.Queue = asyncio.Queue()   # backend → Extension
+    ext_recv_queue: asyncio.Queue = asyncio.Queue()   # Extension → backend
+    _ext_agent_queues[task_id] = (ext_send_queue, ext_recv_queue)
 
     try:
-        ext_ctx.status = "running"
         active_tasks[task_id]["status"] = "running"
 
-        # 1. Broadcast CONTEXT_ATTACHED immediately using tab info from Extension
+        # Signal Extension to open /ws/ext-agent/{task_id}
         await broadcaster.broadcast(
             DeepBrowserEvent(
                 task_id=task_id,
@@ -346,212 +366,51 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
                 browser_id=browser_id,
                 tab_id=tab_id,
                 event_type=EventType.CONTEXT_ATTACHED,
-                status="ATTACHED",
-                summary=f"Current tab: {req.title or req.url or 'Active Tab'}",
-                message=f"Extension attached to tab {tab_id}: {req.url or 'current tab'}",
-                data={"url": req.url, "title": req.title, "tab_id": tab_id, "window_id": req.window_id},
-            )
-        )
-
-        # 2. Wait for Extension JS to connect its chrome.debugger CDP bridge
-        await broadcaster.broadcast(
-            DeepBrowserEvent(
-                task_id=task_id,
-                session_id=session_id,
-                owner=owner,
-                browser_mode=browser_mode,
-                browser_id=browser_id,
-                tab_id=tab_id,
-                event_type=EventType.THINKING_STATUS,
                 status="WAITING",
-                summary="Waiting for browser debugger connection...",
-                message="Extension is attaching chrome.debugger to current tab",
+                summary=f"Extension agent starting for: {req.title or req.url or 'current tab'}",
+                message=f"Connect to /ws/ext-agent/{task_id}",
+                data={"task_id": task_id, "url": req.url, "title": req.title, "tab_id": tab_id},
             )
         )
 
-        cdp_connected = await cdp_bridge.wait_for_extension(timeout=12.0)
-        if not cdp_connected:
-            err_msg = (
-                "Extension CDP bridge did not connect. "
-                "Make sure the Deep-Browser Extension is open and the page is accessible. "
-                "Some pages (chrome://, extension pages) block debugger access."
-            )
-            raise RuntimeError(err_msg)
+        # Wait for Extension WS connection (Extension opens /ws/ext-agent/{task_id})
+        # Timeout: 15 seconds
+        deadline = asyncio.get_event_loop().time() + 15.0
+        while True:
+            if ext_recv_queue.qsize() > 0:
+                break
+            if asyncio.get_event_loop().time() > deadline:
+                raise RuntimeError(
+                    "Extension did not connect to /ws/ext-agent/ within 15s. "
+                    "Make sure the Deep-Browser Extension is open and the companion server is running."
+                )
+            await asyncio.sleep(0.1)
 
-        ext_ctx.cdp_ready = True
+        # WS callbacks
+        async def ws_send(data: dict):
+            await ext_send_queue.put(data)
 
-        # 3. Build BrowserSession over the Extension's chrome.debugger CDP bridge
-        # The bridge proxy is exposed as a local WebSocket endpoint
-        cdp_proxy_url = f"ws://127.0.0.1:8765/ws/cdp-bridge/{task_id}"
-        profile = BrowserProfile(
-            headless=False,
-            cdp_url=cdp_proxy_url,
-        )
-        session = BrowserSession(browser_profile=profile)
-
-        # NOTE: BrowserSession.start() will connect to cdp_proxy_url,
-        # but the real CDP traffic goes through CdpBridgeProxy → Extension JS → chrome.debugger
-        # We skip session.start() here — the bridge is already established
-        # Instead we register the bridge's message relay with the session
-        session_event_queue = asyncio.Queue()
-        cdp_bridge.add_session_queue(session_event_queue)
-
-        await broadcaster.broadcast(
-            DeepBrowserEvent(
-                task_id=task_id,
-                session_id=session_id,
-                owner=owner,
-                browser_mode=browser_mode,
-                browser_id=browser_id,
-                tab_id=tab_id,
-                event_type=EventType.THINKING_STATUS,
-                status="CONNECTED",
-                summary="Browser debugger connected. Starting reasoning...",
-                message=f"chrome.debugger attached to tab {tab_id}. Agent starting.",
-            )
-        )
+        async def ws_recv(timeout: float = 15.0) -> dict:
+            return await asyncio.wait_for(ext_recv_queue.get(), timeout=timeout)
 
         llm = _create_llm(req.model_provider, req.model_name, req.api_key)
-        policy = SafeModePolicy(enabled=req.safe_mode, timeout_seconds=req.safe_timeout_seconds)
-        tools = SafeTools(safe_policy=policy, broadcaster=broadcaster)
 
-        # Step callback — same pattern as Workspace but owner=EXTENSION
-        async def step_callback(state_summary, agent_output, step_num):
-            url = getattr(state_summary, "url", "") or req.url or ""
-            title = getattr(state_summary, "title", "") or req.title or ""
-            thinking = getattr(agent_output.current_state, "thinking", None) if agent_output else None
-            next_goal = getattr(agent_output.current_state, "next_goal", None) if agent_output else None
-
-            await broadcaster.broadcast(
-                DeepBrowserEvent(
-                    task_id=task_id,
-                    session_id=session_id,
-                    owner=owner,
-                    browser_mode=browser_mode,
-                    browser_id=browser_id,
-                    tab_id=tab_id,
-                    event_type=EventType.OBSERVATION,
-                    status="OBSERVED",
-                    summary=f"Observing {title or url or 'current tab'}",
-                    message=f"Step {step_num}: {url}",
-                    data={"step": step_num, "url": url, "title": title,
-                          "thought": thinking, "next_goal": next_goal},
-                )
-            )
-
-            if thinking:
-                await broadcaster.broadcast(
-                    DeepBrowserEvent(
-                        task_id=task_id,
-                        session_id=session_id,
-                        owner=owner,
-                        browser_mode=browser_mode,
-                        browser_id=browser_id,
-                        tab_id=tab_id,
-                        event_type=EventType.THINKING_STATUS,
-                        status="THINKING",
-                        summary="Analyzing page...",
-                        message=str(thinking)[:200],
-                        data={"thinking": thinking},
-                    )
-                )
-
-            # Cloudflare / challenge detection
-            lower_title = (title or "").lower()
-            lower_url = (url or "").lower()
-            is_challenge = (
-                "just a moment" in lower_title
-                or "cloudflare" in lower_title
-                or "attention required" in lower_title
-                or "verify you are human" in lower_title
-                or "challenges.cloudflare.com" in lower_url
-            )
-            if is_challenge:
-                ext_ctx.status = "blocked"
-                await broadcaster.broadcast(
-                    DeepBrowserEvent(
-                        task_id=task_id,
-                        session_id=session_id,
-                        owner=owner,
-                        browser_mode=browser_mode,
-                        browser_id=browser_id,
-                        tab_id=tab_id,
-                        event_type=EventType.CHALLENGE_REQUIRED,
-                        status="BLOCKED",
-                        summary="Cloudflare / Verification challenge on current tab",
-                        message="Verification challenge detected. Interact with the current tab to resolve.",
-                        data={"url": url, "title": title},
-                    )
-                )
-
-            # Broadcast individual actions
-            if agent_output and getattr(agent_output, "action", None):
-                for act in agent_output.action:
-                    act_dump = act.model_dump(exclude_unset=True) if hasattr(act, "model_dump") else {}
-                    for act_name, act_params in act_dump.items():
-                        evt_type, target_str = map_action_to_event(act_name, act_params)
-                        await broadcaster.broadcast(
-                            DeepBrowserEvent(
-                                task_id=task_id,
-                                session_id=session_id,
-                                owner=owner,
-                                browser_mode=browser_mode,
-                                browser_id=browser_id,
-                                tab_id=tab_id,
-                                event_type=evt_type,
-                                action=act_name,
-                                target=target_str,
-                                status="EXECUTING",
-                                summary=f"{act_name}: {target_str}",
-                                data=act_params if isinstance(act_params, dict) else {},
-                            )
-                        )
-
-        # Build context-enriched task prompt for current tab
-        effective_task = build_extension_context_prompt(req.task, ext_ctx)
-
-        agent = Agent(
-            task=effective_task,
+        result = await run_extension_agent_loop(
+            task_id=task_id,
+            session_id=session_id,
+            task=req.task,
+            tab_id=tab_id,
+            url=req.url,
+            title=req.title,
             llm=llm,
-            browser_session=session,
-            tools=tools,
-            register_new_step_callback=step_callback,
+            ws_send=ws_send,
+            ws_recv=ws_recv,
+            broadcaster=broadcaster,
         )
-
-        active_agents[task_id] = agent
-
-        await broadcaster.broadcast(
-            DeepBrowserEvent(
-                task_id=task_id,
-                session_id=session_id,
-                owner=owner,
-                browser_mode=browser_mode,
-                browser_id=browser_id,
-                tab_id=tab_id,
-                event_type=EventType.TASK_STARTED,
-                message="Extension agent reasoning started on current tab",
-            )
-        )
-
-        result = await agent.run()
 
         ext_ctx.status = "completed"
         active_tasks[task_id]["status"] = "completed"
         active_tasks[task_id]["result"] = str(result)
-
-        await broadcaster.broadcast(
-            DeepBrowserEvent(
-                task_id=task_id,
-                session_id=session_id,
-                owner=owner,
-                browser_mode=browser_mode,
-                browser_id=browser_id,
-                tab_id=tab_id,
-                event_type=EventType.COMPLETED,
-                message="Extension task completed on current tab",
-                data={"result": str(result)},
-            )
-        )
 
     except Exception as e:
         logger.error(f"Extension task {task_id} failed: {e}", exc_info=True)
@@ -574,8 +433,9 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
             )
         )
     finally:
+        _ext_agent_queues.pop(task_id, None)
         active_agents.pop(task_id, None)
-        remove_cdp_bridge(task_id)
+
 
 
 async def _run_task_background(task_id: str, req: CreateTaskRequest, session_id: str):
@@ -1041,7 +901,85 @@ async def cdp_bridge_ws_endpoint(websocket: WebSocket, task_id: str):
         logger.error(f"[CDP Bridge] Error for task {task_id}: {e}")
 
 
-# --- Extension Task Status Endpoints ---
+# --- Extension Agent WebSocket — bidirectional DOM↔Action channel ---
+
+@app.websocket("/ws/ext-agent/{task_id}")
+async def ext_agent_ws_endpoint(websocket: WebSocket, task_id: str):
+    """
+    Bidirectional WebSocket for Extension JS ↔ ExtensionAgentLoop.
+
+    Extension JS connects here after receiving task_id from POST /api/tasks.
+    Backend agent loop reads DOM snapshots from Extension, sends action commands.
+
+    Protocol (all messages are JSON):
+      Backend → Extension:
+        { "type": "GET_DOM_SNAPSHOT", "step": N }
+        { "type": "EXECUTE_ACTION", "step": N, "action": "click|type|navigate|scroll|...", "params": {...} }
+        { "type": "AGENT_DONE", "result": "..." }
+
+      Extension → Backend:
+        { "type": "DOM_SNAPSHOT", "data": { "url":..., "title":..., "interactiveElements":[...], "bodyText":"..." } }
+        { "type": "ACTION_RESULT", "success": true|false, "error": "...", "step": N }
+    """
+    await websocket.accept()
+    logger.info(f"[ExtAgent WS] Extension connected for task {task_id}")
+
+    queues = _ext_agent_queues.get(task_id)
+    if not queues:
+        # Task not found or not an Extension task — close gracefully
+        await websocket.send_text(json.dumps({
+            "type": "ERROR",
+            "message": f"No active Extension agent loop for task_id={task_id}. Submit task first via POST /api/tasks."
+        }))
+        await websocket.close()
+        return
+
+    send_queue, recv_queue = queues
+
+    # Put CONNECTED sentinel so _run_extension_task_background can proceed
+    await recv_queue.put({"type": "CONNECTED", "task_id": task_id})
+
+    async def pump_to_extension():
+        """Relay messages from backend agent loop to Extension JS."""
+        try:
+            while True:
+                msg = await send_queue.get()
+                await websocket.send_text(json.dumps(msg))
+                if msg.get("type") == "AGENT_DONE":
+                    break
+        except Exception:
+            pass
+
+    async def pump_from_extension():
+        """Relay messages from Extension JS to backend agent loop."""
+        try:
+            while True:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+                await recv_queue.put(msg)
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            logger.error(f"[ExtAgent WS] recv error task {task_id}: {e}")
+
+    to_ext_task = asyncio.create_task(pump_to_extension())
+    from_ext_task = asyncio.create_task(pump_from_extension())
+
+    try:
+        done, pending = await asyncio.wait(
+            [to_ext_task, from_ext_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"[ExtAgent WS] error task {task_id}: {e}")
+    finally:
+        logger.info(f"[ExtAgent WS] Extension disconnected for task {task_id}")
+
+
 
 @app.get("/api/extension/tasks")
 async def list_ext_tasks():
