@@ -79,6 +79,12 @@ global.chrome = {
   },
 };
 
+// Load core scripts
+require('../../extension/core/interaction_manager.js');
+require('../../extension/core/dom_service.js');
+require('../../extension/core/browser_session.js');
+
+
 // Fast-forward delays for instant unit testing
 global.BrowserSession.prototype.wait = async () => {};
 global.BrowserSession.prototype.waitForNavigation = async () => ({ success: true });
@@ -92,6 +98,7 @@ require('../../extension/core/tools.js');
 require('../../extension/core/message_manager.js');
 require('../../extension/core/llm_client.js');
 require('../../extension/core/agent.js');
+
 
 async function runTests() {
   console.log('================================================================');

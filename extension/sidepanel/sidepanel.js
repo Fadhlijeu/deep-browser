@@ -674,19 +674,26 @@ function stopAgent() {
   widgetManager.clear();
 }
 
-// ─── Streamlined Event Log Handler (Reasoning + Concrete Actions Only) ───────
-let currentStepLogs = [];
-
 function handleAgentEvent(evt) {
   const t = evt.event_type || '';
   const msg = evt.message || '';
   const data = evt.data || {};
+
+  // Broadcast event to in-page Floating HUD Island
+  if (typeof chrome !== 'undefined' && chrome.tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs?.[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, evt).catch(() => {});
+      }
+    });
+  }
 
   if (t === 'TASK_STARTED') {
     state.stepStartTime = Date.now();
     currentStepLogs = [];
     return;
   }
+
 
   // Handle completion
   if (t === 'TASK_COMPLETED') {
@@ -930,16 +937,16 @@ function bindEvents() {
   const btnPopout = $('btn-popout');
   if (btnPopout) {
     btnPopout.addEventListener('click', () => {
-      if (typeof chrome !== 'undefined' && chrome.windows) {
-        chrome.windows.create({
-          url: chrome.runtime.getURL('compact/compact.html'),
-          type: 'popup',
-          width: 360,
-          height: 480,
+      if (typeof chrome !== 'undefined' && chrome.tabs) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs?.[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, { type: 'SHOW_FLOATING_HUD' }).catch(() => {});
+          }
         });
       }
     });
   }
+
 
 
   // Model Modal

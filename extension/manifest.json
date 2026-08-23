@@ -31,9 +31,10 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/hud_overlay.js", "content/agent_cursor.js"],
-      "css": ["content/hud_overlay.css", "content/agent_cursor.css"],
+      "js": ["content/hud_overlay.js", "content/agent_cursor.js", "content/floating_hud.js"],
+      "css": ["content/hud_overlay.css", "content/agent_cursor.css", "content/floating_hud.css"],
       "run_at": "document_end"
     }
   ]
+
 }
