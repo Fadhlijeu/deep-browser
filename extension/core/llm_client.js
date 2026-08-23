@@ -66,6 +66,70 @@
       return this._parseActionJSON(rawResponseText);
     }
 
+    /**
+     * Multimodal Vision Evaluation Loop:
+     * Evaluates whether a captured screenshot satisfies the user's specific context & goal,
+     * or if it is just a commercial landing page, blank page, search list, or cookie banner.
+     * @param {Object} params
+     * @param {string} params.imageBase64 - Clean base64 PNG/JPEG string
+     * @param {string} params.userGoal - The original user prompt / task
+     * @param {string} params.currentUrl - The URL from which the screenshot was taken
+     * @returns {Promise<Object>} { valid: boolean, reason: string, issue: string, suggested_action: string }
+     */
+    async evaluateScreenshotWithVision({ imageBase64, userGoal, currentUrl }) {
+      if (!imageBase64 || (!this.apiKey && this.provider !== 'ollama')) {
+        return { valid: true, reason: 'Evaluasi visual dilewati (mode fallback)', issue: 'none' };
+      }
+
+      // Strip data URI prefix if present
+      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+      const evalSystemPrompt = `You are an expert Multimodal Visual Evaluator for an autonomous web browsing agent.
+Your mission is to evaluate a captured screenshot against the user's explicit goal.
+
+RULES FOR EVALUATION:
+1. If the user asked for an ARTICLE, NEWS, or REPORT (e.g. "Cari artikel terbaru mengenai perkembangan AI di Google"):
+   - Is this an actual article page with headline, author/date, and paragraphs?
+   - Or is this just a generic corporate homepage, marketing landing page (e.g. "Create images", "Try in Gemini", "Flow Agent"), login screen, or cookie popup? If it is a generic marketing/commercial landing page, IT IS INVALID (valid: false)!
+2. If the user asked for a PROFILE or BIODATA (e.g. PDDIKTI student profile):
+   - Is this an actual profile detail page?
+   - Or is this a search results table with multiple rows? If it is just a search results list, IT IS INVALID (valid: false)!
+3. If the page is blank, errored, or blocked by a full-screen cookie consent dialog, IT IS INVALID (valid: false).
+
+Respond strictly with a JSON object:
+{
+  "valid": true | false,
+  "issue": "marketing_landing_page" | "search_results_list" | "cookie_popup" | "blank_page" | "wrong_topic" | "none",
+  "reason": "Clear explanation in Indonesian or English of what the screenshot actually shows and why it passes or fails",
+  "suggested_action": "e.g. 'Search on Google for specific blog article', 'Click target profile link [index]', 'Dismiss cookie popup', 'Scroll down'"
+}`;
+
+      const evalUserPrompt = `User Goal: "${userGoal}"\nCurrent Webpage URL: "${currentUrl}"\n\nCarefully inspect the screenshot image above. Does this image show the true substantive information/article/profile requested, or is it a commercial landing page/search list? Return your JSON evaluation.`;
+
+      try {
+        let rawResponse = '';
+        if (this.provider === 'gemini') {
+          rawResponse = await this._callGemini(evalSystemPrompt, evalUserPrompt, cleanBase64);
+        } else if (this.provider === 'openai' || this.provider === 'custom_openai') {
+          rawResponse = await this._callOpenAI(evalSystemPrompt, evalUserPrompt, cleanBase64);
+        } else if (this.provider === 'anthropic') {
+          rawResponse = await this._callAnthropic(evalSystemPrompt, evalUserPrompt, cleanBase64);
+        } else {
+          return { valid: true, reason: 'Evaluasi dilewati (provider non-vision)', issue: 'none' };
+        }
+
+        const parsed = this._parseActionJSON(rawResponse);
+        return {
+          valid: parsed.valid !== false,
+          issue: parsed.issue || 'none',
+          reason: parsed.reason || 'Screenshot visual dievaluasi.',
+          suggested_action: parsed.suggested_action || '',
+        };
+      } catch (err) {
+        return { valid: true, reason: `Visual check bypassed (${err.message})`, issue: 'none' };
+      }
+    }
+
 
     // ─── Gemini Provider ───────────────────────────────────────────────────────
     async _callGemini(systemPrompt, textPrompt, screenshotBase64) {

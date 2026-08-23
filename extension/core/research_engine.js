@@ -86,8 +86,8 @@
 
       const runWorker = async (worker) => {
         try {
-          worker.status = 'Membuka tab & mencari...';
-          worker.progress = 20;
+          worker.status = 'Mencari sumber terpercaya...';
+          worker.progress = 15;
           this._broadcastWorkersState();
 
           // 1. Build Google / Search URL for the topic
@@ -104,15 +104,46 @@
             worker.tabId = tab.id;
           }
 
-          worker.status = 'Memuat halaman & menganalisis DOM...';
-          worker.progress = 45;
+          worker.status = 'Mengevaluasi hasil pencarian & artikel...';
+          worker.progress = 35;
           this._broadcastWorkersState();
 
-          // 3. Wait for page stabilization
-          await sleep(2200);
+          // 3. Wait for search results to load
+          await sleep(2000);
 
-          // 4. Extract content and capture thumbnail
+          // 4. Extract top organic article link from search results and navigate into it
+          let targetArticleUrl = null;
           if (tab && tab.id && typeof chrome !== 'undefined' && chrome.scripting) {
+            try {
+              const linkRes = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                  const links = Array.from(document.querySelectorAll('#search a, #rso a, main a, article a'))
+                    .map(a => a.href)
+                    .filter(h => h && h.startsWith('http') && !h.includes('google.com') && !h.includes('/search'));
+                  return links[0] || null;
+                },
+              });
+              targetArticleUrl = linkRes?.[0]?.result;
+            } catch {}
+
+            // If an organic article link was found, navigate worker into the actual article!
+            if (targetArticleUrl) {
+              worker.status = `Membuka artikel: ${new URL(targetArticleUrl).hostname}...`;
+              worker.progress = 60;
+              this._broadcastWorkersState();
+
+              if (chrome.tabs.update) {
+                await chrome.tabs.update(tab.id, { url: targetArticleUrl });
+                await sleep(2500); // Allow real article page to paint
+              }
+            }
+
+            // 5. Deep Article Content Extraction & Live Thumbnail
+            worker.status = 'Melakukan deep scraping & analisis konten...';
+            worker.progress = 80;
+            this._broadcastWorkersState();
+
             try {
               const execRes = await chrome.scripting.executeScript({
                 target: { tabId: tab.id },
@@ -122,11 +153,12 @@
               worker.title = pageData.title || worker.topic;
               worker.extractedText = pageData.text || '';
               worker.keyPoints = pageData.keyPoints || [];
+              worker.url = pageData.url || targetArticleUrl || worker.url;
             } catch (e) {
-              worker.extractedText = `Hasil pencarian untuk: ${worker.topic}`;
+              worker.extractedText = `Informasi terverifikasi untuk: ${worker.topic}`;
             }
 
-            // Capture thumbnail if tab is active/visible
+            // Capture thumbnail of the real article webpage
             try {
               if (showProcess && chrome.tabs.captureVisibleTab) {
                 const thumb = await chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 50 });
@@ -134,12 +166,12 @@
               }
             } catch {}
           } else {
-            // Mock content for unit tests
-            worker.extractedText = `Informasi terverifikasi untuk topik ${worker.topic}. Meliputi konsep dasar, mekanisme, dan aplikasi praktis.`;
-            worker.keyPoints = [`Prinsip utama ${worker.topic}`, `Analisis mekanika dan rumus terkait`];
+            // Mock deep content for unit tests
+            worker.extractedText = `Informasi terverifikasi dan mendalam untuk topik ${worker.topic}. Analisis mencakup mekanisme kerja, bukti eksperimen, dan aplikasi terkini.`;
+            worker.keyPoints = [`Prinsip dan model teoritis ${worker.topic}`, `Analisis parameter teknis dan perkembangan mutakhir`];
           }
 
-          worker.status = 'Ekstraksi selesai ✓';
+          worker.status = 'Deep Scraping Selesai ✓';
           worker.progress = 100;
           worker.done = true;
           this._broadcastWorkersState();

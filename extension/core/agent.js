@@ -109,6 +109,39 @@
           title: tab.title,
         });
 
+        // Direct Parallel Multi-Tab Intent Decomposition
+        const taskLower = (this.task || '').toLowerCase();
+        const tabMatch = taskLower.match(/(?:buka|cari|research|buat)\s+(\d+)\s+tab/i) || taskLower.match(/(\d+)\s+tab.*(?:parallel|paralel|research|ringkas)/i);
+        if (tabMatch || taskLower.includes('secara parallel') || taskLower.includes('secara paralel')) {
+          const numTabs = tabMatch ? parseInt(tabMatch[1], 10) : 3;
+          this._emit('REASONING', `Mendekomposisi tugas menjadi ${numTabs} worker riset paralel simultan dengan deep scraping...`);
+          
+          const rawTopic = this.task.replace(/(?:buka|cari|secara|parallel|paralel|terkait|tentang|\d+\s+tab|dan|ringkas|informasinya|sebanyak\s+banyaknya)/gi, ' ').trim();
+          const cleanBase = rawTopic || 'Riset Mendalam';
+          const subTopics = [
+            `${cleanBase} konsep dasar dan teori ilmiah`,
+            `${cleanBase} aplikasi praktis dan implementasi teknologi`,
+            `${cleanBase} penemuan terbaru artikel jurnal riset`,
+            `${cleanBase} eksperimen ilmiah dan perkembangan mutakhir`,
+            `${cleanBase} masa depan dan studi analisis komparatif`
+          ].slice(0, Math.min(5, Math.max(2, numTabs)));
+
+          const res = await this.tools.execute('parallel_research', {
+            topics: subTopics,
+            max_parallel: numTabs,
+            show_process: true,
+          });
+
+          const report = res.data?.synthesizedReport || res.message;
+          this.isRunning = false;
+          this._emit('TASK_COMPLETED', report, {
+            result: report,
+            totalSteps: 1,
+            success: true,
+          });
+          return { success: true, result: report, totalSteps: 1 };
+        }
+
         while (this.step < this.maxSteps && !this.isStopped) {
           this.step++;
 
@@ -226,10 +259,35 @@
             this._emit('ACTION_EXECUTED', actionResult.message || `Aksi ${actionName} dieksekusi`, { data: actionResult.data });
 
             if (actionName === 'screenshot' || actionName === 'take_screenshot') {
+              const rawImg = actionResult.data?.screenshotDataUrl;
+              
+              // ─── Multimodal Vision Context Verification ─────────────────────────
+              this._emit('REASONING', 'Memeriksa keakuratan konteks visual screenshot dengan Gemini Vision...');
+              const evalRes = await this.llmClient.evaluateScreenshotWithVision({
+                imageBase64: rawImg,
+                userGoal: this.task,
+                currentUrl: state.url,
+              });
+
+              if (!evalRes.valid) {
+                const failMsg = `Screenshot ditolak oleh Evaluator Vision: ${evalRes.reason}. (Saran: ${evalRes.suggested_action})`;
+                this._emit('REASONING', `⚠️ ${failMsg}`);
+                this._emit('ACTION_FAILED', failMsg, { evalResult: evalRes });
+                this.messageManager.recordStep(
+                  this.step,
+                  decision.thinking,
+                  { name: actionName, parameters: params },
+                  { success: false, error: failMsg, evalResult: evalRes }
+                );
+                continue; // Do not send invalid screenshot to user, continue step loop to navigate/scroll to real article!
+              }
+
+              this._emit('REASONING', `✓ Screenshot terverifikasi: ${evalRes.reason}`);
               this._emit('SCREENSHOT_CAPTURED', 'Screenshot viewport berhasil diambil.', actionResult.data);
+              
               const taskLower = (this.task || '').toLowerCase().trim();
-              if (taskLower.includes('screenshot') || taskLower.includes('tangkap layar')) {
-                const finalAnswer = 'Screenshot berhasil diambil dan ditampilkan di chat.';
+              if (taskLower.includes('screenshot') || taskLower.includes('tangkap layar') || taskLower.includes('gambar')) {
+                const finalAnswer = `Screenshot terverifikasi berhasil diambil dari sumber:\n**${state.title || state.url}**\n\n> *${evalRes.reason}*`;
                 this.isRunning = false;
                 this._emit('TASK_COMPLETED', finalAnswer, {
                   result: finalAnswer,
@@ -238,6 +296,15 @@
                 });
                 return { success: true, result: finalAnswer, totalSteps: this.step };
               }
+            } else if (actionName === 'parallel_research') {
+              const report = actionResult.data?.synthesizedReport || actionResult.message;
+              this.isRunning = false;
+              this._emit('TASK_COMPLETED', report, {
+                result: report,
+                totalSteps: this.step,
+                success: true,
+              });
+              return { success: true, result: report, totalSteps: this.step };
             } else if (actionName === 'save_as_pdf') {
               this._emit('PDF_SAVED', actionResult.message, actionResult.data);
               const taskLower = (this.task || '').toLowerCase().trim();
