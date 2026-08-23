@@ -196,7 +196,7 @@ async function updateTabStrip() {
   });
 }
 
-// ─── Model CRUD Management ───────────────────────────────────────────────────
+// ─── Model CRUD & Selector ───────────────────────────────────────────────────
 function getActiveModel() {
   return state.models.find((m) => m.id === state.selectedModelId) || state.models[0] || DEFAULT_MODELS[0];
 }
@@ -224,7 +224,7 @@ function renderModelsList() {
         <div class="model-card-name">
           <span class="material-symbols-outlined" style="font-size:15px;color:var(--muted-foreground)">${m.icon || 'bolt'}</span>
           <span>${escHtml(m.name)}</span>
-          ${isSelected ? '<span style="color:var(--primary);font-size:10px;margin-left:4px">✓ Aktif</span>' : ''}
+          ${isSelected ? '<span style="color:var(--primary);font-size:10.5px;font-weight:600;margin-left:4px">Aktif</span>' : ''}
         </div>
         <div class="model-card-meta">
           <span style="background:var(--secondary);padding:1px 4px;border-radius:3px">${badgeText}</span>
@@ -432,8 +432,9 @@ function renderModeOptions() {
         <div class="model-card-name">
           <span class="material-symbols-outlined" style="font-size:15px">${m.icon}</span>
           <span>${escHtml(m.name)}</span>
-          ${isSelected ? '<span style="color:var(--primary);font-size:10px;margin-left:4px">✓ Aktif</span>' : ''}
+          ${isSelected ? '<span style="color:var(--primary);font-size:10.5px;font-weight:600;margin-left:4px">Aktif</span>' : ''}
         </div>
+
         <div class="model-card-meta">${escHtml(m.desc)}</div>
       </div>
     `;
@@ -936,16 +937,48 @@ function bindEvents() {
 
   const btnPopout = $('btn-popout');
   if (btnPopout) {
-    btnPopout.addEventListener('click', () => {
+    btnPopout.addEventListener('click', async () => {
       if (typeof chrome !== 'undefined' && chrome.tabs) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (tabs?.[0]?.id) {
-            chrome.tabs.sendMessage(tabs[0].id, { type: 'SHOW_FLOATING_HUD' }).catch(() => {});
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+          const tab = tabs?.[0];
+          if (!tab?.id) return;
+
+          // If internal browser page (edge://, chrome://, about:), open standalone compact window
+          if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+            if (chrome.windows) {
+              chrome.windows.create({
+                url: chrome.runtime.getURL('compact/compact.html'),
+                type: 'popup',
+                width: 360,
+                height: 480,
+              });
+            }
+            return;
+          }
+
+          // In-page Floating Dynamic Island injection
+          try {
+            if (chrome.scripting) {
+              await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content/floating_hud.css'] }).catch(() => {});
+              await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/floating_hud.js'] }).catch(() => {});
+            }
+            chrome.tabs.sendMessage(tab.id, { type: 'SHOW_FLOATING_HUD' }).catch(() => {});
+          } catch (e) {
+            console.warn('[PopOut] Injection fallback:', e);
+            if (chrome.windows) {
+              chrome.windows.create({
+                url: chrome.runtime.getURL('compact/compact.html'),
+                type: 'popup',
+                width: 360,
+                height: 480,
+              });
+            }
           }
         });
       }
     });
   }
+
 
 
 
