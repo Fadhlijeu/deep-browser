@@ -6,7 +6,7 @@
  * - Ultra-Premium Shadcn Dark Zinc Obsidian theme (#09090b, #18181b, #27272a)
  * - Frosted glass with 24px backdrop blur & hairline borders
  * - Resizable, Draggable with Boundary Physics & Auto-Save
- * - Collapsible reasoning accordions & action telemetry cards
+ * - Quick Action Widgets & Interactive HITL Widgets
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -23,12 +23,18 @@
   color: #f4f4f5 !important;
   box-sizing: border-box !important;
   user-select: none !important;
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  display: block;
   pointer-events: auto !important;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: opacity 0.15s ease;
+}
+
+#deep-browser-floating-hud.db-hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 #deep-browser-floating-hud * {
@@ -53,13 +59,13 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   1. DYNAMIC ISLAND PILL (Collapsed State — Raycast / Apple Island Inspired)
+   1. DYNAMIC ISLAND PILL (Collapsed State)
    ═══════════════════════════════════════════════════════════════════════════ */
 .db-island-pill {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px 6px 8px;
+  padding: 6px 10px 6px 8px;
   background: rgba(9, 9, 11, 0.92);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -148,7 +154,7 @@
 }
 
 .db-pill-ticker {
-  max-width: 120px;
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -165,15 +171,15 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   2. COMMAND HUD CARD (Expanded State — Ultra-Premium Window)
+   2. COMMAND HUD CARD (Expanded State)
    ═══════════════════════════════════════════════════════════════════════════ */
 .db-hud-window {
   display: none;
   flex-direction: column;
-  width: 420px;
+  width: 440px;
   min-width: 320px;
   max-width: 860px;
-  height: 520px;
+  height: 540px;
   min-height: 280px;
   max-height: 880px;
   background: rgba(9, 9, 11, 0.96);
@@ -287,6 +293,58 @@
   flex-direction: column;
   gap: 8px;
   background: rgba(9, 9, 11, 0.9);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. QUICK ACTION WIDGETS BAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+.db-quick-widgets-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(18, 18, 22, 0.6);
+  border: 1px solid rgba(39, 39, 42, 0.8);
+  border-radius: 8px;
+}
+
+.db-quick-widgets-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #a1a1aa;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.db-quick-widgets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.db-quick-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: rgba(24, 24, 27, 0.8);
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-radius: 6px;
+  color: #e4e4e7;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.db-quick-chip:hover {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: #8b5cf6;
+  color: #f4f4f5;
+  transform: translateY(-1px);
 }
 
 /* User Prompt Bubble */
@@ -426,7 +484,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   3. INTERACTIVE HITL WIDGETS
+   4. INTERACTIVE HITL WIDGETS
    ═══════════════════════════════════════════════════════════════════════════ */
 .db-hitl-widget-box {
   padding: 10px 12px;
@@ -512,7 +570,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   4. COMMAND INPUT FOOTER BAR
+   5. COMMAND INPUT FOOTER BAR
    ═══════════════════════════════════════════════════════════════════════════ */
 .db-window-footer {
   padding: 8px 10px;

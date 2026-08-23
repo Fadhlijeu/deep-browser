@@ -4,15 +4,15 @@
  * Master Controller:
  * - Dynamic Island Pill & Command HUD Window
  * - Smooth Drag & Drop with Viewport Boundaries
+ * - Reliable Close / Minimize / Show Controls (.db-hidden class toggle)
+ * - Quick Action Widgets & Interactive HITL Widget Mount
  * - Bidirectional Agent Execution & Instant Stop
- * - Collapsible Step Accordions & Action Badges
- * - Interactive HITL Widget Mount (Confirm, Choice, Approval, etc.)
  */
 
 (function() {
   'use strict';
 
-  // Prevent multiple instances on the same page
+  // Prevent duplicate instances
   if (document.getElementById('deep-browser-floating-hud')) return;
 
   const hudHost = document.createElement('div');
@@ -35,6 +35,9 @@
       <div class="db-pill-actions">
         <button class="db-control-btn" id="db-btn-pill-expand" title="Buka Command HUD">
           <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <button class="db-control-btn close-btn" id="db-btn-pill-close" title="Tutup Floating">
+          <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
     </div>
@@ -59,7 +62,7 @@
           <button class="db-control-btn" id="db-btn-win-minimize" title="Minimize ke Island Pill (Esc)">
             <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
           </button>
-          <button class="db-control-btn close-btn" id="db-btn-win-close" title="Sembunyikan">
+          <button class="db-control-btn close-btn" id="db-btn-win-close" title="Tutup Floating (✕)">
             <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -67,7 +70,36 @@
 
       <!-- Window Body (Activity Stream & Widgets) -->
       <div class="db-window-body" id="db-win-body">
+        <!-- Interactive HITL Widget Container -->
         <div id="db-win-widgets"></div>
+
+        <!-- Quick Action Widgets (Visible when idle) -->
+        <div class="db-quick-widgets-container" id="db-quick-widgets">
+          <div class="db-quick-widgets-title">
+            <svg class="db-svg-icon" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            <span>Aksi Cepat &amp; Widget</span>
+          </div>
+          <div class="db-quick-widgets-grid">
+            <button class="db-quick-chip" data-prompt="Cari data di PDDIKTI lalu ambil informasi lengkapnya">
+              <span>Cari PDDIKTI</span>
+              <svg class="db-svg-icon" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <button class="db-quick-chip" data-prompt="Rangkum konten halaman aktif ini dan jelaskan poin-poin intinya">
+              <span>Ringkas Halaman</span>
+              <svg class="db-svg-icon" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <button class="db-quick-chip" data-prompt="Lakukan riset multi-tab komprehensif mengenai topik ini">
+              <span>Riset Multi-Tab</span>
+              <svg class="db-svg-icon" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <button class="db-quick-chip" id="db-btn-demo-widget">
+              <span style="color:#f59e0b">Demo Widget Interaktif</span>
+              <svg class="db-svg-icon" viewBox="0 0 24 24" style="width:12px;height:12px;stroke:#f59e0b"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Activity Timeline Stream -->
         <div id="db-win-timeline"></div>
       </div>
 
@@ -95,12 +127,15 @@
   const elPillTicker    = document.getElementById('db-pill-ticker');
   const elTimeline      = document.getElementById('db-win-timeline');
   const elWidgetsMount  = document.getElementById('db-win-widgets');
+  const elQuickWidgets  = document.getElementById('db-quick-widgets');
   const elPromptInput   = document.getElementById('db-prompt-input');
   const elBtnDispatch   = document.getElementById('db-btn-dispatch');
   const elDispatchIcon  = document.getElementById('db-dispatch-icon');
   const elBtnExpand     = document.getElementById('db-btn-pill-expand');
+  const elBtnPillClose  = document.getElementById('db-btn-pill-close');
   const elBtnMinimize   = document.getElementById('db-btn-win-minimize');
   const elBtnClose      = document.getElementById('db-btn-win-close');
+  const elBtnDemoWidget = document.getElementById('db-btn-demo-widget');
 
   let isAgentRunning = false;
   let isWaitingUser = false;
@@ -111,18 +146,31 @@
 
   // ─── Mode Switching (Island Pill <-> Command HUD) ───────────────────────────
   function openCommandHUD() {
+    hudHost.classList.remove('db-hidden');
     elPill.style.display = 'none';
     elWindow.style.display = 'flex';
     elPromptInput.focus();
   }
 
   function minimizeToPill() {
+    hudHost.classList.remove('db-hidden');
     elWindow.style.display = 'none';
     elPill.style.display = 'flex';
   }
 
+  function hideFloatingHUD() {
+    hudHost.classList.add('db-hidden');
+    chrome.storage?.local?.set({ db_floating_hud_hidden: true });
+  }
+
+  function showFloatingHUD() {
+    hudHost.classList.remove('db-hidden');
+    chrome.storage?.local?.set({ db_floating_hud_hidden: false });
+    openCommandHUD();
+  }
+
   elPill.addEventListener('click', (e) => {
-    if (e.target.closest('#db-pill-drag-grip')) return;
+    if (e.target.closest('#db-pill-drag-grip') || e.target.closest('#db-btn-pill-close')) return;
     openCommandHUD();
   });
 
@@ -131,16 +179,45 @@
     openCommandHUD();
   });
 
-  elBtnMinimize.addEventListener('click', minimizeToPill);
-  elBtnClose.addEventListener('click', () => {
-    hudHost.style.display = 'none';
+  elBtnPillClose.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideFloatingHUD();
   });
 
+  elBtnMinimize.addEventListener('click', minimizeToPill);
+  elBtnClose.addEventListener('click', hideFloatingHUD);
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && elWindow.style.display === 'flex') {
-      minimizeToPill();
+    if (e.key === 'Escape') {
+      if (elWindow.style.display === 'flex') {
+        minimizeToPill();
+      }
     }
   });
+
+  // ─── Quick Action Chips ───────────────────────────────────────────────────
+  document.querySelectorAll('.db-quick-chip[data-prompt]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const prompt = btn.dataset.prompt;
+      elPromptInput.value = prompt;
+      elBtnDispatch.disabled = false;
+      handleDispatchClick();
+    });
+  });
+
+  if (elBtnDemoWidget) {
+    elBtnDemoWidget.addEventListener('click', () => {
+      renderHITLWidget({
+        type: 'choice',
+        question: 'Demo Widget Interaktif: Pilih opsi tindakan yang ingin dijalankan:',
+        options: [
+          { id: 'opt_1', label: 'Lanjutkan jelajah halaman secara otonom' },
+          { id: 'opt_2', label: 'Ekstrak tabel dan download data sebagai CSV' },
+          { id: 'opt_3', label: 'Konfirmasi review sebelum submit' },
+        ],
+      });
+    });
+  }
 
   // ─── Prompt Submission & Stop Controller ───────────────────────────────────
   elPromptInput.addEventListener('input', () => {
@@ -169,6 +246,8 @@
   function startNewTask() {
     const goal = elPromptInput.value.trim();
     if (!goal) return;
+
+    if (elQuickWidgets) elQuickWidgets.style.display = 'none';
 
     appendUserQuery(goal);
     elPromptInput.value = '';
@@ -329,8 +408,7 @@
     if (!msg) return;
 
     if (msg.type === 'SHOW_FLOATING_HUD') {
-      hudHost.style.display = 'block';
-      openCommandHUD();
+      showFloatingHUD();
     }
 
     if (msg.event_type) {
@@ -341,6 +419,7 @@
       if (t === 'TASK_STARTED') {
         currentStepStartTime = Date.now();
         setTaskRunningState(true);
+        if (elQuickWidgets) elQuickWidgets.style.display = 'none';
       } else if (t === 'REASONING') {
         appendReasoningThought(m);
       } else if (t === 'CLICK') {
@@ -489,8 +568,11 @@
     resizeObserver.observe(elWindow);
   }
 
-  // Restore saved geometry
-  chrome.storage?.local?.get(['db_floating_hud_pos', 'db_floating_hud_size'], (res) => {
+  // Restore saved geometry & hidden state
+  chrome.storage?.local?.get(['db_floating_hud_pos', 'db_floating_hud_size', 'db_floating_hud_hidden'], (res) => {
+    if (res?.db_floating_hud_hidden) {
+      hudHost.classList.add('db-hidden');
+    }
     if (res?.db_floating_hud_pos) {
       hudHost.style.bottom = 'auto';
       hudHost.style.right = 'auto';
