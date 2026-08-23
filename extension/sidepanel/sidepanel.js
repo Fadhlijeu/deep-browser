@@ -731,6 +731,25 @@ function handleAgentEvent(evt) {
     return;
   }
 
+  // Handle Rich Visual Media in Chat
+  if (t === 'SCREENSHOT_CAPTURED') {
+    renderScreenshotInChat(data.screenshotDataUrl, data.fileName || 'screenshot.png');
+    recordMessageToActiveSession({ role: 'screenshot', dataUrl: data.screenshotDataUrl, fileName: data.fileName });
+    return;
+  }
+
+  if (t === 'HTML_SNIPPET_CAPTURED') {
+    renderHtmlSnippetInChat(data.html, data.title || 'Struktur Informasi Visual', data.text);
+    recordMessageToActiveSession({ role: 'snippet', html: data.html, title: data.title });
+    return;
+  }
+
+  if (t === 'PDF_SAVED') {
+    renderPdfBadgeInChat(data.fileName, data.title, data.url);
+    recordMessageToActiveSession({ role: 'pdf', fileName: data.fileName, title: data.title });
+    return;
+  }
+
   // Filter ONLY relevant items: REASONING, CLICK, TYPE, NAVIGATION, SCROLL, EXTRACTION, ACTION_FAILED
   let iconName = null;
   let text = '';
@@ -758,7 +777,7 @@ function handleAgentEvent(evt) {
     iconName = 'error';
     text = `Failed: ${msg}`;
   } else {
-    // Ignore all other noisy telemetry (ATTACH_TAB, OBSERVATION, PLAN, SCREENSHOT, WAITING, VERIFICATION, ACTION_EXECUTED)
+    // Ignore all other noisy telemetry (ATTACH_TAB, OBSERVATION, PLAN, WAITING, VERIFICATION, ACTION_EXECUTED)
     return;
   }
 
@@ -850,6 +869,71 @@ function renderStepSubItem(bodyEl, iconName, text) {
   `;
   bodyEl.appendChild(item);
   item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderScreenshotInChat(dataUrl, fileName = 'screenshot.png') {
+  hideEmptyState();
+  const card = document.createElement('div');
+  card.className = 'chat-media-card';
+  card.innerHTML = `
+    <div class="chat-media-header">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#8b5cf6">photo_camera</span>
+        <span style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(fileName)}</span>
+      </div>
+      <a href="${dataUrl}" download="${escHtml(fileName)}" class="media-download-btn" title="Download Screenshot">
+        <span class="material-symbols-outlined" style="font-size:14px">download</span>
+      </a>
+    </div>
+    <div class="chat-media-preview-wrap">
+      <img src="${dataUrl}" alt="${escHtml(fileName)}" class="chat-screenshot-img" />
+    </div>
+  `;
+  elTimeline.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderHtmlSnippetInChat(htmlContent, title = 'Struktur Informasi Visual', rawText = '') {
+  hideEmptyState();
+  const card = document.createElement('div');
+  card.className = 'chat-html-snippet-card';
+  card.innerHTML = `
+    <div class="chat-snippet-header">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">code_blocks</span>
+        <span style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(title)}</span>
+      </div>
+      <button class="btn-copy-snippet" title="Salin HTML" style="background:transparent;border:none;color:var(--muted-foreground);cursor:pointer">
+        <span class="material-symbols-outlined" style="font-size:14px">content_copy</span>
+      </button>
+    </div>
+    <div class="chat-snippet-body">
+      <div class="chat-snippet-rendered">${htmlContent}</div>
+    </div>
+  `;
+  card.querySelector('.btn-copy-snippet').addEventListener('click', () => {
+    navigator.clipboard?.writeText?.(htmlContent);
+  });
+  elTimeline.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '') {
+  hideEmptyState();
+  const card = document.createElement('div');
+  card.className = 'chat-pdf-card';
+  card.innerHTML = `
+    <div class="chat-pdf-inner">
+      <span class="material-symbols-outlined" style="font-size:20px;color:#ef4444">picture_as_pdf</span>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(fileName)}</div>
+        <div style="font-size:10px;color:var(--muted-foreground)">${escHtml(title || url)}</div>
+      </div>
+      <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">check_circle</span>
+    </div>
+  `;
+  elTimeline.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 function renderAgentResult(text, isError = false) {

@@ -403,6 +403,59 @@
     setTaskRunningState(false);
   }
 
+  function appendScreenshotCard(dataUrl, fileName = 'screenshot.png') {
+    const card = document.createElement('div');
+    card.className = 'db-media-card';
+    card.innerHTML = `
+      <div class="db-media-header">
+        <span style="font-weight:600;font-size:11px;color:#f4f4f5">📸 ${esc(fileName)}</span>
+        <a href="${dataUrl}" download="${esc(fileName)}" class="db-media-dl" title="Unduh Screenshot">
+          <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </a>
+      </div>
+      <div class="db-media-img-wrap">
+        <img src="${dataUrl}" alt="${esc(fileName)}" style="max-width:100%;max-height:180px;border-radius:4px;object-fit:contain" />
+      </div>
+    `;
+    elTimeline.appendChild(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  function appendHtmlSnippetCard(html, title = 'Struktur Informasi Visual') {
+    const card = document.createElement('div');
+    card.className = 'db-snippet-card';
+    card.innerHTML = `
+      <div class="db-snippet-header">
+        <span style="font-weight:600;font-size:11px;color:#4ade80">📋 ${esc(title)}</span>
+        <button class="db-control-btn btn-copy-snip" title="Salin HTML" style="width:20px;height:20px">
+          <svg class="db-svg-icon" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+        </button>
+      </div>
+      <div class="db-snippet-body">${html}</div>
+    `;
+    card.querySelector('.btn-copy-snip').addEventListener('click', () => {
+      navigator.clipboard?.writeText?.(html);
+    });
+    elTimeline.appendChild(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  function appendPdfCard(fileName, title) {
+    const card = document.createElement('div');
+    card.className = 'db-pdf-card';
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;color:#ef4444">📄</span>
+        <div>
+          <div style="font-weight:600;font-size:11px;color:#f4f4f5">${esc(fileName)}</div>
+          <div style="font-size:9.5px;color:#a1a1aa">${esc(title || 'Dokumen PDF')}</div>
+        </div>
+      </div>
+    `;
+    elTimeline.appendChild(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
   // ─── Realtime Event Listener from Agent Runtime ────────────────────────────
   chrome.runtime?.onMessage?.addListener((msg) => {
     if (!msg) return;
@@ -432,6 +485,12 @@
         appendActionTelemetry('SCROLL', 'scroll', d.down !== false ? 'Bawah' : 'Atas');
       } else if (t === 'EXTRACTION') {
         appendActionTelemetry('EXTRACT', 'extract', d.query || 'Target data');
+      } else if (t === 'SCREENSHOT_CAPTURED') {
+        appendScreenshotCard(d.screenshotDataUrl, d.fileName);
+      } else if (t === 'HTML_SNIPPET_CAPTURED') {
+        appendHtmlSnippetCard(d.html, d.title);
+      } else if (t === 'PDF_SAVED') {
+        appendPdfCard(d.fileName, d.title);
       } else if (t === 'USER_INPUT_REQUIRED') {
         updateStatusBadge('Menunggu Anda', false, true);
         renderHITLWidget(d.interaction || { type: d.type, question: d.question, options: d.options });

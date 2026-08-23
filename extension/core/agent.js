@@ -224,6 +224,14 @@
             this._emit('ACTION_FAILED', `Gagal: ${actionResult.error}`, { error: actionResult.error });
           } else {
             this._emit('ACTION_EXECUTED', actionResult.message || `Aksi ${actionName} dieksekusi`, { data: actionResult.data });
+
+            if (actionName === 'screenshot' || actionName === 'take_screenshot') {
+              this._emit('SCREENSHOT_CAPTURED', 'Screenshot viewport berhasil diambil.', actionResult.data);
+            } else if (actionName === 'save_as_pdf') {
+              this._emit('PDF_SAVED', actionResult.message, actionResult.data);
+            } else if (actionName === 'extract_html_snippet') {
+              this._emit('HTML_SNIPPET_CAPTURED', `Struktur informasi visual berhasil diekstrak.`, actionResult.data);
+            }
           }
 
           // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────

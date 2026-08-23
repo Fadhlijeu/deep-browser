@@ -3,11 +3,12 @@
  * ===================================================
  *
  * Full Browser Use action registry and execution engine:
- *   - Navigation: navigate, go_back, go_forward, refresh, switch_tab, close_tab
- *   - Interaction: click_element, click_coordinate, double_click, right_click, hover, input_text, send_keys, select_dropdown_option
- *   - Scrolling: scroll_page (smooth), scroll_to_text
- *   - Extraction: extract (query, schema, links, images)
- *   - Flow: wait, done
+ *   - Navigation: navigate, go_back, go_forward, refresh, switch_tab, open_tab, close_tab
+ *   - Interaction: click_element, click_coordinate, input_text, send_keys, select_dropdown_option, get_dropdown_options, hover
+ *   - Scrolling: scroll_page, find_text
+ *   - Visual & Media: screenshot, save_as_pdf
+ *   - Fast Extraction & Grep: extract, extract_html_snippet, search_page, find_elements, evaluate
+ *   - Flow & Interaction: ask_user, wait, done
  */
 
 (function(global) {
@@ -109,6 +110,17 @@
           },
         },
         {
+          name: 'open_tab',
+          description: 'Open a new tab in Microsoft Edge with the specified URL and switch to it.',
+          parameters: {
+            type: 'object',
+            properties: {
+              url: { type: 'string', description: 'URL to open in a new tab.' },
+            },
+            required: ['url'],
+          },
+        },
+        {
           name: 'close_tab',
           description: 'Close a tab by its tabId (or current tab if omitted).',
           parameters: {
@@ -116,6 +128,73 @@
             properties: {
               tab_id: { type: 'string', description: 'Tab ID to close.' },
             },
+          },
+        },
+        {
+          name: 'screenshot',
+          description: 'Capture a screenshot of the visible webpage viewport and display it directly in chat.',
+          parameters: {
+            type: 'object',
+            properties: {
+              file_name: { type: 'string', description: 'Optional filename for the screenshot.' },
+            },
+          },
+        },
+        {
+          name: 'save_as_pdf',
+          description: 'Save the current page content as a printable PDF document and send the download badge to chat.',
+          parameters: {
+            type: 'object',
+            properties: {
+              file_name: { type: 'string', description: 'PDF file name (e.g. "biodata_mahasiswa.pdf").' },
+            },
+          },
+        },
+        {
+          name: 'extract_html_snippet',
+          description: 'Extract visual HTML & CSS structure of a specific section (e.g. biodata, info card, table, product details) and render it as a styled rich snippet in chat.',
+          parameters: {
+            type: 'object',
+            properties: {
+              selector_or_keyword: { type: 'string', description: 'CSS selector (e.g. ".card", "#info") or text keywords to locate the section.' },
+              title: { type: 'string', description: 'Title or label for the extracted snippet card.' },
+            },
+            required: ['selector_or_keyword'],
+          },
+        },
+        {
+          name: 'search_page',
+          description: 'Fast zero-LLM grep search in page text for a pattern with surrounding context.',
+          parameters: {
+            type: 'object',
+            properties: {
+              pattern: { type: 'string', description: 'Text or regex pattern to search for.' },
+              is_regex: { type: 'boolean', description: 'Treat pattern as regular expression (default: false).' },
+            },
+            required: ['pattern'],
+          },
+        },
+        {
+          name: 'find_elements',
+          description: 'Fast zero-LLM DOM query returning matching elements by CSS selector.',
+          parameters: {
+            type: 'object',
+            properties: {
+              selector: { type: 'string', description: 'CSS selector (e.g. "table tr", "a.link").' },
+              attributes: { type: 'array', items: { type: 'string' }, description: 'Attributes to extract (e.g. ["href", "src"]).' },
+            },
+            required: ['selector'],
+          },
+        },
+        {
+          name: 'evaluate',
+          description: 'Execute arbitrary browser JavaScript in the active page context and return the result.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'JavaScript code expression or IIFE to execute.' },
+            },
+            required: ['code'],
           },
         },
         {
@@ -176,7 +255,7 @@
         },
         {
           name: 'ask_user',
-          description: 'Ask the user a structured question or request confirmation using an interactive widget.',
+          description: 'Ask the user a structured question or request confirmation using an interactive widget (choice, confirm, text_input).',
           parameters: {
             type: 'object',
             properties: {
@@ -185,17 +264,6 @@
               options: { type: 'array', items: { type: 'string' }, description: 'Options for choice or multi_choice.' },
             },
             required: ['type', 'question'],
-          },
-        },
-        {
-          name: 'open_tab',
-          description: 'Open a new tab in Microsoft Edge with the specified URL and switch to it.',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: { type: 'string', description: 'URL to open in a new tab.' },
-            },
-            required: ['url'],
           },
         },
         {
@@ -212,7 +280,6 @@
         },
       ];
     }
-
 
     /**
      * Executes a tool action by name with the given parameters.
@@ -294,6 +361,63 @@
             return { success: true, message: `Closed tab ${tabId || 'active'}`, data: res };
           }
 
+          case 'screenshot':
+          case 'take_screenshot': {
+            const res = await this.browserSession.takeScreenshot();
+            if (!res.success) return { success: false, error: res.error };
+            return {
+              success: true,
+              message: 'Screenshot captured.',
+              data: {
+                screenshotDataUrl: res.screenshotDataUrl,
+                fileName: params.file_name || `screenshot_${Date.now()}.png`,
+              },
+            };
+          }
+
+          case 'save_as_pdf': {
+            const res = await this.browserSession.saveAsPdf(params);
+            return {
+              success: true,
+              message: res.message || 'Page saved as PDF.',
+              data: res,
+            };
+          }
+
+          case 'extract_html_snippet': {
+            const query = params.selector_or_keyword || params.selector || params.query || '';
+            const res = await this.browserSession.extractHtmlSnippet(query);
+            if (!res.success) return { success: false, error: res.error };
+            return {
+              success: true,
+              message: `Extracted visual snippet for "${query}"`,
+              data: {
+                title: params.title || `Struktur Informasi: ${query}`,
+                html: res.html,
+                text: res.text,
+              },
+            };
+          }
+
+          case 'search_page': {
+            const pattern = params.pattern || '';
+            const isRegex = !!params.is_regex;
+            const res = await this.browserSession.searchPage(pattern, isRegex);
+            return { success: true, message: `Found ${res.totalMatches || 0} matches for "${pattern}"`, data: res };
+          }
+
+          case 'find_elements': {
+            const sel = params.selector || '*';
+            const res = await this.browserSession.findElements(sel, params.attributes);
+            return { success: true, message: `Found ${res.total || 0} elements matching "${sel}"`, data: res };
+          }
+
+          case 'evaluate': {
+            const code = params.code || '';
+            const res = await this.browserSession.evaluateScript(code);
+            return { success: true, message: 'Script executed.', data: res };
+          }
+
           case 'get_dropdown_options': {
             const index = this._requireIndex(params);
             const res = await this.browserSession.getDropdownOptions(index);
@@ -331,6 +455,15 @@
                 title: state.title,
                 summary: state.simplifiedTreeText.slice(0, 500),
               },
+            };
+          }
+
+          case 'ask_user': {
+            // Handled at agent step level, but safe fallback here
+            return {
+              success: true,
+              message: `Question asked to user: ${params.question || ''}`,
+              data: { is_interaction: true, ...params },
             };
           }
 
