@@ -13,15 +13,19 @@
   <div id="drawer-overlay"></div>
   <div id="session-drawer">
     <div class="drawer-header">
-      <span style="font-weight:600;font-size:13px">Riwayat Sesi</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="material-symbols-outlined" style="font-size:16px;color:var(--muted-foreground)">folder</span>
+        <span style="font-weight:600;font-size:12.5px">Riwayat Sesi</span>
+      </div>
       <button class="icon-btn" id="drawer-close" title="Tutup">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <span class="material-symbols-outlined">close</span>
       </button>
     </div>
     <div class="drawer-body" id="session-list"></div>
-    <div style="padding:10px;border-top:1px solid var(--border)">
+    <div style="padding:8px 10px;border-top:1px solid var(--border)">
       <button class="btn-secondary" id="btn-new-session" style="width:100%;justify-content:center">
-        + Buat Sesi Baru
+        <span class="material-symbols-outlined" style="font-size:14px">add</span>
+        Buat Sesi Baru
       </button>
     </div>
   </div>
@@ -29,16 +33,9 @@
   <!-- Top Bar -->
   <div id="topbar">
     <button class="icon-btn" id="btn-menu" title="Menu Sesi">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
-      </svg>
+      <span class="material-symbols-outlined">menu</span>
     </button>
     <div id="brand-wrap">
-      <div id="brand-logo">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
-        </svg>
-      </div>
       <span id="brand-title">Deep Browser</span>
       <span id="browser-badge">Edge</span>
       <div id="status-pill">
@@ -50,18 +47,14 @@
 
     <div id="topbar-actions">
       <button class="btn-secondary" id="btn-new" title="Sesi baru">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="material-symbols-outlined" style="font-size:14px">add</span>
         Sesi
       </button>
       <button class="icon-btn" id="btn-open-apikeys" title="Kelola API Key">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-        </svg>
+        <span class="material-symbols-outlined">key</span>
       </button>
-      <button class="icon-btn" id="btn-open-settings" title="Mode & Pengaturan">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
+      <button class="icon-btn" id="btn-open-settings" title="Mode &amp; Pengaturan">
+        <span class="material-symbols-outlined">tune</span>
       </button>
     </div>
   </div>
@@ -69,7 +62,7 @@
   <!-- Multi-Tab Strip -->
   <div id="tab-strip"></div>
 
-  <!-- Main Timeline -->
+  <!-- Main Content -->
   <div id="main">
     <!-- Interactive Widget Mount Container -->
     <div id="widget-container"></div>
@@ -77,9 +70,7 @@
     <!-- Empty State -->
     <div id="empty-state">
       <div class="empty-icon-box">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-        </svg>
+        <span class="material-symbols-outlined" style="font-size:22px">explore</span>
       </div>
       <div>
         <h2 class="empty-title">Deep Browser Copilot</h2>
@@ -87,21 +78,21 @@
       </div>
       <div class="quick-prompts-grid">
         <button class="quick-chip" data-prompt="Cari website pddikti yang benar lalu cari nama muhammad fadhli rizaldy lalu ambil informasinya">
-          <span>🔍 Cari data mahasiswa di PDDIKTI</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          <span>Cari data mahasiswa di PDDIKTI</span>
+          <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
         </button>
         <button class="quick-chip" data-prompt="Jelajahi halaman ini dan rangkum poin-poin pentingnya">
-          <span>📋 Rangkum konten halaman aktif</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          <span>Rangkum konten halaman aktif</span>
+          <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
         </button>
         <button class="quick-chip" data-prompt="Cari artikel terbaru mengenai perkembangan AI di Google">
-          <span>🌐 Cari artikel terbaru AI di Google</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          <span>Cari artikel terbaru AI di Google</span>
+          <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
         </button>
       </div>
     </div>
 
-    <!-- Timeline cards container -->
+    <!-- Timeline messages container -->
     <div id="timeline"></div>
   </div>
 
@@ -112,18 +103,18 @@
       <div class="prompt-footer">
         <div class="footer-left">
           <button class="model-select-btn" id="btn-select-model" title="Pilih / Kelola Model">
-            <span id="model-badge-icon">⚡</span>
+            <span class="material-symbols-outlined" id="model-badge-icon" style="font-size:14px">bolt</span>
             <span id="model-badge-name">Gemini 2.0 Flash</span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+            <span class="material-symbols-outlined" style="font-size:14px">expand_more</span>
           </button>
-          <button class="btn-secondary" id="btn-select-mode" style="padding:3px 7px;font-size:10.5px" title="Mode Eksekusi">
-            <span id="mode-badge-icon">🤖</span>
-            <span id="mode-badge-name">Adaptif</span>
+          <button class="btn-secondary" id="btn-select-mode" style="padding:2px 6px;font-size:10.5px" title="Mode Eksekusi">
+            <span class="material-symbols-outlined" id="mode-badge-icon" style="font-size:13px">smart_toy</span>
+            <span id="mode-badge-name">Agent Decide</span>
           </button>
         </div>
         <div class="footer-right">
           <button id="btn-send" disabled title="Kirim Perintah">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            <span class="material-symbols-outlined" id="send-icon" style="font-size:14px">send</span>
           </button>
         </div>
       </div>
@@ -136,7 +127,7 @@
       <div class="modal-header">
         <span class="modal-title" id="models-modal-title">Pilih &amp; Kelola Model</span>
         <button class="icon-btn" id="close-modal-models">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
@@ -144,8 +135,8 @@
       <div class="modal-body" id="model-list-view">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="font-size:11px;color:var(--muted-foreground)">Daftar Model Tersedia</span>
-          <button class="btn-primary" id="btn-add-model" style="padding:4px 8px;font-size:11px">
-            + Tambah Model
+          <button class="btn-primary" id="btn-add-model" style="padding:3px 7px;font-size:11px">
+            <span class="material-symbols-outlined" style="font-size:12px;vertical-align:-1px">add</span> Tambah Model
           </button>
         </div>
         <div class="model-list-group" id="models-container"></div>
@@ -179,7 +170,7 @@
           <label class="form-label">Temperature</label>
           <input class="form-input" type="number" id="input-model-temp" min="0" max="1" step="0.1" value="0.1" />
         </div>
-        <div style="display:flex;gap:8px;margin-top:4px">
+        <div style="display:flex;gap:6px;margin-top:4px">
           <button class="btn-primary" id="btn-save-model" style="flex:1">Simpan Model</button>
           <button class="btn-ghost" id="btn-cancel-model">Batal</button>
         </div>
@@ -198,7 +189,7 @@
       <div class="modal-header">
         <span class="modal-title">Kelola API Keys</span>
         <button class="icon-btn" id="close-modal-apikeys">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body" id="apikeys-container"></div>
@@ -214,7 +205,7 @@
       <div class="modal-header">
         <span class="modal-title">Mode Eksekusi Agent</span>
         <button class="icon-btn" id="close-modal-settings">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">

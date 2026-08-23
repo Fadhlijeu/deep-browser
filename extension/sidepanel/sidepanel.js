@@ -3,32 +3,31 @@
  * =============================================================
  *
  * Implements:
- *   - 100% Edge-First browser control
- *   - Structured STEP → Observation, Reasoning, Action, Verification, Result timeline
- *   - 28 typed events stream
- *   - Multi-tab strip manager with live tab switching
- *   - Interactive widgets & Action Proposal approval flow
- *   - Full Model CRUD management
+ *   - Google Material Symbols (zero emojis)
+ *   - Collapsible "Worked for Xs >" thought & tool logs matching Cursor/Antigravity
+ *   - Full Model CRUD (ability to delete and edit any model)
+ *   - Full Session Management (persistence, switching, and deleting sessions)
+ *   - Multi-tab strip and live Edge tab controller
  */
 
 'use strict';
 
 // ─── Default Models ───────────────────────────────────────────────────────────
 const DEFAULT_MODELS = [
-  { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',       icon: '⚡', provider: 'gemini',        modelId: 'gemini-2.0-flash',      isPreset: true },
-  { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite',  icon: '🏃', provider: 'gemini',        modelId: 'gemini-2.0-flash-lite', isPreset: true },
-  { id: 'gemini/gemini-1.5-pro',        name: 'Gemini 1.5 Pro',         icon: '🔬', provider: 'gemini',        modelId: 'gemini-1.5-pro',        isPreset: true },
-  { id: 'openai/gpt-4o',                name: 'GPT-4o',                 icon: '🤖', provider: 'openai',        modelId: 'gpt-4o',                isPreset: true },
-  { id: 'openai/gpt-4o-mini',           name: 'GPT-4o Mini',            icon: '⚡', provider: 'openai',        modelId: 'gpt-4o-mini',           isPreset: true },
-  { id: 'anthropic/claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',      icon: '🎭', provider: 'anthropic',     modelId: 'claude-3-5-sonnet-20241022', isPreset: true },
-  { id: 'custom/deepseek-chat',         name: 'DeepSeek Chat (V3)',     icon: '🐋', provider: 'custom_openai', modelId: 'deepseek-chat',         baseUrl: 'https://api.deepseek.com/v1', isPreset: true },
-  { id: 'ollama/llama3',                name: 'Llama 3 (Local)',        icon: '🦙', provider: 'ollama',        modelId: 'llama3',                baseUrl: 'http://localhost:11434', isPreset: true },
+  { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',       icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-2.0-flash' },
+  { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite',  icon: 'speed',      provider: 'gemini',        modelId: 'gemini-2.0-flash-lite' },
+  { id: 'gemini/gemini-1.5-pro',        name: 'Gemini 1.5 Pro',         icon: 'psychology', provider: 'gemini',        modelId: 'gemini-1.5-pro' },
+  { id: 'openai/gpt-4o',                name: 'GPT-4o',                 icon: 'memory',     provider: 'openai',        modelId: 'gpt-4o' },
+  { id: 'openai/gpt-4o-mini',           name: 'GPT-4o Mini',            icon: 'bolt',       provider: 'openai',        modelId: 'gpt-4o-mini' },
+  { id: 'anthropic/claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',      icon: 'psychology', provider: 'anthropic',     modelId: 'claude-3-5-sonnet-20241022' },
+  { id: 'custom/deepseek-chat',         name: 'DeepSeek Chat (V3)',     icon: 'hub',        provider: 'custom_openai', modelId: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+  { id: 'ollama/llama3',                name: 'Llama 3 (Local)',        icon: 'terminal',   provider: 'ollama',        modelId: 'llama3', baseUrl: 'http://localhost:11434' },
 ];
 
 const MODES = [
-  { id: 'agent_decide', name: 'Agent Decide',    desc: 'Agent bebas mengambil keputusan normal secara adaptif.', icon: '🤖' },
-  { id: 'auto',         name: 'Always Proceed',  desc: 'Eksekusi otomatis tanpa jeda konfirmasi.', icon: '⚡' },
-  { id: 'hitl',         name: 'Request Review',  desc: 'Minta persetujuan proposal aksi sebelum dieksekusi.', icon: '🔵' },
+  { id: 'agent_decide', name: 'Agent Decide',    desc: 'Agent mengambil keputusan adaptif.', icon: 'smart_toy' },
+  { id: 'auto',         name: 'Always Proceed',  desc: 'Eksekusi cepat otomatis.', icon: 'bolt' },
+  { id: 'hitl',         name: 'Request Review',  desc: 'Review proposal sebelum eksekusi.', icon: 'shield' },
 ];
 
 const PROVIDERS = [
@@ -52,8 +51,9 @@ let state = {
   currentAgent: null,
   agentRunning: false,
   editingModelId: null,
-  currentStepContainer: null,
-  currentStepNum: 0,
+  activeStepDropdown: null,
+  activeStepBody: null,
+  stepStartTime: 0,
 };
 
 // ─── DOM References ──────────────────────────────────────────────────────────
@@ -63,6 +63,7 @@ const elTimeline            = $('timeline');
 const elEmptyState          = $('empty-state');
 const elGoalInput           = $('goal-input');
 const elBtnSend             = $('btn-send');
+const elSendIcon            = $('send-icon');
 const elStatusPill          = $('status-pill');
 const elStatusText          = $('status-text');
 const elStepCounter         = $('step-counter');
@@ -110,17 +111,24 @@ async function init() {
 // ─── Storage Operations ──────────────────────────────────────────────────────
 async function loadStorage() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(
+    chrome.storage?.local?.get(
       ['models', 'selectedModelId', 'selectedMode', 'apiKeys', 'sessions', 'activeSessionId'],
       (data) => {
-        if (data.models && Array.isArray(data.models) && data.models.length > 0) {
+        if (data?.models && Array.isArray(data.models) && data.models.length > 0) {
           state.models = data.models;
         }
-        if (data.selectedModelId) state.selectedModelId = data.selectedModelId;
-        if (data.selectedMode) state.selectedMode = data.selectedMode;
-        if (data.apiKeys) state.apiKeys = data.apiKeys;
-        if (data.sessions) state.sessions = data.sessions;
-        if (data.activeSessionId) state.activeSessionId = data.activeSessionId;
+        if (data?.selectedModelId) state.selectedModelId = data.selectedModelId;
+        if (data?.selectedMode) state.selectedMode = data.selectedMode;
+        if (data?.apiKeys) state.apiKeys = data.apiKeys;
+        if (data?.sessions && Array.isArray(data.sessions)) state.sessions = data.sessions;
+        if (data?.activeSessionId) state.activeSessionId = data.activeSessionId;
+
+        // Ensure at least one active session
+        if (!state.sessions || state.sessions.length === 0) {
+          const initId = 'session_' + Date.now();
+          state.sessions = [{ id: initId, name: 'Sesi Baru', createdAt: Date.now(), messages: [] }];
+          state.activeSessionId = initId;
+        }
         resolve();
       }
     );
@@ -128,7 +136,7 @@ async function loadStorage() {
 }
 
 async function saveStorage(keys) {
-  return new Promise((resolve) => chrome.storage.local.set(keys, resolve));
+  return new Promise((resolve) => chrome.storage?.local?.set(keys, resolve));
 }
 
 // ─── Tab Strip & Active Tab Tracking ─────────────────────────────────────────
@@ -173,7 +181,7 @@ async function updateTabStrip() {
 
       const faviconSrc = tab.favIconUrl || '';
       pill.innerHTML = `
-        ${faviconSrc ? `<img src="${faviconSrc}" alt="" />` : ''}
+        ${faviconSrc ? `<img src="${faviconSrc}" alt="" />` : '<span class="material-symbols-outlined" style="font-size:12px">language</span>'}
         <span>${escHtml(tab.title || tab.url)}</span>
       `;
 
@@ -195,7 +203,7 @@ function getActiveModel() {
 
 function renderModelPill() {
   const m = getActiveModel();
-  elModelBadgeIcon.textContent = m.icon || '⚡';
+  elModelBadgeIcon.textContent = m.icon || 'bolt';
   elModelBadgeName.textContent = m.name;
 }
 
@@ -214,7 +222,7 @@ function renderModelsList() {
     card.innerHTML = `
       <div class="model-card-info" style="flex:1">
         <div class="model-card-name">
-          <span>${m.icon || '⚡'}</span>
+          <span class="material-symbols-outlined" style="font-size:15px;color:var(--muted-foreground)">${m.icon || 'bolt'}</span>
           <span>${escHtml(m.name)}</span>
           ${isSelected ? '<span style="color:var(--primary);font-size:10px;margin-left:4px">✓ Aktif</span>' : ''}
         </div>
@@ -225,15 +233,11 @@ function renderModelsList() {
       </div>
       <div class="model-card-actions">
         <button class="icon-btn btn-edit-model" data-id="${m.id}" title="Edit Model">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+          <span class="material-symbols-outlined" style="font-size:14px">edit</span>
         </button>
-        ${
-          !m.isPreset
-            ? `<button class="icon-btn btn-delete-model" data-id="${m.id}" title="Hapus Model" style="color:var(--destructive)">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>`
-            : ''
-        }
+        <button class="icon-btn btn-delete-model" data-id="${m.id}" title="Hapus Model" style="color:var(--destructive)">
+          <span class="material-symbols-outlined" style="font-size:14px">delete</span>
+        </button>
       </div>
     `;
 
@@ -250,13 +254,10 @@ function renderModelsList() {
       openModelForm(m.id);
     });
 
-    const deleteBtn = card.querySelector('.btn-delete-model');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteModel(m.id);
-      });
-    }
+    card.querySelector('.btn-delete-model').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteModel(m.id);
+    });
 
     elModelsContainer.appendChild(card);
   });
@@ -308,12 +309,12 @@ async function saveModelForm() {
     return;
   }
 
-  let icon = '⚡';
-  if (provider === 'gemini') icon = '⚡';
-  else if (provider === 'openai') icon = '🤖';
-  else if (provider === 'anthropic') icon = '🎭';
-  else if (provider === 'ollama') icon = '🦙';
-  else if (provider === 'custom_openai') icon = '🐋';
+  let icon = 'bolt';
+  if (provider === 'gemini') icon = 'bolt';
+  else if (provider === 'openai') icon = 'memory';
+  else if (provider === 'anthropic') icon = 'psychology';
+  else if (provider === 'ollama') icon = 'terminal';
+  else if (provider === 'custom_openai') icon = 'hub';
 
   if (state.editingModelId) {
     const idx = state.models.findIndex((x) => x.id === state.editingModelId);
@@ -338,7 +339,6 @@ async function saveModelForm() {
       baseUrl: baseUrl || undefined,
       temperature: temp,
       icon,
-      isPreset: false,
     };
     state.models.push(newModel);
     state.selectedModelId = newId;
@@ -351,10 +351,14 @@ async function saveModelForm() {
 }
 
 async function deleteModel(modelId) {
-  if (!confirm('Hapus model ini?')) return;
+  if (state.models.length <= 1) {
+    alert('Minimal harus ada 1 model di daftar.');
+    return;
+  }
+  if (!confirm('Hapus model ini dari daftar?')) return;
   state.models = state.models.filter((m) => m.id !== modelId);
   if (state.selectedModelId === modelId) {
-    state.selectedModelId = state.models[0]?.id || DEFAULT_MODELS[0].id;
+    state.selectedModelId = state.models[0].id;
   }
   await saveStorage({ models: state.models, selectedModelId: state.selectedModelId });
   renderModelPill();
@@ -383,7 +387,7 @@ function renderApikeys() {
         <input class="form-input" type="password" id="apikey-input-${p.id}"
           placeholder="${escHtml(p.placeholder)}" value="${escHtml(savedKey)}" />
         <button class="icon-btn btn-toggle-key" data-target="apikey-input-${p.id}" title="Lihat / Sembunyikan">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="material-symbols-outlined" style="font-size:14px">visibility</span>
         </button>
       </div>
     `;
@@ -426,7 +430,7 @@ function renderModeOptions() {
     card.innerHTML = `
       <div class="model-card-info">
         <div class="model-card-name">
-          <span>${m.icon}</span>
+          <span class="material-symbols-outlined" style="font-size:15px">${m.icon}</span>
           <span>${escHtml(m.name)}</span>
           ${isSelected ? '<span style="color:var(--primary);font-size:10px;margin-left:4px">✓ Aktif</span>' : ''}
         </div>
@@ -444,42 +448,107 @@ function renderModeOptions() {
   });
 }
 
-// ─── Sessions ────────────────────────────────────────────────────────────────
+// ─── Session Management (Switch, Delete, Persist) ────────────────────────────
 function loadSessions() {
   renderSessionList();
+  renderActiveSessionTimeline();
+}
+
+function getActiveSession() {
+  return state.sessions.find((s) => s.id === state.activeSessionId) || state.sessions[0];
 }
 
 function createNewSession() {
-  const id = 'ext_' + Date.now();
-  const session = { id, name: 'Sesi ' + new Date().toLocaleTimeString('id-ID'), createdAt: Date.now() };
-  state.sessions.push(session);
+  const id = 'session_' + Date.now();
+  const session = {
+    id,
+    name: 'Sesi ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: Date.now(),
+    messages: [],
+  };
+  state.sessions.unshift(session);
   state.activeSessionId = id;
   saveStorage({ sessions: state.sessions, activeSessionId: id });
   renderSessionList();
-  clearTimeline();
+  renderActiveSessionTimeline();
   closeDrawer();
   return id;
 }
 
+function switchSession(sessionId) {
+  state.activeSessionId = sessionId;
+  saveStorage({ activeSessionId: sessionId });
+  renderSessionList();
+  renderActiveSessionTimeline();
+  closeDrawer();
+}
+
+async function deleteSession(sessionId, e) {
+  if (e) e.stopPropagation();
+  if (!confirm('Hapus sesi ini?')) return;
+
+  state.sessions = state.sessions.filter((s) => s.id !== sessionId);
+  if (state.sessions.length === 0) {
+    const newId = 'session_' + Date.now();
+    state.sessions = [{ id: newId, name: 'Sesi Baru', createdAt: Date.now(), messages: [] }];
+    state.activeSessionId = newId;
+  } else if (state.activeSessionId === sessionId) {
+    state.activeSessionId = state.sessions[0].id;
+  }
+
+  await saveStorage({ sessions: state.sessions, activeSessionId: state.activeSessionId });
+  renderSessionList();
+  renderActiveSessionTimeline();
+}
+
 function renderSessionList() {
   elSessionList.innerHTML = '';
-  [...state.sessions].reverse().forEach((s) => {
+  state.sessions.forEach((s) => {
     const div = document.createElement('div');
     div.className = 'session-row' + (s.id === state.activeSessionId ? ' active' : '');
     div.innerHTML = `
-      <div>
+      <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
         <div style="font-weight:500">${escHtml(s.name)}</div>
         <div style="font-size:10px;color:var(--muted-foreground)">${new Date(s.createdAt).toLocaleDateString('id-ID')}</div>
       </div>
+      <button class="session-delete-btn" data-id="${s.id}" title="Hapus Sesi">
+        <span class="material-symbols-outlined" style="font-size:14px">delete</span>
+      </button>
     `;
-    div.addEventListener('click', () => {
-      state.activeSessionId = s.id;
-      saveStorage({ activeSessionId: s.id });
-      renderSessionList();
-      closeDrawer();
-    });
+    div.addEventListener('click', () => switchSession(s.id));
+    div.querySelector('.session-delete-btn').addEventListener('click', (e) => deleteSession(s.id, e));
     elSessionList.appendChild(div);
   });
+}
+
+function renderActiveSessionTimeline() {
+  elTimeline.innerHTML = '';
+  const current = getActiveSession();
+  if (!current || !current.messages || current.messages.length === 0) {
+    elEmptyState.style.display = 'flex';
+    return;
+  }
+
+  elEmptyState.style.display = 'none';
+  current.messages.forEach((msg) => {
+    if (msg.role === 'user') {
+      renderUserMessage(msg.text);
+    } else if (msg.role === 'step') {
+      const dd = renderStepDropdown(msg.duration || '2s');
+      (msg.items || []).forEach((item) => renderStepSubItem(dd.body, item.icon, item.text));
+    } else if (msg.role === 'agent') {
+      renderAgentResult(msg.text, msg.isError);
+    }
+  });
+}
+
+function recordMessageToActiveSession(msgObj) {
+  const current = getActiveSession();
+  if (current) {
+    if (!current.messages) current.messages = [];
+    current.messages.push(msgObj);
+    saveStorage({ sessions: state.sessions });
+  }
 }
 
 function openDrawer() {
@@ -502,26 +571,29 @@ async function submitTask() {
     return;
   }
 
-  if (!state.activeSessionId) createNewSession();
-
   const activeModel = getActiveModel();
   const provider = activeModel.provider;
   const apiKey = state.apiKeys[provider] || '';
 
-  if (provider !== 'ollama' && (!apiKey || !apiKey.trim())) {
-    appendCard('error', '🔑', 'API KEY DIBUTUHKAN', `Silakan masukkan ${provider.toUpperCase()} API Key di menu API Keys terlebih dahulu.`);
-    openModal('modal-apikeys');
-    return;
+  // Update session title if first message
+  const activeSession = getActiveSession();
+  if (activeSession && (!activeSession.messages || activeSession.messages.length === 0)) {
+    activeSession.name = goal.slice(0, 24) + (goal.length > 24 ? '...' : '');
+    saveStorage({ sessions: state.sessions });
+    renderSessionList();
   }
 
-  appendCard('user', '👤', 'USER', goal);
+  // Render & persist user message
+  hideEmptyState();
+  renderUserMessage(goal);
+  recordMessageToActiveSession({ role: 'user', text: goal });
+
   elGoalInput.value = '';
   resizeTextarea();
-  hideEmptyState();
   setAgentRunning(true);
   updateStatus('Bekerja...', true);
-  state.currentStepContainer = null;
-  state.currentStepNum = 0;
+
+  state.stepStartTime = Date.now();
 
   const browserSession = new window.BrowserSession({
     tabId: state.currentTab?.id,
@@ -554,7 +626,7 @@ async function submitTask() {
   try {
     await agent.run();
   } catch (err) {
-    console.error('[SidePanel] Agent error:', err);
+    console.error('[SidePanel] Agent run error:', err);
   } finally {
     setAgentRunning(false);
     updateStatus('Siap', false);
@@ -574,166 +646,177 @@ function stopAgent() {
   widgetManager.clear();
 }
 
-// ─── 28 Typed Events Handler ─────────────────────────────────────────────────
+// ─── Sleek Event Log Handler (Cursor / Antigravity Style) ──────────────────────
+let currentStepLogs = [];
+
 function handleAgentEvent(evt) {
   const t = evt.event_type || '';
   const msg = evt.message || '';
   const data = evt.data || {};
   const step = evt.step;
 
-  if (step && step !== state.currentStepNum) {
-    state.currentStepNum = step;
-    elStepCounter.style.display = 'inline-block';
-    elStepCounter.textContent = `${step} / 25`;
-    createStepContainer(step);
-  }
-
-  switch (t) {
-    case 'TASK_STARTED':
-      appendCard('action', '🚀', 'TASK STARTED', msg);
-      break;
-    case 'ATTACH_TAB':
-      appendCard('action', '🔗', 'ATTACH TAB', msg);
-      break;
-    case 'OBSERVATION':
-      appendStepCard('observation', '👁️', 'OBSERVATION', msg);
-      break;
-    case 'REASONING':
-      appendStepCard('thinking', '🧠', 'REASONING', msg);
-      break;
-    case 'PLAN':
-      // Internal step plan status
-      break;
-    case 'ACTION_PROPOSED':
-      appendStepCard('action', '🛡️', 'PROPOSAL', msg);
-      break;
-    case 'ACTION_EXECUTED':
-      appendStepCard('action', '⚡', 'EXECUTED', msg);
-      break;
-    case 'ACTION_FAILED':
-      appendStepCard('error', '❌', 'ACTION FAILED', msg);
-      break;
-    case 'SCREENSHOT':
-      // Handled silently or thumbnail
-      break;
-    case 'NAVIGATION':
-      appendStepCard('action', '🌐', 'NAVIGATE', msg);
-      break;
-    case 'CLICK':
-      appendStepCard('action', '🖱️', 'CLICK', msg);
-      break;
-    case 'TYPE':
-      appendStepCard('action', '⌨️', 'TYPE', msg);
-      break;
-    case 'SCROLL':
-      appendStepCard('action', '📜', 'SCROLL', msg);
-      break;
-    case 'HOVER':
-      appendStepCard('action', '🎯', 'HOVER', msg);
-      break;
-    case 'EXTRACTION':
-      appendStepCard('action', '📊', 'EXTRACTION', msg);
-      break;
-    case 'WAITING':
-      appendStepCard('thinking', '⏳', 'WAITING', msg);
-      break;
-    case 'VERIFICATION':
-      appendStepCard('verification', '✓', 'VERIFY', msg);
-      break;
-    case 'RETRY':
-      appendStepCard('thinking', '🔄', 'RETRY', msg);
-      break;
-    case 'TAB_CREATED':
-    case 'TAB_SWITCHED':
-    case 'TAB_CLOSED':
-      appendStepCard('action', '📑', 'TAB', msg);
-      updateTabStrip();
-      break;
-    case 'TASK_COMPLETED':
-      appendCard('completed', '✅', 'DONE', data.result || msg || 'Tugas selesai');
-      break;
-    case 'ERROR':
-      appendCard('error', '❌', 'ERROR', data.error || msg);
-      break;
-    case 'TASK_CANCELLED':
-      appendCard('thinking', '⏹️', 'CANCELLED', msg);
-      break;
-  }
-}
-
-// ─── Step Hierarchical UI Helpers ────────────────────────────────────────────
-function createStepContainer(stepNum) {
-  hideEmptyState();
-
-  const container = document.createElement('div');
-  container.className = 'step-container';
-  container.id = `step-container-${stepNum}`;
-  container.innerHTML = `
-    <div class="step-header">
-      <span>LANGKAH ${stepNum}</span>
-      <span style="font-family:var(--font-mono);font-size:10px">${new Date().toLocaleTimeString('id-ID')}</span>
-    </div>
-    <div class="step-body" id="step-body-${stepNum}"></div>
-  `;
-
-  elTimeline.appendChild(container);
-  state.currentStepContainer = container.querySelector(`#step-body-${stepNum}`);
-  container.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
-
-function appendStepCard(type, icon, tag, body) {
-  if (!state.currentStepContainer) {
-    appendCard(type, icon, tag, body);
+  if (t === 'TASK_STARTED') {
+    state.stepStartTime = Date.now();
+    currentStepLogs = [];
     return;
   }
 
-  const card = document.createElement('div');
-  card.className = `event-card ${type}`;
+  // Ensure dropdown is created for current step
+  if (!state.activeStepDropdown) {
+    const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+    state.activeStepDropdown = renderStepDropdown(`${elapsed}s`);
+    state.activeStepBody = state.activeStepDropdown.body;
+  }
 
-  const isThinking = type === 'thinking';
-  card.innerHTML = `
-    <div class="event-header">
-      <span class="event-badge">${icon} ${escHtml(tag)}</span>
-    </div>
-    <div class="event-body ${isThinking ? 'thought-accordion' : ''}">${escHtml(body)}</div>
-  `;
+  let iconName = 'info';
+  let text = msg;
 
-  state.currentStepContainer.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  switch (t) {
+    case 'OBSERVATION':
+      iconName = 'visibility';
+      text = `Observed: ${data.elementsCount || 0} interactive elements on ${data.title || data.url}`;
+      break;
+    case 'REASONING':
+      iconName = 'psychology';
+      text = msg;
+      break;
+    case 'CLICK':
+      iconName = 'touch_app';
+      text = `Click [${data.index || ''}] ${data.target || ''}`;
+      break;
+    case 'TYPE':
+      iconName = 'edit';
+      text = `Type "${data.text || ''}" into [${data.index || ''}]`;
+      break;
+    case 'NAVIGATION':
+      iconName = 'navigation';
+      text = `Navigate to ${data.url || msg}`;
+      break;
+    case 'SCROLL':
+      iconName = 'swap_vert';
+      text = `Scroll ${data.down !== false ? 'down' : 'up'}`;
+      break;
+    case 'EXTRACTION':
+      iconName = 'dataset';
+      text = `Extracting content: "${data.query || ''}"`;
+      break;
+    case 'VERIFICATION':
+      iconName = 'check_circle';
+      text = msg;
+      break;
+    case 'ACTION_EXECUTED':
+      iconName = 'check';
+      text = msg;
+      break;
+    case 'ACTION_FAILED':
+      iconName = 'error';
+      text = msg;
+      break;
+    case 'TASK_COMPLETED': {
+      const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+      if (state.activeStepDropdown) {
+        state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
+      }
+      renderAgentResult(data.result || msg || 'Tugas selesai.', false);
+      recordMessageToActiveSession({ role: 'agent', text: data.result || msg, isError: false });
+      state.activeStepDropdown = null;
+      state.activeStepBody = null;
+      return;
+    }
+    case 'ERROR': {
+      renderAgentResult(data.error || msg, true);
+      recordMessageToActiveSession({ role: 'agent', text: data.error || msg, isError: true });
+      state.activeStepDropdown = null;
+      state.activeStepBody = null;
+      return;
+    }
+  }
+
+  renderStepSubItem(state.activeStepBody, iconName, text);
+  currentStepLogs.push({ icon: iconName, text });
+
+  // Update elapsed time header
+  const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+  if (state.activeStepDropdown) {
+    state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
+  }
 }
 
-function appendCard(type, icon, tag, body) {
-  hideEmptyState();
-
-  const card = document.createElement('div');
-  card.className = `event-card ${type}`;
-  const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  const isThinking = type === 'thinking';
-  const isCompleted = type === 'completed';
-
-  card.innerHTML = `
-    <div class="event-header">
-      <span class="event-badge">${icon} ${escHtml(tag)}</span>
-      <span class="event-time">${time}</span>
+// ─── UI Render Helpers (Zero Emojis, Google Material) ─────────────────────────
+function renderUserMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'chat-user-message';
+  div.innerHTML = `
+    <div class="chat-user-header">
+      <span class="material-symbols-outlined" style="font-size:14px">person</span>
+      <span>User</span>
     </div>
-    <div class="event-body ${isThinking ? 'thought-accordion' : ''} ${isCompleted ? 'highlight' : ''}">${escHtml(body)}</div>
+    <div>${escHtml(text)}</div>
+  `;
+  elTimeline.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderStepDropdown(durationStr = '1s') {
+  const container = document.createElement('div');
+  container.className = 'thought-dropdown';
+
+  const header = document.createElement('div');
+  header.className = 'thought-header open';
+  header.innerHTML = `
+    <span class="chevron-icon material-symbols-outlined">chevron_right</span>
+    <span class="header-label">Worked for ${escHtml(durationStr)}</span>
   `;
 
-  elTimeline.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  const body = document.createElement('div');
+  body.className = 'thought-body open';
+
+  header.addEventListener('click', () => {
+    const isOpen = header.classList.toggle('open');
+    body.classList.toggle('open', isOpen);
+  });
+
+  container.appendChild(header);
+  container.appendChild(body);
+  elTimeline.appendChild(container);
+  container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+  return {
+    container,
+    header,
+    headerText: header.querySelector('.header-label'),
+    body,
+  };
+}
+
+function renderStepSubItem(bodyEl, iconName, text) {
+  if (!bodyEl) return;
+  const item = document.createElement('div');
+  item.className = 'thought-sub-item';
+  item.innerHTML = `
+    <span class="material-symbols-outlined item-icon">${iconName}</span>
+    <span>${escHtml(text)}</span>
+  `;
+  bodyEl.appendChild(item);
+  item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderAgentResult(text, isError = false) {
+  const div = document.createElement('div');
+  div.className = `chat-agent-result ${isError ? 'error' : 'completed'}`;
+  div.innerHTML = `
+    <div style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:12px;color:${isError ? 'var(--destructive)' : 'var(--success)'}">
+      <span class="material-symbols-outlined" style="font-size:16px">${isError ? 'error' : 'check_circle'}</span>
+      <span>${isError ? 'Gagal' : 'Hasil Agent'}</span>
+    </div>
+    <div style="white-space:pre-wrap;margin-top:2px">${escHtml(text)}</div>
+  `;
+  elTimeline.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 function hideEmptyState() {
   elEmptyState.style.display = 'none';
-}
-
-function clearTimeline() {
-  elTimeline.innerHTML = '';
-  elEmptyState.style.display = '';
-  elStepCounter.style.display = 'none';
-  state.currentStepContainer = null;
-  state.currentStepNum = 0;
 }
 
 function updateStatus(text, isRunning) {
@@ -751,11 +834,11 @@ function setAgentRunning(running) {
   if (running) {
     elBtnSend.classList.add('running');
     elBtnSend.title = 'Hentikan Agent';
-    elBtnSend.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>`;
+    elSendIcon.textContent = 'stop';
   } else {
     elBtnSend.classList.remove('running');
     elBtnSend.title = 'Kirim Perintah';
-    elBtnSend.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+    elSendIcon.textContent = 'send';
   }
 }
 
