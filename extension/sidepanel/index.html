@@ -40,10 +40,12 @@
         </svg>
       </div>
       <span id="brand-title">Deep Browser</span>
+      <span id="browser-badge">Edge</span>
       <div id="status-pill">
         <div id="status-dot"></div>
         <span id="status-text">Siap</span>
       </div>
+      <span id="step-counter">0 / 25</span>
     </div>
 
     <div id="topbar-actions">
@@ -64,8 +66,14 @@
     </div>
   </div>
 
+  <!-- Multi-Tab Strip -->
+  <div id="tab-strip"></div>
+
   <!-- Main Timeline -->
   <div id="main">
+    <!-- Interactive Widget Mount Container -->
+    <div id="widget-container"></div>
+
     <!-- Empty State -->
     <div id="empty-state">
       <div class="empty-icon-box">
@@ -75,7 +83,7 @@
       </div>
       <div>
         <h2 class="empty-title">Deep Browser Copilot</h2>
-        <p class="empty-desc">Otonom menjelajah, menganalisis data, dan mengeksekusi aksi langsung pada browser Anda.</p>
+        <p class="empty-desc">Otonom menjelajah, menganalisis data, dan mengeksekusi aksi langsung pada Microsoft Edge.</p>
       </div>
       <div class="quick-prompts-grid">
         <button class="quick-chip" data-prompt="Cari website pddikti yang benar lalu cari nama muhammad fadhli rizaldy lalu ambil informasinya">
@@ -99,11 +107,6 @@
 
   <!-- Bottom Input Bar -->
   <div id="bottom-bar">
-    <div id="active-tab-bar">
-      <img id="tab-icon" src="" alt="" />
-      <span id="tab-name">Tab aktif</span>
-    </div>
-
     <div id="prompt-container">
       <textarea id="goal-input" placeholder="Perintahkan agent (contoh: Cari data di PDDIKTI)..." rows="1"></textarea>
       <div class="prompt-footer">
@@ -113,7 +116,7 @@
             <span id="model-badge-name">Gemini 2.0 Flash</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
           </button>
-          <button class="btn-secondary" id="btn-select-mode" style="padding:3px 7px;font-size:10.5px" title="Mode Keputusan">
+          <button class="btn-secondary" id="btn-select-mode" style="padding:3px 7px;font-size:10.5px" title="Mode Eksekusi">
             <span id="mode-badge-icon">🤖</span>
             <span id="mode-badge-name">Adaptif</span>
           </button>
@@ -198,9 +201,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="modal-body" id="apikeys-container">
-        <!-- Injected via JS -->
-      </div>
+      <div class="modal-body" id="apikeys-container"></div>
       <div class="modal-footer">
         <button class="btn-primary" id="btn-save-apikeys">Tutup &amp; Simpan</button>
       </div>
@@ -211,14 +212,14 @@
   <div class="modal-overlay" id="modal-settings">
     <div class="modal-dialog">
       <div class="modal-header">
-        <span class="modal-title">Mode Keputusan Agent</span>
+        <span class="modal-title">Mode Eksekusi Agent</span>
         <button class="icon-btn" id="close-modal-settings">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">Tingkat Otonomi Agent</label>
+          <label class="form-label">Tingkat Otonomi &amp; Review Policy</label>
           <div class="model-list-group" id="mode-options-container"></div>
         </div>
       </div>
@@ -233,6 +234,11 @@
 <!-- Core Runtime Modules -->
 <script src="../core/dom_service.js"></script>
 <script src="../core/browser_session.js"></script>
+<script src="../core/extractor.js"></script>
+<script src="../core/skills/skill_base.js"></script>
+<script src="../core/skills/research_skill.js"></script>
+<script src="../core/security_policy.js"></script>
+<script src="../core/widgets.js"></script>
 <script src="../core/tools.js"></script>
 <script src="../core/message_manager.js"></script>
 <script src="../core/llm_client.js"></script>

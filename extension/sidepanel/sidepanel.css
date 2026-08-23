@@ -41,7 +41,7 @@
   --radius-sm:          6px;
   --radius-lg:          12px;
   --font-sans:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono:          'JetBrains Mono', monospace;
+  --font-mono:          'JetBrains Mono', Consolas, monospace;
 }
 
 html, body {
@@ -55,7 +55,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ─── App Container ─── */
 #app {
   display: flex;
   flex-direction: column;
@@ -64,7 +63,7 @@ html, body {
   background: var(--background);
 }
 
-/* ─── Header / Topbar ─── */
+/* ─── Top Bar ─── */
 #topbar {
   display: flex;
   align-items: center;
@@ -124,6 +123,16 @@ html, body {
   letter-spacing: -0.2px;
 }
 
+#browser-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 #status-pill {
   display: inline-flex;
   align-items: center;
@@ -162,6 +171,16 @@ html, body {
   50% { opacity: 0.4; transform: scale(1.2); }
 }
 
+#step-counter {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--muted-foreground);
+  background: var(--secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: none;
+}
+
 #topbar-actions {
   margin-left: auto;
   display: flex;
@@ -191,6 +210,55 @@ html, body {
   color: var(--foreground);
 }
 
+/* ─── Multi-Tab Strip ─── */
+#tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #0d0d10;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 140px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-pill.active {
+  background: var(--secondary);
+  border-color: var(--border-focus);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.tab-pill:hover {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.tab-pill img {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 /* ─── Main Timeline Area ─── */
 #main {
   flex: 1;
@@ -201,6 +269,92 @@ html, body {
   flex-direction: column;
   gap: 10px;
   scroll-behavior: smooth;
+}
+
+/* ─── Interactive Widgets Container ─── */
+#widget-container {
+  display: none;
+  margin-bottom: 8px;
+}
+
+.agent-widget-card {
+  border-radius: var(--radius);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.agent-widget-card.approval {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.widget-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.widget-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.proposal-action {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #c4b5fd;
+}
+
+.proposal-params {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.widget-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.widget-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.widget-choice-btn {
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.widget-choice-btn:hover {
+  background: var(--secondary);
+  border-color: var(--primary);
+  color: #ffffff;
 }
 
 /* ─── Empty State ─── */
@@ -274,7 +428,7 @@ html, body {
   transform: translateY(-1px);
 }
 
-/* ─── Timeline Event Cards ─── */
+/* ─── Timeline Event Hierarchy ─── */
 #timeline {
   display: flex;
   flex-direction: column;
@@ -282,20 +436,44 @@ html, body {
   width: 100%;
 }
 
-.event-card {
+.step-container {
+  display: flex;
+  flex-direction: column;
   border-radius: var(--radius);
   background: var(--card);
   border: 1px solid var(--border);
-  padding: 10px 12px;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.step-body {
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  animation: fadeIn 0.2s ease forwards;
-  transition: border-color 0.15s ease;
 }
 
-.event-card:hover {
-  border-color: var(--border-focus);
+.event-card {
+  border-radius: var(--radius-sm);
+  background: var(--popover);
+  border: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  animation: fadeIn 0.15s ease forwards;
 }
 
 @keyframes fadeIn {
@@ -321,6 +499,11 @@ html, body {
 .event-card.action {
   background: rgba(139, 92, 246, 0.06);
   border-color: rgba(139, 92, 246, 0.2);
+}
+
+.event-card.verification {
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(16, 185, 129, 0.2);
 }
 
 .event-card.completed {
@@ -357,17 +540,9 @@ html, body {
 .event-card.observation .event-badge { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
 .event-card.thinking .event-badge { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
 .event-card.action .event-badge { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
+.event-card.verification .event-badge { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
 .event-card.completed .event-badge { background: rgba(34, 197, 94, 0.2); color: #86efac; }
 .event-card.error .event-badge { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-
-.event-step-pill {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  background: var(--secondary);
-  padding: 1px 5px;
-  border-radius: 3px;
-}
 
 .event-time {
   margin-left: auto;
@@ -384,12 +559,13 @@ html, body {
   white-space: pre-wrap;
 }
 
-.event-body.thought-accordion {
-  font-size: 12px;
+.thought-accordion {
+  font-size: 11.5px;
   color: var(--muted-foreground);
   font-style: italic;
   padding-left: 8px;
   border-left: 2px solid rgba(245, 158, 11, 0.4);
+  cursor: pointer;
 }
 
 /* ─── Bottom Bar & Prompt Input ─── */
@@ -402,32 +578,6 @@ html, body {
   gap: 8px;
   flex-shrink: 0;
   z-index: 20;
-}
-
-#active-tab-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: var(--muted);
-  font-size: 11px;
-  color: var(--muted-foreground);
-  overflow: hidden;
-}
-
-#tab-icon {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-#tab-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
 }
 
 #prompt-container {
@@ -546,7 +696,7 @@ html, body {
   50% { transform: scale(1.05); }
 }
 
-/* ─── Modal / Dialog Overlay ─── */
+/* ─── Modals ─── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -609,7 +759,6 @@ html, body {
   background: var(--card);
 }
 
-/* ─── Form Controls in Modals ─── */
 .form-group {
   display: flex;
   flex-direction: column;
@@ -673,7 +822,6 @@ html, body {
   color: var(--foreground);
 }
 
-/* ─── Model List Items ─── */
 .model-list-group {
   display: flex;
   flex-direction: column;
@@ -730,7 +878,7 @@ html, body {
   gap: 4px;
 }
 
-/* ─── Session Drawer ─── */
+/* ─── Drawer ─── */
 #session-drawer {
   position: fixed;
   top: 0;
@@ -803,7 +951,6 @@ html, body {
   font-weight: 500;
 }
 
-/* ─── Scrollbar ─── */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;

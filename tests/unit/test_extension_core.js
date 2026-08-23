@@ -43,10 +43,16 @@ global.chrome = {
 // Load core scripts
 require('../../extension/core/dom_service.js');
 require('../../extension/core/browser_session.js');
+require('../../extension/core/extractor.js');
+require('../../extension/core/skills/skill_base.js');
+require('../../extension/core/skills/research_skill.js');
+require('../../extension/core/security_policy.js');
+require('../../extension/core/widgets.js');
 require('../../extension/core/tools.js');
 require('../../extension/core/message_manager.js');
 require('../../extension/core/llm_client.js');
 require('../../extension/core/agent.js');
+
 
 async function runTests() {
   console.log('--- Starting Standalone Extension Core Tests ---');
@@ -225,10 +231,11 @@ async function runTests() {
     assert(result.result.includes('Teknik Informatika'));
     assert(events.includes('TASK_STARTED'));
     assert(events.includes('OBSERVATION'));
-    assert(events.includes('THINKING_STATUS'));
+    assert(events.includes('REASONING'));
     assert(events.includes('TYPE'));
-    assert(events.includes('COMPLETED'));
+    assert(events.includes('TASK_COMPLETED'));
   });
+
 
   console.log(`\nResults: ${passed}/${total} tests passed.`);
   if (passed !== total) {

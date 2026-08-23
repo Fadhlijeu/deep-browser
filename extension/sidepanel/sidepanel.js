@@ -1,17 +1,19 @@
 /**
- * Deep Browser Extension — Standalone SidePanel Controller
- * =========================================================
+ * Deep Browser Extension — SidePanel UI & Lifecycle Controller
+ * =============================================================
  *
  * Implements:
- *   - Full Model Management CRUD (Create, Read, Update, Delete)
- *   - API Key & Provider Management
- *   - Autonomous Browser Use Agent execution (Zero WebSocket dependency)
- *   - Rich shadcn-styled event timeline with collapsible reasoning
+ *   - 100% Edge-First browser control
+ *   - Structured STEP → Observation, Reasoning, Action, Verification, Result timeline
+ *   - 28 typed events stream
+ *   - Multi-tab strip manager with live tab switching
+ *   - Interactive widgets & Action Proposal approval flow
+ *   - Full Model CRUD management
  */
 
 'use strict';
 
-// ─── Default Model Presets ───────────────────────────────────────────────────
+// ─── Default Models ───────────────────────────────────────────────────────────
 const DEFAULT_MODELS = [
   { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',       icon: '⚡', provider: 'gemini',        modelId: 'gemini-2.0-flash',      isPreset: true },
   { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite',  icon: '🏃', provider: 'gemini',        modelId: 'gemini-2.0-flash-lite', isPreset: true },
@@ -24,9 +26,9 @@ const DEFAULT_MODELS = [
 ];
 
 const MODES = [
-  { id: 'agent_decide', name: 'Adaptif (Agent Decide)', desc: 'Agent memutuskan langkah optimal secara dinamis.', icon: '🤖' },
-  { id: 'auto',         name: 'Always Proceed (Auto)',  desc: 'Eksekusi cepat tanpa jeda konfirmasi.', icon: '⚡' },
-  { id: 'hitl',         name: 'Human-in-the-Loop',      desc: 'Minta persetujuan sebelum form submission / transaksi.', icon: '🔵' },
+  { id: 'agent_decide', name: 'Agent Decide',    desc: 'Agent bebas mengambil keputusan normal secara adaptif.', icon: '🤖' },
+  { id: 'auto',         name: 'Always Proceed',  desc: 'Eksekusi otomatis tanpa jeda konfirmasi.', icon: '⚡' },
+  { id: 'hitl',         name: 'Request Review',  desc: 'Minta persetujuan proposal aksi sebelum dieksekusi.', icon: '🔵' },
 ];
 
 const PROVIDERS = [
@@ -40,6 +42,7 @@ const PROVIDERS = [
 // ─── State ───────────────────────────────────────────────────────────────────
 let state = {
   currentTab: null,
+  tabsList: [],
   models: [...DEFAULT_MODELS],
   selectedModelId: 'gemini/gemini-2.0-flash',
   selectedMode: 'agent_decide',
@@ -49,9 +52,11 @@ let state = {
   currentAgent: null,
   agentRunning: false,
   editingModelId: null,
+  currentStepContainer: null,
+  currentStepNum: 0,
 };
 
-// ─── DOM Elements ────────────────────────────────────────────────────────────
+// ─── DOM References ──────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const elMain                = $('main');
 const elTimeline            = $('timeline');
@@ -60,8 +65,9 @@ const elGoalInput           = $('goal-input');
 const elBtnSend             = $('btn-send');
 const elStatusPill          = $('status-pill');
 const elStatusText          = $('status-text');
-const elTabIcon             = $('tab-icon');
-const elTabName             = $('tab-name');
+const elStepCounter         = $('step-counter');
+const elTabStrip            = $('tab-strip');
+const elWidgetContainer     = $('widget-container');
 const elModelBadgeIcon      = $('model-badge-icon');
 const elModelBadgeName      = $('model-badge-name');
 const elModeBadgeIcon       = $('mode-badge-icon');
@@ -83,8 +89,11 @@ const elSessionDrawer       = $('session-drawer');
 const elDrawerOverlay       = $('drawer-overlay');
 const elSessionList         = $('session-list');
 
+let widgetManager = null;
+
 // ─── Initialization ──────────────────────────────────────────────────────────
 async function init() {
+  widgetManager = new window.WidgetManager(elWidgetContainer);
   await loadStorage();
   bindEvents();
   renderModelPill();
@@ -94,6 +103,7 @@ async function init() {
   renderModeOptions();
   detectCurrentTab();
   loadSessions();
+  updateTabStrip();
   updateStatus('Siap', false);
 }
 
@@ -121,37 +131,64 @@ async function saveStorage(keys) {
   return new Promise((resolve) => chrome.storage.local.set(keys, resolve));
 }
 
-// ─── Tab Tracking ────────────────────────────────────────────────────────────
+// ─── Tab Strip & Active Tab Tracking ─────────────────────────────────────────
 function detectCurrentTab() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs?.[0]) setCurrentTab(tabs[0]);
   });
-  chrome.tabs.onActivated.addListener((info) => {
+  chrome.tabs?.onActivated?.addListener((info) => {
     chrome.tabs.get(info.tabId, (tab) => {
-      if (tab) setCurrentTab(tab);
+      if (tab) {
+        setCurrentTab(tab);
+        updateTabStrip();
+      }
     });
   });
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  chrome.tabs?.onUpdated?.addListener((tabId, changeInfo, tab) => {
     if (state.currentTab && tabId === state.currentTab.id && (changeInfo.title || changeInfo.url)) {
       setCurrentTab(tab);
     }
+    updateTabStrip();
   });
+  chrome.tabs?.onRemoved?.addListener(() => updateTabStrip());
 }
 
 function setCurrentTab(tab) {
   state.currentTab = tab;
-  if (tab && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://')) {
-    elTabIcon.src = tab.favIconUrl || '';
-    elTabIcon.style.display = tab.favIconUrl ? 'block' : 'none';
-    elTabName.textContent = tab.title || tab.url;
-  } else {
-    elTabIcon.style.display = 'none';
-    elTabName.textContent = 'Tab Khusus / Browser';
-  }
+}
+
+async function updateTabStrip() {
+  if (!chrome.tabs) return;
+
+  chrome.tabs.query({ currentWindow: true }, (tabs) => {
+    state.tabsList = tabs || [];
+    elTabStrip.innerHTML = '';
+
+    tabs.forEach((tab) => {
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) return;
+
+      const pill = document.createElement('div');
+      const isActive = state.currentTab && tab.id === state.currentTab.id;
+      pill.className = 'tab-pill' + (isActive ? ' active' : '');
+
+      const faviconSrc = tab.favIconUrl || '';
+      pill.innerHTML = `
+        ${faviconSrc ? `<img src="${faviconSrc}" alt="" />` : ''}
+        <span>${escHtml(tab.title || tab.url)}</span>
+      `;
+
+      pill.addEventListener('click', async () => {
+        await chrome.tabs.update(tab.id, { active: true });
+        setCurrentTab(tab);
+        updateTabStrip();
+      });
+
+      elTabStrip.appendChild(pill);
+    });
+  });
 }
 
 // ─── Model CRUD Management ───────────────────────────────────────────────────
-
 function getActiveModel() {
   return state.models.find((m) => m.id === state.selectedModelId) || state.models[0] || DEFAULT_MODELS[0];
 }
@@ -266,12 +303,8 @@ async function saveModelForm() {
   const baseUrl = $('input-model-baseurl').value.trim();
   const temp = parseFloat($('input-model-temp').value) || 0.1;
 
-  if (!name) {
-    alert('Harap masukkan Nama Tampilan Model');
-    return;
-  }
-  if (!modelId) {
-    alert('Harap masukkan Model ID (misal: gemini-2.0-flash / deepseek-chat)');
+  if (!name || !modelId) {
+    alert('Harap isi Nama dan Model ID');
     return;
   }
 
@@ -283,7 +316,6 @@ async function saveModelForm() {
   else if (provider === 'custom_openai') icon = '🐋';
 
   if (state.editingModelId) {
-    // Update existing
     const idx = state.models.findIndex((x) => x.id === state.editingModelId);
     if (idx !== -1) {
       state.models[idx] = {
@@ -297,7 +329,6 @@ async function saveModelForm() {
       };
     }
   } else {
-    // Create new
     const newId = `${provider}/${modelId}_${Date.now().toString(36)}`;
     const newModel = {
       id: newId,
@@ -320,7 +351,7 @@ async function saveModelForm() {
 }
 
 async function deleteModel(modelId) {
-  if (!confirm('Hapus model ini dari daftar?')) return;
+  if (!confirm('Hapus model ini?')) return;
   state.models = state.models.filter((m) => m.id !== modelId);
   if (state.selectedModelId === modelId) {
     state.selectedModelId = state.models[0]?.id || DEFAULT_MODELS[0].id;
@@ -331,7 +362,7 @@ async function deleteModel(modelId) {
 }
 
 async function resetDefaultModels() {
-  if (!confirm('Reset semua model ke pengaturan awal?')) return;
+  if (!confirm('Reset semua model ke pengaturan default?')) return;
   state.models = [...DEFAULT_MODELS];
   state.selectedModelId = DEFAULT_MODELS[0].id;
   await saveStorage({ models: state.models, selectedModelId: state.selectedModelId });
@@ -342,7 +373,6 @@ async function resetDefaultModels() {
 // ─── API Key Management ──────────────────────────────────────────────────────
 function renderApikeys() {
   elApikeysContainer.innerHTML = '';
-
   PROVIDERS.forEach((p) => {
     const savedKey = state.apiKeys[p.id] || '';
     const row = document.createElement('div');
@@ -384,7 +414,7 @@ async function saveApikeys() {
 function renderModePill() {
   const m = MODES.find((x) => x.id === state.selectedMode) || MODES[0];
   elModeBadgeIcon.textContent = m.icon;
-  elModeBadgeName.textContent = m.name.split(' ')[0];
+  elModeBadgeName.textContent = m.name;
 }
 
 function renderModeOptions() {
@@ -414,7 +444,7 @@ function renderModeOptions() {
   });
 }
 
-// ─── Sessions Drawer ─────────────────────────────────────────────────────────
+// ─── Sessions ────────────────────────────────────────────────────────────────
 function loadSessions() {
   renderSessionList();
 }
@@ -462,7 +492,7 @@ function closeDrawer() {
   elDrawerOverlay.classList.remove('active');
 }
 
-// ─── Direct Agent Execution (Zero WebSocket) ─────────────────────────────────
+// ─── Task Execution ──────────────────────────────────────────────────────────
 async function submitTask() {
   const goal = elGoalInput.value.trim();
   if (!goal) return;
@@ -490,6 +520,8 @@ async function submitTask() {
   hideEmptyState();
   setAgentRunning(true);
   updateStatus('Bekerja...', true);
+  state.currentStepContainer = null;
+  state.currentStepNum = 0;
 
   const browserSession = new window.BrowserSession({
     tabId: state.currentTab?.id,
@@ -512,6 +544,9 @@ async function submitTask() {
     maxSteps: 25,
     mode: state.selectedMode,
     onEvent: handleAgentEvent,
+    onApprovalRequired: async (proposal) => {
+      return widgetManager.requestApproval(proposal);
+    },
   });
 
   state.currentAgent = agent;
@@ -519,11 +554,13 @@ async function submitTask() {
   try {
     await agent.run();
   } catch (err) {
-    console.error('[SidePanel] Agent run error:', err);
+    console.error('[SidePanel] Agent error:', err);
   } finally {
     setAgentRunning(false);
     updateStatus('Siap', false);
     state.currentAgent = null;
+    widgetManager.clear();
+    updateTabStrip();
   }
 }
 
@@ -534,56 +571,138 @@ function stopAgent() {
   setAgentRunning(false);
   updateStatus('Dihentikan', false);
   state.currentAgent = null;
+  widgetManager.clear();
 }
 
+// ─── 28 Typed Events Handler ─────────────────────────────────────────────────
 function handleAgentEvent(evt) {
   const t = evt.event_type || '';
   const msg = evt.message || '';
   const data = evt.data || {};
   const step = evt.step;
 
+  if (step && step !== state.currentStepNum) {
+    state.currentStepNum = step;
+    elStepCounter.style.display = 'inline-block';
+    elStepCounter.textContent = `${step} / 25`;
+    createStepContainer(step);
+  }
+
   switch (t) {
     case 'TASK_STARTED':
-      appendCard('action', '🚀', 'AGENT', msg, step);
+      appendCard('action', '🚀', 'TASK STARTED', msg);
       break;
-    case 'CONTEXT_ATTACHED':
-      appendCard('action', '🔗', 'ATTACH', msg, step);
+    case 'ATTACH_TAB':
+      appendCard('action', '🔗', 'ATTACH TAB', msg);
       break;
     case 'OBSERVATION':
-      appendCard('observation', '👁️', 'OBSERVASI', msg, step);
+      appendStepCard('observation', '👁️', 'OBSERVATION', msg);
       break;
-    case 'THINKING_STATUS':
-      appendCard('thinking', '🧠', 'REASONING', msg, step);
+    case 'REASONING':
+      appendStepCard('thinking', '🧠', 'REASONING', msg);
+      break;
+    case 'PLAN':
+      // Internal step plan status
+      break;
+    case 'ACTION_PROPOSED':
+      appendStepCard('action', '🛡️', 'PROPOSAL', msg);
+      break;
+    case 'ACTION_EXECUTED':
+      appendStepCard('action', '⚡', 'EXECUTED', msg);
+      break;
+    case 'ACTION_FAILED':
+      appendStepCard('error', '❌', 'ACTION FAILED', msg);
+      break;
+    case 'SCREENSHOT':
+      // Handled silently or thumbnail
+      break;
+    case 'NAVIGATION':
+      appendStepCard('action', '🌐', 'NAVIGATE', msg);
       break;
     case 'CLICK':
-      appendCard('action', '🖱️', 'CLICK', msg, step);
+      appendStepCard('action', '🖱️', 'CLICK', msg);
       break;
     case 'TYPE':
-      appendCard('action', '⌨️', 'TYPE', msg, step);
-      break;
-    case 'NAVIGATE':
-      appendCard('action', '🌐', 'NAVIGATE', msg, step);
+      appendStepCard('action', '⌨️', 'TYPE', msg);
       break;
     case 'SCROLL':
-      appendCard('action', '📜', 'SCROLL', msg, step);
+      appendStepCard('action', '📜', 'SCROLL', msg);
       break;
-    case 'ACTION':
-      appendCard('action', '⚡', 'ACTION', msg, step);
+    case 'HOVER':
+      appendStepCard('action', '🎯', 'HOVER', msg);
       break;
-    case 'COMPLETED':
-      appendCard('completed', '✅', 'DONE', data.result || msg || 'Tugas selesai', step);
+    case 'EXTRACTION':
+      appendStepCard('action', '📊', 'EXTRACTION', msg);
       break;
-    case 'FAILED':
-      appendCard('error', '❌', 'FAILED', data.error || msg, step);
+    case 'WAITING':
+      appendStepCard('thinking', '⏳', 'WAITING', msg);
       break;
-    case 'STOPPED':
-      appendCard('thinking', '⏹️', 'STOPPED', 'Agent dihentikan oleh pengguna', step);
+    case 'VERIFICATION':
+      appendStepCard('verification', '✓', 'VERIFY', msg);
+      break;
+    case 'RETRY':
+      appendStepCard('thinking', '🔄', 'RETRY', msg);
+      break;
+    case 'TAB_CREATED':
+    case 'TAB_SWITCHED':
+    case 'TAB_CLOSED':
+      appendStepCard('action', '📑', 'TAB', msg);
+      updateTabStrip();
+      break;
+    case 'TASK_COMPLETED':
+      appendCard('completed', '✅', 'DONE', data.result || msg || 'Tugas selesai');
+      break;
+    case 'ERROR':
+      appendCard('error', '❌', 'ERROR', data.error || msg);
+      break;
+    case 'TASK_CANCELLED':
+      appendCard('thinking', '⏹️', 'CANCELLED', msg);
       break;
   }
 }
 
-// ─── Timeline UI Card Helper ─────────────────────────────────────────────────
-function appendCard(type, icon, tag, body, step = null) {
+// ─── Step Hierarchical UI Helpers ────────────────────────────────────────────
+function createStepContainer(stepNum) {
+  hideEmptyState();
+
+  const container = document.createElement('div');
+  container.className = 'step-container';
+  container.id = `step-container-${stepNum}`;
+  container.innerHTML = `
+    <div class="step-header">
+      <span>LANGKAH ${stepNum}</span>
+      <span style="font-family:var(--font-mono);font-size:10px">${new Date().toLocaleTimeString('id-ID')}</span>
+    </div>
+    <div class="step-body" id="step-body-${stepNum}"></div>
+  `;
+
+  elTimeline.appendChild(container);
+  state.currentStepContainer = container.querySelector(`#step-body-${stepNum}`);
+  container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function appendStepCard(type, icon, tag, body) {
+  if (!state.currentStepContainer) {
+    appendCard(type, icon, tag, body);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = `event-card ${type}`;
+
+  const isThinking = type === 'thinking';
+  card.innerHTML = `
+    <div class="event-header">
+      <span class="event-badge">${icon} ${escHtml(tag)}</span>
+    </div>
+    <div class="event-body ${isThinking ? 'thought-accordion' : ''}">${escHtml(body)}</div>
+  `;
+
+  state.currentStepContainer.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function appendCard(type, icon, tag, body) {
   hideEmptyState();
 
   const card = document.createElement('div');
@@ -596,7 +715,6 @@ function appendCard(type, icon, tag, body, step = null) {
   card.innerHTML = `
     <div class="event-header">
       <span class="event-badge">${icon} ${escHtml(tag)}</span>
-      ${step ? `<span class="event-step-pill">Langkah ${step}</span>` : ''}
       <span class="event-time">${time}</span>
     </div>
     <div class="event-body ${isThinking ? 'thought-accordion' : ''} ${isCompleted ? 'highlight' : ''}">${escHtml(body)}</div>
@@ -613,6 +731,9 @@ function hideEmptyState() {
 function clearTimeline() {
   elTimeline.innerHTML = '';
   elEmptyState.style.display = '';
+  elStepCounter.style.display = 'none';
+  state.currentStepContainer = null;
+  state.currentStepNum = 0;
 }
 
 function updateStatus(text, isRunning) {
@@ -651,7 +772,6 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// ─── Modal Helpers ───────────────────────────────────────────────────────────
 function openModal(id) {
   const modal = $(id);
   if (modal) modal.classList.add('active');
@@ -664,7 +784,6 @@ function closeModal(id) {
 
 // ─── Event Bindings ──────────────────────────────────────────────────────────
 function bindEvents() {
-  // Input submit
   elBtnSend.addEventListener('click', submitTask);
   elGoalInput.addEventListener('input', () => {
     resizeTextarea();
@@ -677,14 +796,14 @@ function bindEvents() {
     }
   });
 
-  // Topbar buttons
+  // Topbar
   $('btn-menu').addEventListener('click', openDrawer);
   $('btn-new').addEventListener('click', () => createNewSession());
   $('drawer-close').addEventListener('click', closeDrawer);
   elDrawerOverlay.addEventListener('click', closeDrawer);
   $('btn-new-session').addEventListener('click', createNewSession);
 
-  // Model Selector Modal
+  // Model Modal
   $('btn-select-model').addEventListener('click', () => {
     closeModelForm();
     renderModelsList();
@@ -705,7 +824,7 @@ function bindEvents() {
   $('close-modal-apikeys').addEventListener('click', () => closeModal('modal-apikeys'));
   $('btn-save-apikeys').addEventListener('click', saveApikeys);
 
-  // Settings / Mode Modal
+  // Mode Modal
   $('btn-open-settings').addEventListener('click', () => {
     renderModeOptions();
     openModal('modal-settings');
@@ -717,7 +836,7 @@ function bindEvents() {
   $('close-modal-settings').addEventListener('click', () => closeModal('modal-settings'));
   $('btn-close-settings').addEventListener('click', () => closeModal('modal-settings'));
 
-  // Quick prompt chips
+  // Quick Chips
   document.querySelectorAll('.quick-chip').forEach((btn) => {
     btn.addEventListener('click', () => {
       elGoalInput.value = btn.dataset.prompt;
@@ -727,7 +846,7 @@ function bindEvents() {
     });
   });
 
-  // Close modals on overlay click
+  // Close modals on backdrop click
   ['modal-models', 'modal-apikeys', 'modal-settings'].forEach((mId) => {
     $(mId).addEventListener('click', (e) => {
       if (e.target === $(mId)) closeModal(mId);

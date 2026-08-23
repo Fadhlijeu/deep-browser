@@ -1,36 +1,48 @@
-.deep-browser-hud-box {
-    position: absolute;
-    border: 2px solid #00f5a0;
-    box-shadow: 0 0 12px rgba(0, 245, 160, 0.6), inset 0 0 8px rgba(0, 245, 160, 0.2);
-    border-radius: 4px;
-    pointer-events: none;
-    z-index: 2147483647;
-    transition: all 0.2s ease-out;
-    animation: deepBrowserPulse 1.5s infinite alternate;
+/* In-Page Element Badges & Highlighting Overlay */
+#__deep_browser_highlight_overlay__ {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2147483640;
 }
 
 .deep-browser-hud-badge {
-    position: absolute;
-    top: -22px;
-    left: 0;
-    background: #00f5a0;
-    color: #000000;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 3px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    white-space: nowrap;
+  position: absolute;
+  background: #8b5cf6;
+  color: #ffffff;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 2147483647;
+  transition: transform 0.15s ease;
 }
 
-@keyframes deepBrowserPulse {
-    0% {
-        border-color: #00f5a0;
-        box-shadow: 0 0 8px rgba(0, 245, 160, 0.4);
-    }
-    100% {
-        border-color: #00d9f5;
-        box-shadow: 0 0 16px rgba(0, 217, 245, 0.8);
-    }
+.deep-browser-target-box {
+  position: absolute;
+  border: 2px solid #8b5cf6;
+  background: rgba(139, 92, 246, 0.12);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 2147483645;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.35);
+  animation: dbTargetPulse 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes dbTargetPulse {
+  0% {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
+  }
+  100% {
+    border-color: #a78bfa;
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.6);
+  }
 }

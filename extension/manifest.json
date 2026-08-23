@@ -8,7 +8,8 @@
     "tabs",
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "https://generativelanguage.googleapis.com/*",
@@ -30,8 +31,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/hud_overlay.js"],
-      "css": ["content/hud_overlay.css"],
+      "js": ["content/hud_overlay.js", "content/agent_cursor.js"],
+      "css": ["content/hud_overlay.css", "content/agent_cursor.css"],
       "run_at": "document_end"
     }
   ]

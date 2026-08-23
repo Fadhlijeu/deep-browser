@@ -1,14 +1,13 @@
 /**
- * Deep Browser Extension — Browser Use DOM Perception Engine (DomService)
- * =======================================================================
+ * Deep Browser Extension — DOM Perception & Extraction Service
+ * ============================================================
  *
- * Implements the core Browser Use DOM extraction algorithm in JavaScript:
- *   1. Traverses the DOM to discover interactive and semantic elements.
- *   2. Generates precise XPath expressions and 1-based selector indices.
- *   3. Computes layout bounding boxes & visibility criteria.
- *   4. Formats the Simplified DOM Tree representation for the LLM context:
- *        [index]<tag type="..." name="...">Visible text or value</tag>
- *   5. Caches the DOMSelectorMap for deterministic action resolution.
+ * Scrapes interactive elements in the active browser tab:
+ *   - Assigns stable 1-based indices [1], [2], ...
+ *   - Computes precise viewport bounding rects
+ *   - Extracts accessible labels (aria-label, placeholder, title, text)
+ *   - Formats Simplified DOM Tree representation for LLM context
+ *   - Computes scroll metrics (pixels_above, pixels_below, scroll_y)
  */
 
 (function(global) {
@@ -16,199 +15,179 @@
 
   class DomService {
     /**
-     * Script executed in the context of the target webpage to extract DOM state.
-     * Must be serializable and self-contained.
+     * Returns a self-contained function to be executed inside the target tab via chrome.scripting.
      */
     static getExtractionFunction() {
       return function extractDOMStateInTab() {
-        function getElementXPath(el) {
-          if (el.id) {
-            return '//*[@id="' + el.id.replace(/"/g, '\\"') + '"]';
-          }
-          const parts = [];
-          let cur = el;
-          while (cur && cur.nodeType === Node.ELEMENT_NODE) {
-            let idx = 1;
-            let sib = cur.previousElementSibling;
-            while (sib) {
-              if (sib.tagName === cur.tagName) idx++;
-              sib = sib.previousElementSibling;
-            }
-            parts.unshift(cur.tagName.toLowerCase() + (idx > 1 ? '[' + idx + ']' : ''));
-            cur = cur.parentElement;
-          }
-          return '/' + parts.join('/');
-        }
+        const MAX_ELEMENTS = 120;
+        const selectorMap = {};
+        const elementsList = [];
+        let indexCounter = 1;
 
-        function isElementVisible(el) {
-          if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+        // Viewport and scroll dimensions
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        const scrollX = window.scrollX || window.pageXOffset || 0;
+        const scrollY = window.scrollY || window.pageYOffset || 0;
+        const docHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.offsetHeight,
+          document.documentElement.offsetHeight
+        );
+        const docWidth = Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth,
+          document.body.offsetWidth,
+          document.documentElement.offsetWidth
+        );
+
+        const pixelsAbove = scrollY;
+        const pixelsBelow = Math.max(0, docHeight - (scrollY + viewportHeight));
+
+        // Interactive tag selectors
+        const INTERACTIVE_SELECTORS = [
+          'a[href]',
+          'button',
+          'input:not([type="hidden"])',
+          'select',
+          'textarea',
+          '[role="button"]',
+          '[role="link"]',
+          '[role="checkbox"]',
+          '[role="radio"]',
+          '[role="tab"]',
+          '[role="menuitem"]',
+          '[role="combobox"]',
+          '[role="searchbox"]',
+          '[contenteditable="true"]',
+          '[tabindex]:not([tabindex="-1"])',
+          '[onclick]',
+        ].join(',');
+
+        function isVisible(el, rect) {
+          if (!rect || rect.width <= 0 || rect.height <= 0) return false;
           const style = window.getComputedStyle(el);
-          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-            return false;
-          }
-          const rect = el.getBoundingClientRect();
-          if (rect.width === 0 && rect.height === 0) {
-            return false;
-          }
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+          // Must be somewhat within or near the viewport
+          if (rect.bottom < -200 || rect.top > viewportHeight + 400) return false;
           return true;
         }
 
-        const INTERACTIVE_SELECTORS = [
-          'a[href]',
-          'button:not([disabled])',
-          'input:not([type="hidden"]):not([disabled])',
-          'select:not([disabled])',
-          'textarea:not([disabled])',
-          '[role="button"]',
-          '[role="link"]',
-          '[role="menuitem"]',
-          '[role="tab"]',
-          '[role="checkbox"]',
-          '[role="radio"]',
-          '[role="combobox"]',
-          '[role="textbox"]',
-          '[role="searchbox"]',
-          '[role="option"]',
-          '[onclick]',
-          '[tabindex]:not([tabindex="-1"])',
-          'summary',
-          'details',
-        ].join(',');
+        function getAccessibleText(el) {
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            return el.placeholder || el.value || el.getAttribute('aria-label') || el.name || '';
+          }
+          if (el.tagName === 'SELECT') {
+            const selected = el.options[el.selectedIndex];
+            return selected ? selected.text : el.getAttribute('aria-label') || '';
+          }
+          const ariaLabel = el.getAttribute('aria-label');
+          if (ariaLabel) return ariaLabel.trim();
+          const title = el.getAttribute('title');
+          if (title) return title.trim();
+          const alt = el.getAttribute('alt');
+          if (alt) return alt.trim();
+          return (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+        }
 
-        const allCandidates = Array.from(document.querySelectorAll(INTERACTIVE_SELECTORS));
-        const elements = [];
-        const selectorMap = {};
-        const seen = new Set();
-        let counter = 1;
+        function computeXPath(element) {
+          if (element.id) {
+            return `//*[@id="${element.id}"]`;
+          }
+          if (element === document.body) {
+            return '/html/body';
+          }
 
-        for (const el of allCandidates) {
-          if (seen.has(el)) continue;
-          seen.add(el);
+          let ix = 0;
+          const siblings = element.parentNode ? element.parentNode.childNodes : [];
+          for (let i = 0; i < siblings.length; i++) {
+            const sibling = siblings[i];
+            if (sibling === element) {
+              const parentPath = element.parentNode ? computeXPath(element.parentNode) : '';
+              return `${parentPath}/${element.tagName.toLowerCase()}[${ix + 1}]`;
+            }
+            if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+              ix++;
+            }
+          }
+          return `//${element.tagName.toLowerCase()}`;
+        }
 
-          if (!isElementVisible(el)) continue;
+        const candidates = document.querySelectorAll(INTERACTIVE_SELECTORS);
+
+        candidates.forEach((el) => {
+          if (indexCounter > MAX_ELEMENTS) return;
 
           const rect = el.getBoundingClientRect();
+          if (!isVisible(el, rect)) return;
+
+          const text = getAccessibleText(el).slice(0, 100);
           const tag = el.tagName.toLowerCase();
-          const type = el.getAttribute('type') || '';
-          const role = el.getAttribute('role') || '';
-          const name = el.getAttribute('name') || '';
-          const id = el.id || '';
-          const placeholder = el.getAttribute('placeholder') || '';
-          const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('title') || '';
-          const href = el.href || el.getAttribute('href') || '';
-          const value = ['input', 'select', 'textarea'].includes(tag) ? el.value : '';
+          const xpath = computeXPath(el);
+          const idx = indexCounter++;
 
-          let text = (el.innerText || ariaLabel || placeholder || value || '').trim();
-          if (text.length > 140) text = text.slice(0, 140) + '...';
+          el.setAttribute('data-deep-browser-idx', String(idx));
 
-          const xpath = getElementXPath(el);
-          const index = counter++;
-
-          const elemData = {
-            index,
+          const elementData = {
+            index: idx,
             tag,
-            type,
-            role,
-            name,
-            id,
-            placeholder,
-            ariaLabel,
-            href,
-            value,
+            type: el.getAttribute('type') || null,
+            name: el.getAttribute('name') || null,
+            id: el.id || null,
+            placeholder: el.getAttribute('placeholder') || null,
+            role: el.getAttribute('role') || null,
+            href: el.getAttribute('href') || null,
             text,
             xpath,
-            rect: {
-              x: Math.round(rect.x),
-              y: Math.round(rect.y),
+            bounds: {
+              left: Math.round(rect.left),
+              top: Math.round(rect.top),
               width: Math.round(rect.width),
               height: Math.round(rect.height),
+              right: Math.round(rect.right),
+              bottom: Math.round(rect.bottom),
             },
           };
 
-          elements.push(elemData);
-          selectorMap[index] = elemData;
-        }
+          elementsList.push(elementData);
+          selectorMap[idx] = {
+            xpath,
+            tag,
+            text,
+            bounds: elementData.bounds,
+          };
+        });
 
-        // Viewport & scroll metrics
-        const docEl = document.documentElement;
-        const body = document.body;
-        const scrollX = window.scrollX || (docEl && docEl.scrollLeft) || (body && body.scrollLeft) || 0;
-        const scrollY = window.scrollY || (docEl && docEl.scrollTop) || (body && body.scrollTop) || 0;
-        const viewW = window.innerWidth || (docEl && docEl.clientWidth) || 1280;
-        const viewH = window.innerHeight || (docEl && docEl.clientHeight) || 800;
-        const totalH = Math.max(
-          (docEl && docEl.scrollHeight) || 0,
-          (body && body.scrollHeight) || 0,
-          viewH
-        );
+        // Format Simplified DOM tree
+        const simplifiedTreeLines = elementsList.map((item) => {
+          let attrs = '';
+          if (item.type) attrs += ` type="${item.type}"`;
+          if (item.name) attrs += ` name="${item.name}"`;
+          if (item.placeholder) attrs += ` placeholder="${item.placeholder}"`;
+          if (item.role) attrs += ` role="${item.role}"`;
+          if (item.href) attrs += ` href="${item.href.slice(0, 60)}"`;
 
-        const pageInfo = {
-          viewport_width: viewW,
-          viewport_height: viewH,
-          scroll_x: Math.round(scrollX),
-          scroll_y: Math.round(scrollY),
-          page_height: Math.round(totalH),
-          pixels_above: Math.round(scrollY),
-          pixels_below: Math.max(0, Math.round(totalH - (scrollY + viewH))),
-        };
-
-        // Build Simplified DOM Tree String
-        const treeLines = elements.map(e => {
-          const attrs = [];
-          if (e.type) attrs.push(`type="${e.type}"`);
-          if (e.role) attrs.push(`role="${e.role}"`);
-          if (e.name) attrs.push(`name="${e.name}"`);
-          if (e.placeholder) attrs.push(`placeholder="${e.placeholder}"`);
-          if (e.ariaLabel && e.ariaLabel !== e.text) attrs.push(`aria-label="${e.ariaLabel}"`);
-          if (e.value) attrs.push(`value="${e.value}"`);
-
-          const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
-          const bodyText = e.text ? `${e.text}` : '';
-          return `[${e.index}]<${e.tag}${attrStr}>${bodyText}</${e.tag}>`;
+          const content = item.text ? item.text : '';
+          return `[${item.index}]<${item.tag}${attrs}>${content}</${item.tag}>`;
         });
 
         return {
-          url: location.href,
-          title: document.title || location.href,
-          elements,
+          elements: elementsList,
           selectorMap,
-          simplifiedTreeText: treeLines.join('\n'),
-          pageInfo,
+          simplifiedTreeText: simplifiedTreeLines.join('\n'),
+          pageInfo: {
+            viewport_width: viewportWidth,
+            viewport_height: viewportHeight,
+            scroll_x: scrollX,
+            scroll_y: scrollY,
+            pixels_above: pixelsAbove,
+            pixels_below: pixelsBelow,
+            document_width: docWidth,
+            document_height: docHeight,
+          },
         };
       };
-    }
-
-    /**
-     * Extracts the complete DOM state from the given Chrome tab.
-     * @param {number} tabId
-     * @returns {Promise<Object>}
-     */
-    static async extractFromTab(tabId) {
-      if (!tabId) throw new Error('DomService.extractFromTab requires a valid tabId');
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: DomService.getExtractionFunction(),
-        });
-
-        if (!results || !results[0] || !results[0].result) {
-          throw new Error('Script execution returned empty DOM state');
-        }
-
-        return results[0].result;
-      } catch (err) {
-        // Fallback for special / restricted tabs
-        return {
-          url: '',
-          title: 'Restricted Page',
-          elements: [],
-          selectorMap: {},
-          simplifiedTreeText: '(Halaman ini memblokir akses script atau merupakan tab khusus)',
-          pageInfo: { viewport_width: 1280, viewport_height: 800, pixels_above: 0, pixels_below: 0 },
-          error: err.message,
-        };
-      }
     }
   }
 
