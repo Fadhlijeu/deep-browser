@@ -47,8 +47,8 @@ At each step, you receive:
 1. **Interactive Elements**: Interact with elements ONLY using their 1-based index (e.g. \`[1]\`, \`[2]\`). Look carefully at the index prefix \`[N]\` next to the tag in the DOM tree.
 2. **Form Inputs & Searches**: To search or fill inputs, use \`input_text\` with the target index and text. You can follow with \`send_keys\` (e.g. \`{"keys": "Enter"}\`) or click the search/submit button.
 3. **Interactive User Prompts & Widgets**: Whenever the user asks you to ask them a question, ask for clarification, request choice selection, or when you need user preference/confirmation before proceeding, YOU MUST CALL the \`ask_user\` action with \`{"type": "choice"|"confirm"|"text_input", "question": "...", "options": [...]}\`. NEVER answer with plain text in \`done\` if the user wants you to ask them!
-4. **Screenshots & Visuals**: When the user requests a screenshot or visual capture, call \`screenshot\`.
-5. **PDF & Document Export**: When the user asks to save/export the page as PDF, call \`save_as_pdf\`.
+4. **Screenshots & Visuals**: When the user requests a screenshot or visual capture (e.g. "screenshot informasinya", "screenshot lagi"), call \`screenshot\` (pass optional \`index\` or \`selector\` to automatically scroll the target element into view). After taking the screenshot, you MUST immediately call \`done\` in the next step to complete the task — DO NOT call screenshot in an infinite loop!
+5. **PDF & Document Export**: When the user asks to save/export the page as PDF, call \`save_as_pdf\` and conclude with \`done\`.
 6. **Structured Visual Snippets**: When extracting specific card/table/biodata information on a webpage, use \`extract_html_snippet\` with the selector or keywords so the visual structured card is displayed in chat.
 7. **Scrolling & Navigation**: If the element or information is not visible yet, use \`scroll_page\` or \`navigate\`.
 8. **Completion**: When the goal is completed, call the \`done\` action with a clear, complete, and formatted answer in the \`text\` parameter.

@@ -94,7 +94,7 @@ let widgetManager = null;
 
 // ─── Initialization ──────────────────────────────────────────────────────────
 async function init() {
-  widgetManager = new window.WidgetManager(elWidgetContainer);
+  widgetManager = new window.WidgetManager(elTimeline);
   await loadStorage();
   bindEvents();
   renderModelPill();
@@ -545,8 +545,31 @@ function renderActiveSessionTimeline() {
       });
     } else if (msg.role === 'agent') {
       renderAgentResult(msg.text, msg.isError);
+    } else if (msg.role === 'screenshot') {
+      renderScreenshotInChat(msg.dataUrl, msg.fileName);
+    } else if (msg.role === 'snippet') {
+      renderHtmlSnippetInChat(msg.html, msg.title, msg.text);
+    } else if (msg.role === 'pdf') {
+      renderPdfBadgeInChat(msg.fileName, msg.title, msg.url, msg.html);
+    } else if (msg.role === 'widget_resolved') {
+      renderResolvedWidgetBadge(msg.label || msg.text);
     }
   });
+}
+
+function renderResolvedWidgetBadge(label) {
+  const div = document.createElement('div');
+  div.className = 'agent-widget-card resolved';
+  div.innerHTML = `
+    <div class="widget-resolved-status">
+      <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">check_circle</span>
+      <div style="flex:1">
+        <span style="color:#a1a1aa">Respon Anda:</span>
+        <strong style="color:#f4f4f5;margin-left:4px">${escHtml(label)}</strong>
+      </div>
+    </div>
+  `;
+  elTimeline.appendChild(div);
 }
 
 function recordMessageToActiveSession(msgObj) {
@@ -745,8 +768,23 @@ function handleAgentEvent(evt) {
   }
 
   if (t === 'PDF_SAVED') {
-    renderPdfBadgeInChat(data.fileName, data.title, data.url);
-    recordMessageToActiveSession({ role: 'pdf', fileName: data.fileName, title: data.title });
+    renderPdfBadgeInChat(data.fileName, data.title, data.url, data.html);
+    recordMessageToActiveSession({ role: 'pdf', fileName: data.fileName, title: data.title, url: data.url });
+    return;
+  }
+
+  if (t === 'USER_INPUT_REQUIRED') {
+    updateStatus('Menunggu Respon Anda', false, true);
+    const interactionObj = data.interaction || {
+      type: data.type || 'choice',
+      question: data.question || msg,
+      options: data.options || [],
+      interaction_id: data.interaction_id || ('ix_' + Date.now()),
+    };
+    widgetManager.renderInteraction(interactionObj).then((res) => {
+      recordMessageToActiveSession({ role: 'widget_resolved', label: res.label || String(res.value) });
+      updateStatus('Memproses respon...', true);
+    });
     return;
   }
 
@@ -918,10 +956,14 @@ function renderHtmlSnippetInChat(htmlContent, title = 'Struktur Informasi Visual
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '') {
+function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '', htmlContent = '') {
   hideEmptyState();
   const card = document.createElement('div');
   card.className = 'chat-pdf-card';
+
+  const docBlob = new Blob([htmlContent || `<!DOCTYPE html><html><head><title>${title}</title><style>body{font-family:sans-serif;padding:24px;color:#111}</style></head><body><h1>${title}</h1><p>Sumber: <a href="${url}">${url}</a></p></body></html>`], { type: 'text/html;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(docBlob);
+
   card.innerHTML = `
     <div class="chat-pdf-inner">
       <span class="material-symbols-outlined" style="font-size:20px;color:#ef4444">picture_as_pdf</span>
@@ -929,7 +971,9 @@ function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '') {
         <div style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(fileName)}</div>
         <div style="font-size:10px;color:var(--muted-foreground)">${escHtml(title || url)}</div>
       </div>
-      <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">check_circle</span>
+      <a href="${blobUrl}" download="${escHtml(fileName)}" class="media-download-btn" title="Unduh Dokumen PDF">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#8b5cf6">download</span>
+      </a>
     </div>
   `;
   elTimeline.appendChild(card);

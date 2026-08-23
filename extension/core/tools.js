@@ -132,10 +132,12 @@
         },
         {
           name: 'screenshot',
-          description: 'Capture a screenshot of the visible webpage viewport and display it directly in chat.',
+          description: 'Capture a screenshot of the visible webpage viewport. If an element index or selector is provided, the page automatically scrolls the element into view first.',
           parameters: {
             type: 'object',
             properties: {
+              index: { type: 'integer', description: 'Optional 1-based element index to center and screenshot.' },
+              selector: { type: 'string', description: 'Optional CSS selector to scroll into view and screenshot.' },
               file_name: { type: 'string', description: 'Optional filename for the screenshot.' },
             },
           },
@@ -363,14 +365,14 @@
 
           case 'screenshot':
           case 'take_screenshot': {
-            const res = await this.browserSession.takeScreenshot();
+            const res = await this.browserSession.takeScreenshot(params);
             if (!res.success) return { success: false, error: res.error };
             return {
               success: true,
-              message: 'Screenshot captured.',
+              message: 'Screenshot berhasil diambil.',
               data: {
                 screenshotDataUrl: res.screenshotDataUrl,
-                fileName: params.file_name || `screenshot_${Date.now()}.png`,
+                fileName: res.fileName || params.file_name || `screenshot_${Date.now()}.png`,
               },
             };
           }

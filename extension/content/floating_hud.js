@@ -514,18 +514,22 @@
 
     card.innerHTML = `
       <div class="db-hitl-question">
-        <svg class="db-svg-icon" viewBox="0 0 24 24" style="stroke:#f59e0b"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+        <svg class="db-svg-icon" viewBox="0 0 24 24" style="stroke:#8b5cf6"><circle cx="12" cy="12" r="10"/><line x1="12" y1="12" x2="12" y2="8"/><line x1="12" y1="12.01" x2="12" y2="16"/></svg>
         <span>${esc(ix.question || 'Konfirmasi Tindakan')}</span>
       </div>
       ${
         type === 'choice'
           ? `<div class="db-hitl-options-grid">
-              ${(ix.options || []).map((o, idx) => `
-                <button class="db-hitl-choice-btn" data-id="${esc(o.id || o.value || o)}">
-                  <span style="font-family:JetBrains Mono;font-size:10px;color:#a1a1aa">[${idx + 1}]</span>
-                  <span>${esc(o.label || o.name || o)}</span>
-                </button>
-              `).join('')}
+              ${(ix.options || []).map((o, idx) => {
+                const id = typeof o === 'object' ? (o.id || o.value || o.label) : o;
+                const label = typeof o === 'object' ? (o.label || o.name || o.text) : o;
+                return `
+                  <button class="db-hitl-choice-btn" data-id="${esc(id)}" data-label="${esc(label)}">
+                    <span style="font-family:ui-monospace, monospace;font-size:10.5px;color:#a1a1aa;background:#27272a;padding:1px 5px;border-radius:3px">${idx + 1}</span>
+                    <span>${esc(label)}</span>
+                  </button>
+                `;
+              }).join('')}
             </div>`
           : `<div class="db-hitl-action-buttons">
               <button class="db-btn-approve" id="db-btn-hitl-yes">Ya, Lanjutkan</button>
@@ -534,14 +538,24 @@
       }
     `;
 
+    const handleChoiceSubmit = (val, label) => {
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#22c55e;padding:4px 0">
+          <span>✓</span>
+          <span>Pilihan terkirim: <strong>${esc(label || val)}</strong> · Memproses...</span>
+        </div>
+      `;
+      submitHITLResponse(val);
+    };
+
     card.querySelectorAll('.db-hitl-choice-btn').forEach((btn) => {
-      btn.addEventListener('click', () => submitHITLResponse(btn.dataset.id));
+      btn.addEventListener('click', () => handleChoiceSubmit(btn.dataset.id, btn.dataset.label));
     });
 
     const btnYes = card.querySelector('#db-btn-hitl-yes');
     const btnNo = card.querySelector('#db-btn-hitl-no');
-    if (btnYes) btnYes.addEventListener('click', () => submitHITLResponse(true));
-    if (btnNo) btnNo.addEventListener('click', () => submitHITLResponse(false));
+    if (btnYes) btnYes.addEventListener('click', () => handleChoiceSubmit(true, 'Ya'));
+    if (btnNo) btnNo.addEventListener('click', () => handleChoiceSubmit(false, 'Batal'));
 
     elWidgetsMount.appendChild(card);
     card.scrollIntoView({ behavior: 'smooth', block: 'end' });

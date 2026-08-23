@@ -227,8 +227,30 @@
 
             if (actionName === 'screenshot' || actionName === 'take_screenshot') {
               this._emit('SCREENSHOT_CAPTURED', 'Screenshot viewport berhasil diambil.', actionResult.data);
+              const taskLower = (this.task || '').toLowerCase().trim();
+              if (taskLower.includes('screenshot') || taskLower.includes('tangkap layar')) {
+                const finalAnswer = 'Screenshot berhasil diambil dan ditampilkan di chat.';
+                this.isRunning = false;
+                this._emit('TASK_COMPLETED', finalAnswer, {
+                  result: finalAnswer,
+                  totalSteps: this.step,
+                  success: true,
+                });
+                return { success: true, result: finalAnswer, totalSteps: this.step };
+              }
             } else if (actionName === 'save_as_pdf') {
               this._emit('PDF_SAVED', actionResult.message, actionResult.data);
+              const taskLower = (this.task || '').toLowerCase().trim();
+              if (taskLower.includes('pdf') || taskLower.includes('ekspor')) {
+                const finalAnswer = actionResult.message || 'Dokumen PDF berhasil diekspor.';
+                this.isRunning = false;
+                this._emit('TASK_COMPLETED', finalAnswer, {
+                  result: finalAnswer,
+                  totalSteps: this.step,
+                  success: true,
+                });
+                return { success: true, result: finalAnswer, totalSteps: this.step };
+              }
             } else if (actionName === 'extract_html_snippet') {
               this._emit('HTML_SNIPPET_CAPTURED', `Struktur informasi visual berhasil diekstrak.`, actionResult.data);
             }

@@ -675,21 +675,41 @@
     // ─── Visual, Media & Advanced DOM Capabilities ───────────────────────────
 
     /**
-     * Captures a screenshot of the visible tab viewport.
-     * @returns {Promise<Object>} { success, screenshotDataUrl }
+     * Captures a screenshot of the visible tab viewport or scrolls to a specific element first.
+     * @param {Object} [options] { index, selector, file_name }
+     * @returns {Promise<Object>} { success, screenshotDataUrl, fileName }
      */
-    async takeScreenshot() {
+    async takeScreenshot(options = {}) {
+      const targetIndex = options.index ?? options.element_index;
+      const targetSelector = options.selector || options.query;
+
+      if (targetIndex != null || targetSelector) {
+        await this._executeInTab((idx, sel) => {
+          let el = null;
+          if (idx != null) {
+            el = document.querySelector(`[data-bu-index="${idx}"]`);
+          }
+          if (!el && sel) {
+            try { el = document.querySelector(sel); } catch {}
+          }
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+          }
+        }, [targetIndex, targetSelector]);
+        await this.wait(0.4);
+      }
+
       if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.captureVisibleTab) {
         try {
           const dataUrl = await chrome.tabs.captureVisibleTab(this.windowId || null, { format: 'png' });
-          return { success: true, screenshotDataUrl: dataUrl };
+          return { success: true, screenshotDataUrl: dataUrl, fileName: options.file_name || `screenshot_${Date.now()}.png` };
         } catch (err) {
           return { success: false, error: err.message || 'Gagal mengambil screenshot viewport.' };
         }
       }
       // Fallback mock screenshot for standalone unit test environments
       const mockPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      return { success: true, screenshotDataUrl: mockPng, mock: true };
+      return { success: true, screenshotDataUrl: mockPng, fileName: options.file_name || 'screenshot.png', mock: true };
     }
 
     /**

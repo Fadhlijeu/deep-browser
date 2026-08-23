@@ -2,15 +2,15 @@
  * Deep Browser Extension — Interactive Widget Renderer & Controller
  * =================================================================
  *
- * Renders structured Human-in-the-Loop widget cards:
- *   1. choice (Single select with Arrow keys + Enter)
- *   2. multi_choice (Multiple checkboxes + Enter)
+ * Anti-AI-Slop, High-Performance Human-in-the-Loop Widget System:
+ *   1. choice (Single select with 1..9 keys / click)
+ *   2. multi_choice (Multiple selection with checkboxes + Enter)
  *   3. confirm (Yes / No with Enter / Escape)
- *   4. text_input (Text input with Enter)
- *   5. number_input (Counter [- N +])
- *   6. file_picker (File selector)
- *   7. approval (Action review: [A]pprove / [R]eject / [E]dit)
- *   8. waiting (Manual CAPTCHA / User confirmation with [Done] / [Cancel])
+ *   4. text_input (Text prompt with Enter)
+ *   5. number_input (Quantity counter [- N +])
+ *   6. file_picker (File upload helper)
+ *   7. approval (Security policy review: [A]pprove / [R]eject / [E]dit)
+ *   8. waiting (Manual CAPTCHA / user action pause & resume)
  */
 
 (function(global) {
@@ -26,6 +26,10 @@
 
     setInteractionManager(im) {
       this.interactionManager = im;
+    }
+
+    setContainer(containerElement) {
+      this.container = containerElement;
     }
 
     /**
@@ -59,12 +63,11 @@
      * @returns {Promise<Object>}
      */
     renderInteraction(interaction) {
-
       this.clear();
       if (!this.container) return Promise.resolve({ approved: true });
 
       const type = interaction.type || 'confirm';
-      const ixId = interaction.interaction_id;
+      const ixId = interaction.interaction_id || ('ix_' + Date.now());
 
       return new Promise((resolve) => {
         this.activeResolver = resolve;
@@ -110,37 +113,57 @@
         card.innerHTML = innerContent;
         this.container.appendChild(card);
         this.currentCard = card;
+        card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
         // Bind interactive events & keyboard shortcuts
         this._bindCardEvents(card, interaction, resolve);
 
-        // Auto-focus first interactive element
+        // Auto-focus first interactive element or input
         setTimeout(() => {
-          const firstFocusable = card.querySelector('button, input, select, textarea');
-          if (firstFocusable) firstFocusable.focus();
-        }, 50);
+          const firstInput = card.querySelector('input, textarea');
+          if (firstInput) {
+            firstInput.focus();
+          } else {
+            card.focus();
+          }
+        }, 60);
       });
     }
 
     _renderChoiceHtml(ix) {
-      const options = ix.options || [];
+      const options = (ix.options || []).map((opt, i) => {
+        if (typeof opt === 'string') {
+          return { id: opt, label: opt, index: i + 1 };
+        }
+        return {
+          id: opt.id || opt.value || opt.label || String(i + 1),
+          label: opt.label || opt.name || opt.text || String(opt),
+          description: opt.description || '',
+          index: i + 1,
+        };
+      });
+
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">help_outline</span>
-          <span class="widget-title">${this._esc(ix.question || 'Pilih salah satu opsi:')}</span>
+          <div class="widget-icon-pill choice">
+            <span class="material-symbols-outlined" style="font-size:15px">help</span>
+          </div>
+          <div class="widget-title">${this._esc(ix.question || 'Pilih salah satu opsi:')}</div>
         </div>
         ${ix.description ? `<div class="widget-desc">${this._esc(ix.description)}</div>` : ''}
         <div class="widget-options-list" role="radiogroup">
-          ${options.map((opt, idx) => `
-            <button class="widget-choice-btn" data-id="${this._esc(opt.id || opt.value || opt)}" data-index="${idx}">
-              <span class="choice-key">${idx + 1}</span>
-              <div style="flex:1;text-align:left">
-                <div style="font-weight:500">${this._esc(opt.label || opt.name || opt)}</div>
-                ${opt.description ? `<div style="font-size:10px;color:var(--muted-foreground)">${this._esc(opt.description)}</div>` : ''}
+          ${options.map((opt) => `
+            <button class="widget-choice-btn" data-id="${this._esc(opt.id)}" data-label="${this._esc(opt.label)}" data-key="${opt.index}">
+              <span class="choice-key">${opt.index}</span>
+              <div class="choice-text-wrap">
+                <div class="choice-label">${this._esc(opt.label)}</div>
+                ${opt.description ? `<div class="choice-desc">${this._esc(opt.description)}</div>` : ''}
               </div>
+              <span class="material-symbols-outlined choice-chevron">chevron_right</span>
             </button>
           `).join('')}
         </div>
+        <div class="widget-footer-hint">Tekan angka 1-${Math.min(9, options.length)} pada keyboard atau klik opsi</div>
       `;
     }
 
@@ -148,19 +171,26 @@
       const options = ix.options || [];
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">checklist</span>
-          <span class="widget-title">${this._esc(ix.question || 'Pilih beberapa opsi:')}</span>
+          <div class="widget-icon-pill multi">
+            <span class="material-symbols-outlined" style="font-size:15px">checklist</span>
+          </div>
+          <div class="widget-title">${this._esc(ix.question || 'Pilih beberapa opsi:')}</div>
         </div>
         <div class="widget-options-list">
-          ${options.map((opt) => `
-            <label class="widget-checkbox-label">
-              <input type="checkbox" class="widget-chk" value="${this._esc(opt.id || opt.value || opt)}" />
-              <span>${this._esc(opt.label || opt.name || opt)}</span>
-            </label>
-          `).join('')}
+          ${options.map((opt, i) => {
+            const val = typeof opt === 'object' ? (opt.id || opt.value || opt.label) : opt;
+            const lbl = typeof opt === 'object' ? (opt.label || opt.name) : opt;
+            return `
+              <label class="widget-checkbox-row">
+                <input type="checkbox" class="widget-chk" value="${this._esc(val)}" />
+                <span class="chk-custom"></span>
+                <span class="chk-label">${this._esc(lbl)}</span>
+              </label>
+            `;
+          }).join('')}
         </div>
-        <div class="widget-actions" style="margin-top:8px">
-          <button class="btn-primary btn-submit-multichoice" style="width:100%">Lanjutkan (Enter)</button>
+        <div class="widget-actions">
+          <button class="btn-widget-primary btn-submit-multichoice">Lanjutkan (Enter)</button>
         </div>
       `;
     }
@@ -168,13 +198,21 @@
     _renderConfirmHtml(ix) {
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:#f59e0b">info</span>
-          <span class="widget-title">${this._esc(ix.question || 'Konfirmasi Tindakan')}</span>
+          <div class="widget-icon-pill confirm">
+            <span class="material-symbols-outlined" style="font-size:15px">help_center</span>
+          </div>
+          <div class="widget-title">${this._esc(ix.question || 'Konfirmasi Tindakan')}</div>
         </div>
         ${ix.description ? `<div class="widget-desc">${this._esc(ix.description)}</div>` : ''}
         <div class="widget-actions">
-          <button class="btn-primary btn-confirm-yes">Ya, Lanjutkan (Enter)</button>
-          <button class="btn-ghost btn-confirm-no">Batal (Esc)</button>
+          <button class="btn-widget-primary btn-confirm-yes">
+            <span class="material-symbols-outlined" style="font-size:14px">check</span>
+            <span>Ya, Lanjutkan (Enter)</span>
+          </button>
+          <button class="btn-widget-ghost btn-confirm-no">
+            <span class="material-symbols-outlined" style="font-size:14px">close</span>
+            <span>Batal (Esc)</span>
+          </button>
         </div>
       `;
     }
@@ -182,15 +220,19 @@
     _renderTextInputHtml(ix) {
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">edit</span>
-          <span class="widget-title">${this._esc(ix.question || 'Masukkan Data')}</span>
+          <div class="widget-icon-pill input">
+            <span class="material-symbols-outlined" style="font-size:15px">edit_note</span>
+          </div>
+          <div class="widget-title">${this._esc(ix.question || 'Masukkan Data')}</div>
         </div>
-        <div style="margin:6px 0">
-          <input type="text" class="form-input widget-text-val" placeholder="${this._esc(ix.description || 'Ketik di sini...')}" />
+        <div style="margin:8px 0">
+          <input type="text" class="widget-text-input widget-text-val" placeholder="${this._esc(ix.description || 'Ketik respon di sini...')}" />
         </div>
         <div class="widget-actions">
-          <button class="btn-primary btn-submit-text">Kirim (Enter)</button>
-          <button class="btn-ghost btn-cancel-text">Batal (Esc)</button>
+          <button class="btn-widget-primary btn-submit-text">
+            <span>Kirim Respon (Enter)</span>
+          </button>
+          <button class="btn-widget-ghost btn-cancel-text">Batal</button>
         </div>
       `;
     }
@@ -198,16 +240,18 @@
     _renderNumberInputHtml(ix) {
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">pin</span>
-          <span class="widget-title">${this._esc(ix.question || 'Jumlah')}</span>
+          <div class="widget-icon-pill number">
+            <span class="material-symbols-outlined" style="font-size:15px">pin</span>
+          </div>
+          <div class="widget-title">${this._esc(ix.question || 'Jumlah')}</div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0">
-          <button class="btn-secondary btn-num-dec" style="width:32px;height:32px;font-size:16px">-</button>
-          <span class="widget-num-val" style="font-size:16px;font-weight:600;min-width:30px;text-align:center">1</span>
-          <button class="btn-secondary btn-num-inc" style="width:32px;height:32px;font-size:16px">+</button>
+        <div class="widget-number-box">
+          <button class="btn-num-ctrl btn-num-dec">-</button>
+          <span class="widget-num-val">1</span>
+          <button class="btn-num-ctrl btn-num-inc">+</button>
         </div>
         <div class="widget-actions">
-          <button class="btn-primary btn-submit-number">Lanjutkan (Enter)</button>
+          <button class="btn-widget-primary btn-submit-number">Lanjutkan (Enter)</button>
         </div>
       `;
     }
@@ -215,14 +259,16 @@
     _renderFilePickerHtml(ix) {
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:var(--primary)">upload_file</span>
-          <span class="widget-title">${this._esc(ix.question || 'Pilih File')}</span>
+          <div class="widget-icon-pill file">
+            <span class="material-symbols-outlined" style="font-size:15px">upload_file</span>
+          </div>
+          <div class="widget-title">${this._esc(ix.question || 'Pilih Berkas')}</div>
         </div>
         <div style="margin:8px 0">
-          <input type="file" class="widget-file-input" style="font-size:11px" />
+          <input type="file" class="widget-file-input" />
         </div>
         <div class="widget-actions">
-          <button class="btn-primary btn-submit-file">Upload &amp; Lanjut</button>
+          <button class="btn-widget-primary btn-submit-file">Upload &amp; Lanjut</button>
         </div>
       `;
     }
@@ -232,15 +278,23 @@
       const paramsStr = JSON.stringify(ix.parameters || {}, null, 2);
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:#f59e0b">shield</span>
-          <span class="widget-title">Review Diperlukan</span>
+          <div class="widget-icon-pill approval">
+            <span class="material-symbols-outlined" style="font-size:15px">shield</span>
+          </div>
+          <div class="widget-title">Review Diperlukan</div>
         </div>
-        <div class="widget-desc">Agent mengusulkan tindakan: <strong style="color:var(--foreground)">${this._esc(actionName)}</strong></div>
+        <div class="widget-desc">Agent mengusulkan tindakan: <strong style="color:var(--foreground,#f4f4f5)">${this._esc(actionName)}</strong></div>
         <pre class="widget-code-preview">${this._esc(paramsStr)}</pre>
         <div class="widget-actions">
-          <button class="btn-primary btn-approve" title="Shortkey: A">Setujui (A)</button>
-          <button class="btn-ghost btn-reject" style="color:var(--destructive)" title="Shortkey: R">Tolak (R)</button>
-          <button class="btn-ghost btn-edit" title="Shortkey: E">Ubah (E)</button>
+          <button class="btn-widget-primary btn-approve" title="Shortkey: A">
+            <span class="material-symbols-outlined" style="font-size:14px">check</span> Setujui (A)
+          </button>
+          <button class="btn-widget-ghost btn-reject" style="color:#ef4444" title="Shortkey: R">
+            <span class="material-symbols-outlined" style="font-size:14px">close</span> Tolak (R)
+          </button>
+          <button class="btn-widget-ghost btn-edit" title="Shortkey: E">
+            <span class="material-symbols-outlined" style="font-size:14px">edit</span> Ubah (E)
+          </button>
         </div>
       `;
     }
@@ -248,38 +302,65 @@
     _renderWaitingHtml(ix) {
       return `
         <div class="widget-header">
-          <span class="material-symbols-outlined" style="font-size:16px;color:#38bdf8">hourglass_top</span>
-          <span class="widget-title">Menunggu Tindakan Manual</span>
+          <div class="widget-icon-pill waiting">
+            <span class="material-symbols-outlined" style="font-size:15px">hourglass_empty</span>
+          </div>
+          <div class="widget-title">Menunggu Tindakan Manual</div>
         </div>
-        <div class="widget-desc">${this._esc(ix.question || 'Silakan selesaikan aksi / CAPTCHA di browser Edge.')}</div>
-        <div class="widget-actions" style="margin-top:8px">
-          <button class="btn-primary btn-waiting-done">Selesai, Lanjutkan (Enter)</button>
-          <button class="btn-ghost btn-waiting-cancel">Batalkan</button>
+        <div class="widget-desc">${this._esc(ix.question || 'Silakan selesaikan aksi / CAPTCHA di tab browser Edge.')}</div>
+        <div class="widget-actions">
+          <button class="btn-widget-primary btn-waiting-done">
+            <span class="material-symbols-outlined" style="font-size:14px">check</span> Selesai, Lanjutkan (Enter)
+          </button>
+          <button class="btn-widget-ghost btn-waiting-cancel">Batalkan</button>
         </div>
       `;
     }
 
     _bindCardEvents(card, ix, resolve) {
-      const resolveAndSubmit = (val, meta = {}) => {
+      let isResolved = false;
+
+      const transitionToResolved = (displayLabel) => {
+        if (isResolved) return;
+        isResolved = true;
+
+        card.innerHTML = `
+          <div class="widget-resolved-status">
+            <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">check_circle</span>
+            <div style="flex:1">
+              <span style="color:#a1a1aa">Respon dikirim:</span>
+              <strong style="color:#f4f4f5;margin-left:4px">${this._esc(displayLabel)}</strong>
+            </div>
+            <span class="widget-loading-pulse">Sedang memproses...</span>
+          </div>
+        `;
+        card.classList.add('resolved');
+      };
+
+      const resolveAndSubmit = (val, displayLabel, meta = {}) => {
+        if (isResolved) return;
+        transitionToResolved(displayLabel || String(val));
+
         if (this.interactionManager) {
           this.interactionManager.submitResponse(ix.interaction_id, val, meta);
         }
-        this.clear();
-        resolve({ approved: val !== false && val !== 'reject', value: val, ...meta });
+        resolve({ approved: val !== false && val !== 'reject', value: val, label: displayLabel, ...meta });
       };
 
-      const rejectAndSubmit = (reason = 'User rejected') => {
+      const rejectAndSubmit = (reason = 'Dibatalkan oleh pengguna') => {
+        if (isResolved) return;
+        transitionToResolved('Dibatalkan');
+
         if (this.interactionManager) {
           this.interactionManager.cancelInteraction(ix.interaction_id, reason);
         }
-        this.clear();
         resolve({ approved: false, value: 'reject', feedback: reason });
       };
 
       // Choice buttons
       card.querySelectorAll('.widget-choice-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-          resolveAndSubmit(btn.dataset.id);
+          resolveAndSubmit(btn.dataset.id, btn.dataset.label || btn.dataset.id);
         });
       });
 
@@ -288,23 +369,27 @@
       if (btnMulti) {
         btnMulti.addEventListener('click', () => {
           const selected = Array.from(card.querySelectorAll('.widget-chk:checked')).map((c) => c.value);
-          resolveAndSubmit(selected);
+          resolveAndSubmit(selected, selected.join(', '));
         });
       }
 
       // Confirm Yes/No
       const btnYes = card.querySelector('.btn-confirm-yes');
       const btnNo = card.querySelector('.btn-confirm-no');
-      if (btnYes) btnYes.addEventListener('click', () => resolveAndSubmit(true));
-      if (btnNo) btnNo.addEventListener('click', () => resolveAndSubmit(false));
+      if (btnYes) btnYes.addEventListener('click', () => resolveAndSubmit(true, 'Ya'));
+      if (btnNo) btnNo.addEventListener('click', () => resolveAndSubmit(false, 'Tidak'));
 
       // Text input
       const btnText = card.querySelector('.btn-submit-text');
       const inpText = card.querySelector('.widget-text-val');
       if (btnText && inpText) {
-        btnText.addEventListener('click', () => resolveAndSubmit(inpText.value.trim()));
+        const doSubmitText = () => {
+          const val = inpText.value.trim();
+          if (val) resolveAndSubmit(val, val);
+        };
+        btnText.addEventListener('click', doSubmitText);
         inpText.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') resolveAndSubmit(inpText.value.trim());
+          if (e.key === 'Enter') doSubmitText();
           if (e.key === 'Escape') rejectAndSubmit('Cancelled by user');
         });
       }
@@ -324,50 +409,69 @@
           if (currentNum > 1) currentNum--;
           numDisplay.textContent = currentNum;
         });
-        btnNumSubmit.addEventListener('click', () => resolveAndSubmit(currentNum));
+        btnNumSubmit.addEventListener('click', () => resolveAndSubmit(currentNum, String(currentNum)));
       }
 
       // Approval (A / R / E)
       const btnApprove = card.querySelector('.btn-approve');
       const btnReject = card.querySelector('.btn-reject');
       const btnEdit = card.querySelector('.btn-edit');
-      if (btnApprove) btnApprove.addEventListener('click', () => resolveAndSubmit('approve', { approved: true }));
+      if (btnApprove) btnApprove.addEventListener('click', () => resolveAndSubmit('approve', 'Disetujui', { approved: true }));
       if (btnReject) {
         btnReject.addEventListener('click', () => {
           const fb = prompt('Alasan penolakan / instruksi alternatif:', 'Tindakan dibatalkan oleh pengguna.');
-          resolveAndSubmit('reject', { approved: false, feedback: fb || 'Rejected' });
+          resolveAndSubmit('reject', 'Ditolak', { approved: false, feedback: fb || 'Rejected' });
         });
       }
       if (btnEdit) {
         btnEdit.addEventListener('click', () => {
           const newInstr = prompt('Edit instruksi:', ix.question || '');
-          resolveAndSubmit('edit', { approved: false, feedback: newInstr || 'Edit requested' });
+          resolveAndSubmit('edit', 'Diedit', { approved: false, feedback: newInstr || 'Edit requested' });
         });
       }
 
       // Waiting (Done / Cancel)
       const btnDone = card.querySelector('.btn-waiting-done');
       const btnWaitCancel = card.querySelector('.btn-waiting-cancel');
-      if (btnDone) btnDone.addEventListener('click', () => resolveAndSubmit('done'));
+      if (btnDone) btnDone.addEventListener('click', () => resolveAndSubmit('done', 'Selesai Manual'));
       if (btnWaitCancel) btnWaitCancel.addEventListener('click', () => rejectAndSubmit('Waiting cancelled'));
 
-      // Global Keyboard Shortcuts on Card
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'a' || e.key === 'A') {
-          if (btnApprove) { e.preventDefault(); btnApprove.click(); }
-        } else if (e.key === 'r' || e.key === 'R') {
-          if (btnReject) { e.preventDefault(); btnReject.click(); }
-        } else if (e.key === 'e' || e.key === 'E') {
-          if (btnEdit) { e.preventDefault(); btnEdit.click(); }
-        } else if (e.key === 'Escape') {
-          if (btnNo) btnNo.click();
+      // Keyboard handler (1..9 numbers for choice, and shortcuts)
+      const onKeyDown = (e) => {
+        if (isResolved) {
+          window.removeEventListener('keydown', onKeyDown);
+          return;
         }
-      });
+
+        // Numbers 1-9 for choices
+        const num = parseInt(e.key, 10);
+        if (!isNaN(num) && num >= 1 && num <= 9 && document.activeElement?.tagName !== 'INPUT') {
+          const matchingBtn = card.querySelector(`.widget-choice-btn[data-key="${num}"]`);
+          if (matchingBtn) {
+            e.preventDefault();
+            matchingBtn.click();
+            return;
+          }
+        }
+
+        if (e.key === 'a' || e.key === 'A') {
+          if (btnApprove && document.activeElement?.tagName !== 'INPUT') { e.preventDefault(); btnApprove.click(); }
+        } else if (e.key === 'r' || e.key === 'R') {
+          if (btnReject && document.activeElement?.tagName !== 'INPUT') { e.preventDefault(); btnReject.click(); }
+        } else if (e.key === 'Enter') {
+          if (btnYes) { e.preventDefault(); btnYes.click(); }
+          else if (btnDone) { e.preventDefault(); btnDone.click(); }
+        } else if (e.key === 'Escape') {
+          if (btnNo) { e.preventDefault(); btnNo.click(); }
+        }
+      };
+
+      window.addEventListener('keydown', onKeyDown);
     }
 
     clear() {
-      if (this.container) {
-        this.container.innerHTML = '';
+      if (this.currentCard && !this.currentCard.classList.contains('resolved')) {
+        this.currentCard.remove();
       }
       this.currentCard = null;
       this.activeResolver = null;
