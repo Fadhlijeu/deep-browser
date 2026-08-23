@@ -77,8 +77,30 @@ Do NOT wrap with markdown other than \`\`\`json or raw JSON. Output valid JSON o
      * @param {number} stepNumber - Current 1-based step counter
      * @returns {Object} { textPrompt, screenshotBase64, fullHistory }
      */
+    /**
+     * Builds the prompt payload for the current step.
+     * @param {Object} state - The DOM and browser state from BrowserSession.getState()
+     * @param {number} stepNumber - Current 1-based step counter
+     * @returns {Object} { textPrompt, screenshotBase64, fullHistory }
+     */
     buildStepPrompt(state, stepNumber = 1) {
       const historySection = this.formatHistory();
+
+      // Check if the immediately preceding step had a user response from a widget
+      let latestUserResponseSection = '';
+      if (this.history.length > 0) {
+        const lastStep = this.history[this.history.length - 1];
+        if (lastStep.result?.user_response != null) {
+          const respStr = typeof lastStep.result.user_response === 'object'
+            ? JSON.stringify(lastStep.result.user_response)
+            : String(lastStep.result.user_response);
+          latestUserResponseSection = `### ⚠️ CRITICAL NEW USER INPUT (FROM INTERACTIVE WIDGET):
+The user just provided this response to your question:
+"${respStr}"
+YOU MUST IMMEDIATELY ACT ON THIS NEW USER INPUT. Do not repeat previous searches or ignore this value!
+`;
+        }
+      }
 
       const stateSection = `### CURRENT BROWSER STATE (Step ${stepNumber})
 * URL: ${state.url || 'about:blank'}
@@ -90,12 +112,12 @@ Do NOT wrap with markdown other than \`\`\`json or raw JSON. Output valid JSON o
 ${state.simplifiedTreeText ? state.simplifiedTreeText : '(No interactive elements detected on this view)'}
 `;
 
-      const userGoalSection = `### USER GOAL
+      const userGoalSection = `### ORIGINAL USER GOAL
 ${this.task}
 
-Analyze the current page state above and decide the next best action to accomplish the goal. Return your JSON response.`;
+Analyze the current page state above and decide the next best action to accomplish the goal. Format your final answer in clean structured Markdown when calling done. Return your JSON response.`;
 
-      const textPrompt = [historySection, stateSection, userGoalSection]
+      const textPrompt = [historySection, latestUserResponseSection, stateSection, userGoalSection]
         .filter(Boolean)
         .join('\n\n');
 
@@ -122,8 +144,11 @@ Analyze the current page state above and decide the next best action to accompli
         lines.push(
           `[Step ${h.step}] Action: \`${h.action?.name || 'unknown'}\` ${actionStr} → Result: ${statusStr}`
         );
+        if (h.result?.user_response != null) {
+          lines.push(`  ↳ USER INTERACTIVE RESPONSE: ${JSON.stringify(h.result.user_response)}`);
+        }
         if (h.thinking) {
-          lines.push(`  Thinking: ${h.thinking.slice(0, 120)}`);
+          lines.push(`  Thinking: ${h.thinking.slice(0, 160)}`);
         }
       });
 

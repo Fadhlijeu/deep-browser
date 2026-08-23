@@ -773,6 +773,17 @@ function handleAgentEvent(evt) {
     return;
   }
 
+  if (t === 'PARALLEL_WORKER_PROGRESS') {
+    renderParallelWorkersGrid(data.workers || []);
+    return;
+  }
+
+  if (t === 'PARALLEL_RESEARCH_COMPLETED') {
+    renderAgentResult(data.report || msg, false);
+    recordMessageToActiveSession({ role: 'agent', text: data.report || msg, isError: false });
+    return;
+  }
+
   if (t === 'USER_INPUT_REQUIRED') {
     updateStatus('Menunggu Respon Anda', false, true);
     const interactionObj = data.interaction || {
@@ -981,17 +992,119 @@ function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '', h
 }
 
 function renderAgentResult(text, isError = false) {
+  hideEmptyState();
   const div = document.createElement('div');
   div.className = `chat-agent-result ${isError ? 'error' : 'completed'}`;
+  const renderedContent = isError ? escHtml(text) : renderMarkdownToHtml(text);
   div.innerHTML = `
-    <div style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:12px;color:${isError ? 'var(--destructive)' : 'var(--success)'}">
+    <div style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:12px;color:${isError ? 'var(--destructive)' : 'var(--success)'};margin-bottom:6px">
       <span class="material-symbols-outlined" style="font-size:16px">${isError ? 'error' : 'check_circle'}</span>
-      <span>${isError ? 'Gagal' : 'Hasil Agent'}</span>
+      <span>${isError ? 'Gagal Dieksekusi' : 'Hasil Agent'}</span>
     </div>
-    <div style="white-space:pre-wrap;margin-top:2px">${escHtml(text)}</div>
+    <div class="chat-agent-markdown">${renderedContent}</div>
   `;
   elTimeline.appendChild(div);
   div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderMarkdownToHtml(md) {
+  if (!md) return '';
+  let html = String(md)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Fenced Code blocks ```lang\n...```
+  html = html.replace(/```([\w-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+    return `<div class="md-codeblock"><div class="md-code-header">${lang || 'code'}</div><pre><code>${code.trim()}</code></pre></div>`;
+  });
+
+  // Headers (###, ##, #)
+  html = html.replace(/^### (.*$)/gim, '<h4 class="md-h3">$1</h4>');
+  html = html.replace(/^## (.*$)/gim, '<h3 class="md-h2">$1</h3>');
+  html = html.replace(/^# (.*$)/gim, '<h2 class="md-h1">$1</h2>');
+
+  // Blockquotes
+  html = html.replace(/^\> (.*$)/gim, '<blockquote class="md-quote">$1</blockquote>');
+
+  // Bold & Italic
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+  // Inline Code `...`
+  html = html.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+
+  // Math tokens like $n$, $l$, $m$, $s$
+  html = html.replace(/\$([a-zA-Z0-9_\^\+\-\s]+)\$/g, '<span class="md-math-token">$1</span>');
+
+  // Horizontal Rule
+  html = html.replace(/^---$/gim, '<hr class="md-hr" />');
+
+  // Ordered lists (1. Item)
+  html = html.replace(/^\s*(\d+)\.\s+(.*$)/gim, '<div class="md-list-item ordered"><span class="md-num">$1.</span><span>$2</span></div>');
+
+  // Unordered lists (- Item or * Item)
+  html = html.replace(/^\s*[\-\*]\s+(.*$)/gim, '<div class="md-list-item unordered"><span class="md-bullet">•</span><span>$1</span></div>');
+
+  // Paragraph breaks
+  html = html.replace(/\n\n+/g, '<div class="md-para-gap"></div>');
+  html = html.replace(/\n/g, '<br />');
+
+  return html;
+}
+
+function renderParallelWorkersGrid(workers) {
+  hideEmptyState();
+  let gridWrap = document.getElementById('parallel-workers-grid-wrap');
+  if (!gridWrap) {
+    gridWrap = document.createElement('div');
+    gridWrap.id = 'parallel-workers-grid-wrap';
+    gridWrap.className = 'parallel-workers-container';
+    elTimeline.appendChild(gridWrap);
+  }
+
+  gridWrap.innerHTML = `
+    <div class="parallel-header">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#8b5cf6">hub</span>
+        <span style="font-weight:600;font-size:12px;color:#f4f4f5">Riset Paralel Multi-Tab (${workers.length} Worker)</span>
+      </div>
+      <span class="parallel-pulse-badge">Aktif</span>
+    </div>
+    <div class="parallel-cards-grid">
+      ${workers.map(w => `
+        <div class="worker-tab-card ${w.done ? 'done' : 'running'}" data-tabid="${w.tabId || ''}">
+          <div class="worker-card-top">
+            <span class="worker-index">[Tab ${w.index}]</span>
+            <span class="worker-topic" title="${escHtml(w.topic)}">${escHtml(w.topic)}</span>
+            <span class="worker-status-chip ${w.done ? 'done' : ''}">${escHtml(w.status)}</span>
+          </div>
+          <div class="worker-card-preview">
+            ${w.thumbnail 
+              ? `<img src="${w.thumbnail}" alt="" class="worker-thumb-img" />`
+              : `<div class="worker-thumb-placeholder"><span class="material-symbols-outlined" style="font-size:22px;color:#71717a">tab</span><span>${escHtml(w.status)}</span></div>`
+            }
+          </div>
+          <div class="worker-progress-bar">
+            <div class="worker-progress-fill" style="width:${w.progress || 0}%"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Bind click to focus tab
+  gridWrap.querySelectorAll('.worker-tab-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      const tabId = parseInt(card.dataset.tabid, 10);
+      if (tabId && chrome.tabs) {
+        await chrome.tabs.update(tabId, { active: true });
+      }
+    });
+  });
+
+  gridWrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 function hideEmptyState() {
@@ -1066,6 +1179,25 @@ function bindEvents() {
   $('drawer-close').addEventListener('click', closeDrawer);
   elDrawerOverlay.addEventListener('click', closeDrawer);
   $('btn-new-session').addEventListener('click', createNewSession);
+
+  // Settings & Parallel Tab options
+  const chkShowTabs = $('chk-show-parallel-tabs');
+  if (chkShowTabs) {
+    chkShowTabs.checked = state.showParallelTabs !== false;
+    chkShowTabs.addEventListener('change', () => {
+      state.showParallelTabs = chkShowTabs.checked;
+      saveStorage({ showParallelTabs: chkShowTabs.checked });
+    });
+  }
+
+  const selWorkers = $('sel-max-parallel-workers');
+  if (selWorkers) {
+    selWorkers.value = String(state.maxParallelWorkers || 3);
+    selWorkers.addEventListener('change', () => {
+      state.maxParallelWorkers = parseInt(selWorkers.value, 10);
+      saveStorage({ maxParallelWorkers: state.maxParallelWorkers });
+    });
+  }
 
   const btnPopout = $('btn-popout');
   if (btnPopout) {

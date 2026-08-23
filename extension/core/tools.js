@@ -256,6 +256,19 @@
           },
         },
         {
+          name: 'parallel_research',
+          description: 'Execute concurrent multi-tab research across several sub-topics or search queries simultaneously using parallel browser workers.',
+          parameters: {
+            type: 'object',
+            properties: {
+              topics: { type: 'array', items: { type: 'string' }, description: 'List of queries or topics to research in parallel.' },
+              max_parallel: { type: 'integer', description: 'Maximum concurrent tabs (default: 3).' },
+              show_process: { type: 'boolean', description: 'Whether to show tabs or run in background (default: true).' },
+            },
+            required: ['topics'],
+          },
+        },
+        {
           name: 'ask_user',
           description: 'Ask the user a structured question or request confirmation using an interactive widget (choice, confirm, text_input).',
           parameters: {
@@ -457,6 +470,18 @@
                 title: state.title,
                 summary: state.simplifiedTreeText.slice(0, 500),
               },
+            };
+          }
+
+          case 'parallel_research': {
+            const engine = new (global.ParallelResearchEngine || window.ParallelResearchEngine)({
+              browserSession: this.browserSession,
+            });
+            const res = await engine.executeParallelResearch(params);
+            return {
+              success: true,
+              message: `Parallel research completed across ${res.totalTopics} topics.`,
+              data: res,
             };
           }
 

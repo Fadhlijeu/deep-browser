@@ -381,6 +381,8 @@
     const card = document.createElement('div');
     card.className = 'db-final-result-card' + (isError ? ' error' : '');
 
+    const rendered = isError ? esc(resultText) : renderHudMarkdown(resultText);
+
     card.innerHTML = `
       <div class="db-result-title">
         <span style="color:${isError ? '#ef4444' : '#22c55e'}">${isError ? 'Gagal Dieksekusi' : 'Hasil Penyelesaian'}</span>
@@ -388,7 +390,7 @@
           <svg class="db-svg-icon" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
         </button>
       </div>
-      <div>${esc(resultText)}</div>
+      <div style="font-size:11.5px;line-height:1.5">${rendered}</div>
     `;
 
     card.querySelector('.btn-copy-result').addEventListener('click', () => {
@@ -401,6 +403,53 @@
     activeStepAccordion = null;
     activeStepBody = null;
     setTaskRunningState(false);
+  }
+
+  function renderHudMarkdown(md) {
+    if (!md) return '';
+    return String(md)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/^### (.*$)/gim, '<h4 style="color:#f4f4f5;margin:4px 0 2px;font-size:11.5px;font-weight:600">$1</h4>')
+      .replace(/^## (.*$)/gim, '<h3 style="color:#c4b5fd;margin:6px 0 2px;font-size:12px;font-weight:600">$1</h3>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em style="color:#e4e4e7">$1</em>')
+      .replace(/`([^`]+)`/g, '<code style="background:#18181b;border:1px solid #27272a;padding:1px 4px;border-radius:3px;font-size:10.5px;color:#c4b5fd">$1</code>')
+      .replace(/\$([a-zA-Z0-9_\^\+\-\s]+)\$/g, '<span style="color:#38bdf8;font-style:italic">$1</span>')
+      .replace(/^\s*(\d+)\.\s+(.*$)/gim, '<div style="margin:2px 0"><span style="color:#8b5cf6;font-weight:600">$1. </span><span>$2</span></div>')
+      .replace(/^\s*[\-\*]\s+(.*$)/gim, '<div style="margin:2px 0"><span style="color:#8b5cf6">• </span><span>$1</span></div>')
+      .replace(/\n/g, '<br />');
+  }
+
+  function appendParallelWorkersCard(workers) {
+    let card = document.getElementById('db-parallel-hud-card');
+    if (!card) {
+      card = document.createElement('div');
+      card.id = 'db-parallel-hud-card';
+      card.className = 'db-snippet-card';
+      elTimeline.appendChild(card);
+    }
+    card.innerHTML = `
+      <div class="db-snippet-header">
+        <span style="font-weight:600;font-size:11px;color:#c4b5fd">⚡ Riset Paralel (${workers.length} Worker)</span>
+        <span class="db-header-badge running" style="font-size:9px">Aktif</span>
+      </div>
+      <div class="db-snippet-body" style="display:flex;flex-direction:column;gap:6px">
+        ${workers.map(w => `
+          <div style="background:#18181b;border:1px solid #27272a;border-radius:6px;padding:5px 7px;font-size:10.5px">
+            <div style="display:flex;justify-content:space-between;font-weight:600;color:#f4f4f5">
+              <span>[Tab ${w.index}] ${esc(w.topic)}</span>
+              <span style="color:${w.done ? '#22c55e' : '#a1a1aa'}">${esc(w.status)}</span>
+            </div>
+            <div style="height:2px;background:#27272a;border-radius:1px;margin-top:4px;overflow:hidden">
+              <div style="height:100%;width:${w.progress || 0}%;background:#8b5cf6;transition:width 0.3s"></div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    card.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
   function appendScreenshotCard(dataUrl, fileName = 'screenshot.png') {
@@ -491,6 +540,10 @@
         appendHtmlSnippetCard(d.html, d.title);
       } else if (t === 'PDF_SAVED') {
         appendPdfCard(d.fileName, d.title);
+      } else if (t === 'PARALLEL_WORKER_PROGRESS') {
+        appendParallelWorkersCard(d.workers || []);
+      } else if (t === 'PARALLEL_RESEARCH_COMPLETED') {
+        appendResultCard(d.report || m || 'Riset paralel selesai.');
       } else if (t === 'USER_INPUT_REQUIRED') {
         updateStatusBadge('Menunggu Anda', false, true);
         renderHITLWidget(d.interaction || { type: d.type, question: d.question, options: d.options });

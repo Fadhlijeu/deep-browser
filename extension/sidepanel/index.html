@@ -213,6 +213,27 @@
           <label class="form-label">Tingkat Otonomi &amp; Review Policy</label>
           <div class="model-list-group" id="mode-options-container"></div>
         </div>
+
+        <div class="form-group" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+          <label class="form-label">Riset Paralel Multi-Tab</label>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:var(--foreground)">
+              <span>Buka Tab Terlihat (Show Process)</span>
+              <input type="checkbox" id="chk-show-parallel-tabs" checked style="accent-color:#8b5cf6;width:16px;height:16px" />
+            </label>
+            <div style="font-size:10.5px;color:var(--muted-foreground)">Jika dinonaktifkan, riset berjalan di latar belakang tanpa membuka tab aktif baru di layar Anda.</div>
+            
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+              <span style="font-size:11.5px;color:var(--foreground)">Maksimal Worker Paralel:</span>
+              <select id="sel-max-parallel-workers" style="background:#18181b;border:1px solid #27272a;border-radius:4px;color:#f4f4f5;padding:3px 8px;font-size:11px">
+                <option value="2">2 Tab Simultan</option>
+                <option value="3" selected>3 Tab Simultan</option>
+                <option value="4">4 Tab Simultan</option>
+                <option value="5">5 Tab Simultan</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn-primary" id="btn-close-settings">Selesai</button>
@@ -227,6 +248,7 @@
 <script src="../core/dom_service.js"></script>
 <script src="../core/browser_session.js"></script>
 <script src="../core/extractor.js"></script>
+<script src="../core/research_engine.js"></script>
 <script src="../core/skills/skill_base.js"></script>
 <script src="../core/skills/research_skill.js"></script>
 <script src="../core/security_policy.js"></script>
