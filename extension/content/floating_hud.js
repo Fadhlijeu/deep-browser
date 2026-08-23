@@ -3,9 +3,9 @@
  * =====================================================================
  * Injected directly into Microsoft Edge pages:
  *   - Collapsed: Sleek floating pill / island with drag handle (⠿) matching screenshot
- *   - Expanded: Compact floating HUD card (Event log, reasoning, actions, widgets, prompt, send)
- *   - Draggable & persistent position
- *   - Full bidirectional synchronization with agent runtime
+ *   - Expanded: Fully resizable HUD card (Event log, reasoning, actions, widgets, prompt, send & stop)
+ *   - Size & position auto-saved in chrome.storage.local
+ *   - Full bidirectional synchronization with agent runtime in SidePanel
  */
 
 (function() {
@@ -31,11 +31,11 @@
       <span class="db-hud-title">Deep Browser</span>
       <span class="db-hud-status-badge" id="db-pill-status">Siap</span>
       <button class="db-icon-btn" id="db-btn-expand-pill" title="Buka Kontrol Agent" style="margin-left:2px">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </button>
     </div>
 
-    <!-- 2. Expanded State: Floating HUD Card -->
+    <!-- 2. Expanded State: Resizable Floating HUD Card -->
     <div class="db-hud-card" id="db-card">
       <!-- Header -->
       <div class="db-hud-card-header" id="db-card-drag">
@@ -53,10 +53,10 @@
         </div>
         <div class="db-hud-header-right">
           <button class="db-icon-btn" id="db-btn-collapse" title="Minimize ke Pill">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
           </button>
           <button class="db-icon-btn" id="db-btn-close-hud" title="Sembunyikan">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
       </div>
@@ -67,7 +67,7 @@
         <div id="db-hud-timeline"></div>
       </div>
 
-      <!-- Footer: Prompt Bar -->
+      <!-- Footer: Prompt Bar & Stop/Send Button -->
       <div class="db-hud-footer">
         <div class="db-hud-input-row">
           <input type="text" class="db-hud-input" id="db-hud-prompt" placeholder="Perintahkan agent di halaman ini..." />
@@ -98,7 +98,9 @@
 
   let isRunning = false;
   let isWaiting = false;
-  let currentActiveThoughtBody = null;
+  let currentThoughtBody = null;
+  let currentThoughtHeader = null;
+  let stepStartTime = 0;
 
   // ─── Expand & Collapse State ───────────────────────────────────────────────
   function expandCard() {
@@ -127,18 +129,30 @@
     hudContainer.style.display = 'none';
   });
 
-  // ─── Prompt Submission ─────────────────────────────────────────────────────
+  // ─── Prompt Submission & Stop Controls ─────────────────────────────────────
   elPromptInput.addEventListener('input', () => {
-    elBtnSend.disabled = !elPromptInput.value.trim() && !isRunning;
-  });
-
-  elPromptInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !elBtnSend.disabled) {
-      submitPrompt();
+    if (!isRunning) {
+      elBtnSend.disabled = !elPromptInput.value.trim();
     }
   });
 
-  elBtnSend.addEventListener('click', submitPrompt);
+  elPromptInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (isRunning) {
+        stopTask();
+      } else if (!elBtnSend.disabled) {
+        submitPrompt();
+      }
+    }
+  });
+
+  elBtnSend.addEventListener('click', () => {
+    if (isRunning) {
+      stopTask();
+    } else {
+      submitPrompt();
+    }
+  });
 
   function submitPrompt() {
     const goal = elPromptInput.value.trim();
@@ -146,13 +160,22 @@
 
     appendUserMessage(goal);
     elPromptInput.value = '';
-    elBtnSend.disabled = true;
+    setStatus('Bekerja...', true, false);
 
-    setRunningState(true);
+    stepStartTime = Date.now();
 
-    // Send task message to runtime (background & sidepanel)
+    // Trigger task execution in SidePanel / background
     chrome.runtime?.sendMessage?.({ action: 'START_TASK_FROM_HUD', task: goal }, (res) => {
-      // Optional callback
+      // Optional ack
+    });
+  }
+
+  function stopTask() {
+    setStatus('Dihentikan', false, false);
+    appendResult('Agent dihentikan oleh pengguna.', true);
+
+    chrome.runtime?.sendMessage?.({ action: 'STOP_TASK_FROM_HUD' }, (res) => {
+      // Optional ack
     });
   }
 
@@ -171,85 +194,95 @@
     if (running) {
       elBtnSend.disabled = false;
       elBtnSend.classList.add('running');
-      elBtnSend.title = 'Hentikan';
+      elBtnSend.title = 'Hentikan Agent';
       elBtnSend.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>`;
     } else {
       elBtnSend.classList.remove('running');
       elBtnSend.title = 'Kirim';
       elBtnSend.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+      elBtnSend.disabled = !elPromptInput.value.trim();
     }
-  }
-
-  function setRunningState(running) {
-    setStatus(running ? 'Bekerja...' : 'Siap', running, false);
   }
 
   // ─── Streamlined Event Log In HUD ──────────────────────────────────────────
   function appendUserMessage(text) {
     const div = document.createElement('div');
-    div.style.cssText = 'padding:5px 8px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);border-radius:6px;font-size:11px;color:#f4f4f5;margin-bottom:4px';
+    div.style.cssText = 'padding:6px 8px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);border-radius:6px;font-size:11px;color:#f4f4f5;margin-bottom:4px';
     div.textContent = text;
     elTimeline.appendChild(div);
     div.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
   function appendReasoning(text) {
-    if (!currentActiveThoughtBody) {
-      createThoughtContainer();
-    }
+    ensureThoughtContainer();
     const div = document.createElement('div');
     div.className = 'db-hud-thought-text';
     div.textContent = text;
-    currentActiveThoughtBody.appendChild(div);
+    currentThoughtBody.appendChild(div);
     div.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
-  function appendAction(actionText) {
-    if (!currentActiveThoughtBody) {
-      createThoughtContainer();
-    }
+  function appendAction(actionText, codeDetail = '') {
+    ensureThoughtContainer();
     const div = document.createElement('div');
     div.className = 'db-hud-action-item';
     div.innerHTML = `
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       <span>${esc(actionText)}</span>
+      ${codeDetail ? `<span class="db-hud-action-code">${esc(codeDetail)}</span>` : ''}
     `;
-    currentActiveThoughtBody.appendChild(div);
+    currentThoughtBody.appendChild(div);
     div.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
   function appendResult(resultText, isError = false) {
+    if (currentThoughtHeader) {
+      const elapsed = Math.max(1, Math.round((Date.now() - (stepStartTime || Date.now())) / 1000));
+      currentThoughtHeader.querySelector('.db-thought-label').textContent = `Worked for ${elapsed}s`;
+      currentThoughtBody.classList.remove('open');
+    }
+
     const div = document.createElement('div');
     div.className = 'db-hud-result-box';
     if (isError) {
-      div.style.background = 'rgba(239, 68, 68, 0.1)';
+      div.style.background = 'rgba(239, 68, 68, 0.08)';
       div.style.borderColor = 'rgba(239, 68, 68, 0.3)';
     }
-    div.innerHTML = `<strong>${isError ? 'Gagal' : 'Hasil'}:</strong> ${esc(resultText)}`;
+    div.innerHTML = `<strong style="color:${isError ? '#ef4444' : '#22c55e'}">${isError ? 'Gagal' : 'Hasil'}:</strong> ${esc(resultText)}`;
     elTimeline.appendChild(div);
     div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    currentActiveThoughtBody = null;
+
+    currentThoughtBody = null;
+    currentThoughtHeader = null;
+    setStatus('Siap', false, false);
   }
 
-  function createThoughtContainer() {
+  function ensureThoughtContainer() {
+    if (currentThoughtBody) return;
+
     const wrap = document.createElement('div');
-    wrap.style.marginBottom = '4px';
+    wrap.className = 'db-hud-thought-wrap';
 
     const header = document.createElement('div');
     header.className = 'db-hud-thought-header';
     header.innerHTML = `
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-      <span>Worked on step</span>
+      <span class="db-thought-label">Sedang memproses...</span>
     `;
 
     const body = document.createElement('div');
-    body.className = 'db-hud-thought-body';
+    body.className = 'db-hud-thought-body open';
+
+    header.addEventListener('click', () => {
+      body.classList.toggle('open');
+    });
 
     wrap.appendChild(header);
     wrap.appendChild(body);
     elTimeline.appendChild(wrap);
 
-    currentActiveThoughtBody = body;
+    currentThoughtBody = body;
+    currentThoughtHeader = header;
     wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }
 
@@ -267,7 +300,10 @@
       const m = msg.message;
       const d = msg.data || {};
 
-      if (t === 'REASONING') {
+      if (t === 'TASK_STARTED') {
+        stepStartTime = Date.now();
+        setStatus('Bekerja...', true, false);
+      } else if (t === 'REASONING') {
         appendReasoning(m);
       } else if (t === 'CLICK') {
         appendAction(`Click [${d.index || ''}] ${d.target || ''}`);
@@ -278,16 +314,16 @@
       } else if (t === 'SCROLL') {
         appendAction(`Scroll ${d.down !== false ? 'down' : 'up'}`);
       } else if (t === 'EXTRACTION') {
-        appendAction(`Extract: ${d.query || ''}`);
+        appendAction(`Extract data:`, d.query || '');
       } else if (t === 'USER_INPUT_REQUIRED') {
         setStatus('Menunggu Anda', false, true);
         renderInteractiveWidgetInHud(d.interaction || { type: d.type, question: d.question, options: d.options });
       } else if (t === 'TASK_COMPLETED') {
-        setStatus('Selesai', false, false);
         appendResult(d.result || m || 'Tugas selesai.');
       } else if (t === 'ERROR') {
-        setStatus('Gagal', false, false);
         appendResult(d.error || m, true);
+      } else if (t === 'TASK_CANCELLED') {
+        appendResult(m || 'Agent dihentikan.', true);
       }
     }
   });
@@ -298,7 +334,7 @@
     const type = ix.type || 'confirm';
 
     const card = document.createElement('div');
-    card.style.cssText = 'padding:8px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;margin-bottom:6px;font-size:11px';
+    card.style.cssText = 'padding:8px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:8px;margin-bottom:6px;font-size:11px';
 
     card.innerHTML = `
       <div style="font-weight:600;color:#f59e0b;margin-bottom:4px">${esc(ix.question || 'Konfirmasi Tindakan')}</div>
@@ -312,7 +348,7 @@
               `).join('')}
             </div>`
           : `<div style="display:flex;gap:4px;margin-top:4px">
-              <button class="db-hud-btn-yes" style="padding:4px 8px;border-radius:4px;background:#8b5cf6;border:none;color:white;cursor:pointer;font-size:10.5px">Ya, Lanjutkan</button>
+              <button class="db-hud-btn-yes" style="padding:4px 8px;border-radius:4px;background:#8b5cf6;border:none;color:white;cursor:pointer;font-size:10.5px;font-weight:500">Ya, Lanjutkan</button>
               <button class="db-hud-btn-no" style="padding:4px 8px;border-radius:4px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#a1a1aa;cursor:pointer;font-size:10.5px">Batal</button>
             </div>`
       }
@@ -357,7 +393,6 @@
       initLeft = rect.left;
       initTop = rect.top;
 
-      // Switch to left/top positioning for absolute drag control
       hudContainer.style.bottom = 'auto';
       hudContainer.style.right = 'auto';
       hudContainer.style.left = initLeft + 'px';
@@ -387,7 +422,6 @@
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
 
-    // Save position to storage
     const pos = { left: hudContainer.style.left, top: hudContainer.style.top };
     chrome.storage?.local?.set({ db_floating_hud_pos: pos });
   }
@@ -395,13 +429,37 @@
   initDrag(document.getElementById('db-pill-drag'));
   initDrag(document.getElementById('db-card-drag'));
 
-  // Restore saved position
-  chrome.storage?.local?.get(['db_floating_hud_pos'], (res) => {
+  // ─── Resizing & Size Persistence ───────────────────────────────────────────
+  if (window.ResizeObserver) {
+    let resizeTimer = null;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === elCard && elCard.style.display !== 'none') {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            const width = elCard.offsetWidth;
+            const height = elCard.offsetHeight;
+            if (width > 200 && height > 150) {
+              chrome.storage?.local?.set({ db_floating_hud_size: { width, height } });
+            }
+          }, 300);
+        }
+      }
+    });
+    observer.observe(elCard);
+  }
+
+  // Restore saved position and size
+  chrome.storage?.local?.get(['db_floating_hud_pos', 'db_floating_hud_size'], (res) => {
     if (res?.db_floating_hud_pos) {
       hudContainer.style.bottom = 'auto';
       hudContainer.style.right = 'auto';
       hudContainer.style.left = res.db_floating_hud_pos.left;
       hudContainer.style.top = res.db_floating_hud_pos.top;
+    }
+    if (res?.db_floating_hud_size) {
+      elCard.style.width = res.db_floating_hud_size.width + 'px';
+      elCard.style.height = res.db_floating_hud_size.height + 'px';
     }
   });
 

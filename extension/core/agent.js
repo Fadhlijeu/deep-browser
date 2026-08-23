@@ -76,8 +76,15 @@
     stop() {
       this.isStopped = true;
       this.isRunning = false;
+      if (this.interactionManager) {
+        try {
+          this.interactionManager.cancelInteraction(null, 'Agent dihentikan oleh pengguna');
+        } catch {}
+      }
       this._emit('TASK_CANCELLED', 'Agent dihentikan oleh pengguna');
+      this._emit('TASK_COMPLETED', 'Agent dihentikan oleh pengguna', { result: 'Agent dihentikan oleh pengguna.' });
     }
+
 
     /**
      * Runs the autonomous Browser Use loop.

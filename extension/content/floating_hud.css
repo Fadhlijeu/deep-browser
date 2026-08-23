@@ -1,13 +1,14 @@
 /**
  * Deep Browser Extension — In-Page Floating Dynamic Island / HUD Widget
  * =====================================================================
- * Sleek, floating in-page capsule matching dynamic island & desktop taskbar aesthetics.
+ * Sleek, floating in-page capsule matching dynamic island & modern desktop HUD.
+ * - Fully resizable (min 300x240, max 800x850) with saved size persistence
  * - Draggable grip handle (⠿)
- * - Frosted glass / backdrop-filter blur
- * - Expandable into full HUD (Event log, reasoning, actions, prompt input, send)
+ * - Frosted glass / backdrop-filter blur with shadcn-grade dark zinc theme
+ * - Event log, reasoning dropdowns, concrete actions, widgets, prompt & stop controls
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 #deep-browser-floating-hud {
   position: fixed !important;
@@ -23,9 +24,7 @@
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
-  transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
-
 
 #deep-browser-floating-hud * {
   box-sizing: border-box;
@@ -33,35 +32,27 @@
   padding: 0;
 }
 
-#deep-browser-floating-hud .material-symbols-outlined {
-  font-family: 'Material Symbols Outlined' !important;
-  font-size: 15px;
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-block;
-}
-
-/* ─── Collapsed State: Sleek Pill / Dynamic Island (Screenshot Style) ─── */
+/* ─── Collapsed State: Dynamic Island Pill ─── */
 .db-hud-pill {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px 6px 8px;
-  background: rgba(18, 18, 22, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(9, 9, 11, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .db-hud-pill:hover {
-  background: rgba(24, 24, 30, 0.95);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(18, 18, 22, 0.98);
+  border-color: rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
 }
 
 .db-drag-handle {
@@ -113,29 +104,35 @@
 .db-hud-status-badge {
   font-size: 10px;
   color: #a1a1aa;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   padding: 1px 6px;
   border-radius: 9999px;
 }
 
-/* ─── Expanded State: Sleek Floating HUD Card ─── */
+/* ─── Expanded State: Sleek Resizable Floating HUD Card ─── */
 .db-hud-card {
   display: none;
   flex-direction: column;
-  width: 330px;
-  max-height: 480px;
-  background: rgba(18, 18, 22, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  width: 380px;
+  min-width: 300px;
+  max-width: 800px;
+  height: 460px;
+  min-height: 240px;
+  max-height: 850px;
+  background: rgba(9, 9, 11, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(39, 39, 42, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
+  resize: both;
+  position: relative;
   animation: db-card-appear 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes db-card-appear {
-  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
@@ -143,10 +140,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 7px 10px;
+  background: rgba(18, 18, 22, 0.95);
+  border-bottom: 1px solid rgba(39, 39, 42, 0.9);
   cursor: grab;
+  flex-shrink: 0;
 }
 
 .db-hud-card-header:active {
@@ -162,7 +160,7 @@
 .db-hud-header-right {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .db-icon-btn {
@@ -184,36 +182,53 @@
   color: #f4f4f5;
 }
 
-/* ─── HUD Body & Event Stream ─── */
+/* ─── HUD Body & Streamlined Event Log ─── */
 .db-hud-body {
-  padding: 10px 12px;
-  max-height: 240px;
+  flex: 1;
+  min-height: 120px;
   overflow-y: auto;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: rgba(9, 9, 11, 0.85);
+}
+
+.db-hud-thought-wrap {
+  border: 1px solid rgba(39, 39, 42, 0.7);
+  border-radius: 6px;
+  background: rgba(18, 18, 22, 0.6);
+  overflow: hidden;
 }
 
 .db-hud-thought-header {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  padding: 5px 8px;
   font-size: 11px;
+  font-weight: 500;
   color: #a1a1aa;
   cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  transition: color 0.15s;
 }
 
 .db-hud-thought-header:hover {
   color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .db-hud-thought-body {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 4px;
-  padding-left: 8px;
-  border-left: 1.5px solid #27272a;
-  margin-top: 2px;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(39, 39, 42, 0.7);
+}
+
+.db-hud-thought-body.open {
+  display: flex;
 }
 
 .db-hud-thought-text {
@@ -221,48 +236,60 @@
   color: #9ca3af;
   line-height: 1.4;
   padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid #52525b;
+  border-radius: 2px;
 }
 
 .db-hud-action-item {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 10.5px;
   color: #d4d4d8;
+  padding: 2px 0;
+}
+
+.db-hud-action-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #a1a1aa;
 }
 
 .db-hud-result-box {
-  padding: 6px 8px;
+  padding: 8px 10px;
   background: rgba(34, 197, 94, 0.08);
   border: 1px solid rgba(34, 197, 94, 0.25);
   border-radius: 6px;
   color: #f4f4f5;
   font-size: 11px;
+  line-height: 1.4;
 }
 
-/* ─── HUD Footer & Prompt Input ─── */
+/* ─── HUD Footer: Prompt & Controls ─── */
 .db-hud-footer {
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 8px;
+  background: rgba(18, 18, 22, 0.95);
+  border-top: 1px solid rgba(39, 39, 42, 0.9);
+  flex-shrink: 0;
 }
 
 .db-hud-input-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 3px 4px 3px 8px;
+  gap: 4px;
+  background: rgba(24, 24, 27, 0.8);
+  border: 1px solid rgba(39, 39, 42, 0.9);
+  border-radius: 6px;
+  padding: 2px 4px 2px 8px;
   transition: border-color 0.15s;
 }
 
 .db-hud-input-row:focus-within {
   border-color: #8b5cf6;
-  box-shadow: 0 0 0 1px #8b5cf6;
 }
 
 .db-hud-input {
@@ -283,14 +310,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   background: #8b5cf6;
   border: none;
   color: white;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 0.15s;
 }
 
 .db-hud-send-btn:hover:not(:disabled) {
@@ -303,12 +330,19 @@
 }
 
 .db-hud-send-btn.running {
-  background: #ef4444;
+  background: #ef4444 !important;
+  opacity: 1 !important;
+  cursor: pointer !important;
+}
+
+.db-hud-send-btn.running:hover {
+  background: #dc2626 !important;
 }
 
 /* Scrollbar */
 .db-hud-body::-webkit-scrollbar {
-  width: 3px;
+  width: 4px;
+  height: 4px;
 }
 
 .db-hud-body::-webkit-scrollbar-thumb {

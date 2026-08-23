@@ -569,14 +569,17 @@ function closeDrawer() {
 }
 
 // ─── Task Execution ──────────────────────────────────────────────────────────
-async function submitTask() {
-  const goal = elGoalInput.value.trim();
-  if (!goal) return;
-
+async function submitTask(explicitGoal = null) {
   if (state.agentRunning) {
     stopAgent();
     return;
   }
+
+  const goal = (typeof explicitGoal === 'string' && explicitGoal.trim())
+    ? explicitGoal.trim()
+    : elGoalInput.value.trim();
+
+  if (!goal) return;
 
   const activeModel = getActiveModel();
   const provider = activeModel.provider;
@@ -599,6 +602,7 @@ async function submitTask() {
   resizeTextarea();
   setAgentRunning(true);
   updateStatus('Bekerja...', true);
+
 
   state.stepStartTime = Date.now();
 
@@ -978,6 +982,33 @@ function bindEvents() {
       }
     });
   }
+
+  // Listen to triggers from In-Page Floating Island HUD
+  chrome.runtime?.onMessage?.addListener((msg, sender, sendResponse) => {
+
+    if (!msg) return;
+    if (msg.action === 'START_TASK_FROM_HUD' && msg.task) {
+      submitTask(msg.task);
+      sendResponse?.({ success: true });
+      return true;
+    }
+    if (msg.action === 'STOP_TASK_FROM_HUD') {
+      stopAgent();
+      sendResponse?.({ success: true });
+      return true;
+    }
+    if (msg.action === 'RESOLVE_INTERACTION_FROM_HUD') {
+      if (widgetManager?.interactionManager) {
+        const activeIx = widgetManager.interactionManager.activeInteraction;
+        if (activeIx?.interaction_id) {
+          widgetManager.interactionManager.submitResponse(activeIx.interaction_id, msg.value);
+        }
+      }
+      sendResponse?.({ success: true });
+      return true;
+    }
+  });
+
 
 
 
