@@ -23,10 +23,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Relay actions from In-Page Floating HUD to SidePanel / active listeners
-  if (action === 'START_TASK_FROM_HUD' || action === 'RESOLVE_INTERACTION_FROM_HUD') {
+  if (action === 'START_TASK_FROM_HUD' || action === 'STOP_TASK_FROM_HUD' || action === 'RESOLVE_INTERACTION_FROM_HUD') {
     chrome.runtime.sendMessage(message).catch(() => {});
     sendResponse({ success: true });
     return true;
   }
 });
+
 
