@@ -4,7 +4,7 @@
  *
  * Implements:
  *   - Google Material Symbols (zero emojis)
- *   - Collapsible "Worked for Xs >" thought & tool logs matching Cursor/Antigravity
+ *   - Streamlined, clean "Worked for Xs >" thought & action logs (Reasoning + concrete actions only)
  *   - Full Model CRUD (ability to delete and edit any model)
  *   - Full Session Management (persistence, switching, and deleting sessions)
  *   - Multi-tab strip and live Edge tab controller
@@ -534,8 +534,14 @@ function renderActiveSessionTimeline() {
     if (msg.role === 'user') {
       renderUserMessage(msg.text);
     } else if (msg.role === 'step') {
-      const dd = renderStepDropdown(msg.duration || '2s');
-      (msg.items || []).forEach((item) => renderStepSubItem(dd.body, item.icon, item.text));
+      const dd = renderStepDropdown(msg.duration || '2s', false);
+      (msg.items || []).forEach((item) => {
+        if (item.isReasoning) {
+          renderReasoningBlock(dd.body, item.text);
+        } else {
+          renderStepSubItem(dd.body, item.icon, item.text);
+        }
+      });
     } else if (msg.role === 'agent') {
       renderAgentResult(msg.text, msg.isError);
     }
@@ -646,14 +652,13 @@ function stopAgent() {
   widgetManager.clear();
 }
 
-// ─── Sleek Event Log Handler (Cursor / Antigravity Style) ──────────────────────
+// ─── Streamlined Event Log Handler (Reasoning + Concrete Actions Only) ───────
 let currentStepLogs = [];
 
 function handleAgentEvent(evt) {
   const t = evt.event_type || '';
   const msg = evt.message || '';
   const data = evt.data || {};
-  const step = evt.step;
 
   if (t === 'TASK_STARTED') {
     state.stepStartTime = Date.now();
@@ -661,79 +666,82 @@ function handleAgentEvent(evt) {
     return;
   }
 
-  // Ensure dropdown is created for current step
+  // Handle completion
+  if (t === 'TASK_COMPLETED') {
+    const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+    if (state.activeStepDropdown) {
+      state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
+      // Collapse dropdown on finish so result is visible cleanly
+      state.activeStepDropdown.header.classList.remove('open');
+      state.activeStepDropdown.body.classList.remove('open');
+    }
+    renderAgentResult(data.result || msg || 'Tugas selesai.', false);
+    recordMessageToActiveSession({
+      role: 'step',
+      duration: `${elapsed}s`,
+      items: [...currentStepLogs],
+    });
+    recordMessageToActiveSession({ role: 'agent', text: data.result || msg, isError: false });
+    state.activeStepDropdown = null;
+    state.activeStepBody = null;
+    currentStepLogs = [];
+    return;
+  }
+
+  // Handle error
+  if (t === 'ERROR') {
+    renderAgentResult(data.error || msg, true);
+    recordMessageToActiveSession({ role: 'agent', text: data.error || msg, isError: true });
+    state.activeStepDropdown = null;
+    state.activeStepBody = null;
+    return;
+  }
+
+  // Filter ONLY relevant items: REASONING, CLICK, TYPE, NAVIGATION, SCROLL, EXTRACTION, ACTION_FAILED
+  let iconName = null;
+  let text = '';
+  let isReasoning = false;
+
+  if (t === 'REASONING') {
+    isReasoning = true;
+    text = msg;
+  } else if (t === 'CLICK') {
+    iconName = 'touch_app';
+    text = `Click [${data.index || ''}] ${data.target || ''}`.trim();
+  } else if (t === 'TYPE') {
+    iconName = 'edit';
+    text = `Type "${data.text || ''}" into [${data.index || ''}]`;
+  } else if (t === 'NAVIGATION') {
+    iconName = 'navigation';
+    text = `Navigate to ${data.url || msg}`;
+  } else if (t === 'SCROLL') {
+    iconName = 'swap_vert';
+    text = `Scroll ${data.down !== false ? 'down' : 'up'}`;
+  } else if (t === 'EXTRACTION') {
+    iconName = 'dataset';
+    text = `Extract: ${data.query || ''}`;
+  } else if (t === 'ACTION_FAILED') {
+    iconName = 'error';
+    text = `Failed: ${msg}`;
+  } else {
+    // Ignore all other noisy telemetry (ATTACH_TAB, OBSERVATION, PLAN, SCREENSHOT, WAITING, VERIFICATION, ACTION_EXECUTED)
+    return;
+  }
+
+  // Ensure dropdown exists
   if (!state.activeStepDropdown) {
     const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-    state.activeStepDropdown = renderStepDropdown(`${elapsed}s`);
+    state.activeStepDropdown = renderStepDropdown(`${elapsed}s`, true);
     state.activeStepBody = state.activeStepDropdown.body;
   }
 
-  let iconName = 'info';
-  let text = msg;
-
-  switch (t) {
-    case 'OBSERVATION':
-      iconName = 'visibility';
-      text = `Observed: ${data.elementsCount || 0} interactive elements on ${data.title || data.url}`;
-      break;
-    case 'REASONING':
-      iconName = 'psychology';
-      text = msg;
-      break;
-    case 'CLICK':
-      iconName = 'touch_app';
-      text = `Click [${data.index || ''}] ${data.target || ''}`;
-      break;
-    case 'TYPE':
-      iconName = 'edit';
-      text = `Type "${data.text || ''}" into [${data.index || ''}]`;
-      break;
-    case 'NAVIGATION':
-      iconName = 'navigation';
-      text = `Navigate to ${data.url || msg}`;
-      break;
-    case 'SCROLL':
-      iconName = 'swap_vert';
-      text = `Scroll ${data.down !== false ? 'down' : 'up'}`;
-      break;
-    case 'EXTRACTION':
-      iconName = 'dataset';
-      text = `Extracting content: "${data.query || ''}"`;
-      break;
-    case 'VERIFICATION':
-      iconName = 'check_circle';
-      text = msg;
-      break;
-    case 'ACTION_EXECUTED':
-      iconName = 'check';
-      text = msg;
-      break;
-    case 'ACTION_FAILED':
-      iconName = 'error';
-      text = msg;
-      break;
-    case 'TASK_COMPLETED': {
-      const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-      if (state.activeStepDropdown) {
-        state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
-      }
-      renderAgentResult(data.result || msg || 'Tugas selesai.', false);
-      recordMessageToActiveSession({ role: 'agent', text: data.result || msg, isError: false });
-      state.activeStepDropdown = null;
-      state.activeStepBody = null;
-      return;
-    }
-    case 'ERROR': {
-      renderAgentResult(data.error || msg, true);
-      recordMessageToActiveSession({ role: 'agent', text: data.error || msg, isError: true });
-      state.activeStepDropdown = null;
-      state.activeStepBody = null;
-      return;
-    }
+  if (isReasoning) {
+    renderReasoningBlock(state.activeStepBody, text);
+    currentStepLogs.push({ isReasoning: true, text });
+  } else {
+    renderStepSubItem(state.activeStepBody, iconName, text);
+    currentStepLogs.push({ icon: iconName, text });
   }
-
-  renderStepSubItem(state.activeStepBody, iconName, text);
-  currentStepLogs.push({ icon: iconName, text });
 
   // Update elapsed time header
   const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
@@ -757,23 +765,23 @@ function renderUserMessage(text) {
   div.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function renderStepDropdown(durationStr = '1s') {
+function renderStepDropdown(durationStr = '1s', isOpen = true) {
   const container = document.createElement('div');
   container.className = 'thought-dropdown';
 
   const header = document.createElement('div');
-  header.className = 'thought-header open';
+  header.className = 'thought-header' + (isOpen ? ' open' : '');
   header.innerHTML = `
     <span class="chevron-icon material-symbols-outlined">chevron_right</span>
     <span class="header-label">Worked for ${escHtml(durationStr)}</span>
   `;
 
   const body = document.createElement('div');
-  body.className = 'thought-body open';
+  body.className = 'thought-body' + (isOpen ? ' open' : '');
 
   header.addEventListener('click', () => {
-    const isOpen = header.classList.toggle('open');
-    body.classList.toggle('open', isOpen);
+    const openState = header.classList.toggle('open');
+    body.classList.toggle('open', openState);
   });
 
   container.appendChild(header);
@@ -787,6 +795,15 @@ function renderStepDropdown(durationStr = '1s') {
     headerText: header.querySelector('.header-label'),
     body,
   };
+}
+
+function renderReasoningBlock(bodyEl, text) {
+  if (!bodyEl || !text) return;
+  const div = document.createElement('div');
+  div.className = 'thought-text-block';
+  div.textContent = text;
+  bodyEl.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 function renderStepSubItem(bodyEl, iconName, text) {

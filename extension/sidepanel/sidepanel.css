@@ -272,7 +272,7 @@ html, body {
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   scroll-behavior: smooth;
 }
 
@@ -389,7 +389,7 @@ html, body {
 .thought-header {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: #a1a1aa;
   font-size: 12px;
   cursor: pointer;
@@ -415,8 +415,8 @@ html, body {
 .thought-body {
   display: none;
   flex-direction: column;
-  gap: 6px;
-  padding-left: 14px;
+  gap: 4px;
+  padding-left: 12px;
   margin-top: 2px;
   border-left: 1.5px solid var(--border);
 }
@@ -430,12 +430,8 @@ html, body {
   align-items: center;
   gap: 6px;
   font-size: 11.5px;
-  color: #a1a1aa;
+  color: #d4d4d8;
   padding: 2px 0;
-}
-
-.thought-sub-item:hover {
-  color: #e4e4e7;
 }
 
 .thought-sub-item .item-icon {
@@ -444,24 +440,16 @@ html, body {
   flex-shrink: 0;
 }
 
-.thought-sub-item .item-tag {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--secondary);
-  color: var(--foreground);
-}
-
 .thought-text-block {
   font-size: 11.5px;
-  color: #71717a;
-  font-style: italic;
-  line-height: 1.4;
-  margin: 2px 0;
-  padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.015);
+  color: #9ca3af;
+  line-height: 1.45;
+  margin: 4px 0 6px 0;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid #52525b;
   border-radius: 3px;
+  white-space: pre-wrap;
 }
 
 .chat-agent-result {
