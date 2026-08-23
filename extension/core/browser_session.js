@@ -675,7 +675,7 @@
     // ─── Visual, Media & Advanced DOM Capabilities ───────────────────────────
 
     /**
-     * Captures a screenshot of the visible tab viewport or scrolls to a specific element first.
+     * Captures a screenshot of the visible tab viewport or scrolls to a specific element/section first.
      * @param {Object} [options] { index, selector, file_name }
      * @returns {Promise<Object>} { success, screenshotDataUrl, fileName }
      */
@@ -683,22 +683,36 @@
       const targetIndex = options.index ?? options.element_index;
       const targetSelector = options.selector || options.query;
 
-      if (targetIndex != null || targetSelector) {
-        await this._executeInTab((idx, sel) => {
-          let el = null;
-          if (idx != null) {
-            el = document.querySelector(`[data-bu-index="${idx}"]`);
-          }
-          if (!el && sel) {
-            try { el = document.querySelector(sel); } catch {}
-          }
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-          }
-        }, [targetIndex, targetSelector]);
-        await this.wait(0.4);
-      }
+      // 1. Semantic layout alignment in DOM
+      await this._executeInTab((idx, sel) => {
+        let el = null;
+        if (idx != null) {
+          el = document.querySelector(`[data-bu-index="${idx}"]`);
+        }
+        if (!el && sel) {
+          try { el = document.querySelector(sel); } catch {}
+        }
+        // Auto-detect main profile/information container if no specific index provided
+        if (!el) {
+          el = document.querySelector('.card, .biodata, .table-responsive, table, #content, main, article');
+        }
 
+        if (el) {
+          // Scroll so element has a comfortable 60px padding from the top
+          const rect = el.getBoundingClientRect();
+          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+          const targetY = scrollTop + rect.top - 60;
+          window.scrollTo({
+            top: Math.max(0, targetY),
+            behavior: 'smooth',
+          });
+        }
+      }, [targetIndex, targetSelector]);
+
+      // 2. Wait for smooth scroll, reflow, and paint to settle
+      await this.wait(0.6);
+
+      // 3. Viewport capture via Chrome Extension API
       if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.captureVisibleTab) {
         try {
           const dataUrl = await chrome.tabs.captureVisibleTab(this.windowId || null, { format: 'png' });

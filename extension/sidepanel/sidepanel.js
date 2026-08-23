@@ -733,12 +733,25 @@ function handleAgentEvent(evt) {
       state.activeStepDropdown.body.classList.remove('open');
     }
     renderAgentResult(data.result || msg || 'Tugas selesai.', false);
-    recordMessageToActiveSession({
-      role: 'step',
-      duration: `${elapsed}s`,
-      items: [...currentStepLogs],
-    });
-    recordMessageToActiveSession({ role: 'agent', text: data.result || msg, isError: false });
+
+    const current = getActiveSession();
+    if (current && current.messages) {
+      const lastMsg = current.messages[current.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'step' && lastMsg._isActive) {
+        lastMsg.duration = `${elapsed}s`;
+        lastMsg.items = [...currentStepLogs];
+        delete lastMsg._isActive;
+      } else if (currentStepLogs.length > 0) {
+        current.messages.push({
+          role: 'step',
+          duration: `${elapsed}s`,
+          items: [...currentStepLogs],
+        });
+      }
+      current.messages.push({ role: 'agent', text: data.result || msg, isError: false });
+      saveStorage({ sessions: state.sessions });
+    }
+
     state.activeStepDropdown = null;
     state.activeStepBody = null;
     currentStepLogs = [];
@@ -793,7 +806,16 @@ function handleAgentEvent(evt) {
       interaction_id: data.interaction_id || ('ix_' + Date.now()),
     };
     widgetManager.renderInteraction(interactionObj).then((res) => {
-      recordMessageToActiveSession({ role: 'widget_resolved', label: res.label || String(res.value) });
+      // Transition widget resolution into the active "Worked for Xs" step log
+      if (!state.activeStepDropdown) {
+        const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+        state.activeStepDropdown = renderStepDropdown(`${elapsed}s`, true);
+        state.activeStepBody = state.activeStepDropdown.body;
+      }
+      const label = res.label || String(res.value);
+      renderStepSubItem(state.activeStepBody, 'check_circle', `Input Pengguna: "${label}"`);
+      currentStepLogs.push({ icon: 'check_circle', text: `Input Pengguna: "${label}"` });
+      saveActiveStepState();
       updateStatus('Memproses respon...', true);
     });
     return;
@@ -845,11 +867,35 @@ function handleAgentEvent(evt) {
     currentStepLogs.push({ icon: iconName, text });
   }
 
+  // Save active step real-time to storage
+  saveActiveStepState();
+
   // Update elapsed time header
   const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
   if (state.activeStepDropdown) {
     state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
   }
+}
+
+function saveActiveStepState() {
+  const current = getActiveSession();
+  if (!current) return;
+  if (!current.messages) current.messages = [];
+
+  const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+  const lastMsg = current.messages[current.messages.length - 1];
+  if (lastMsg && lastMsg.role === 'step' && lastMsg._isActive) {
+    lastMsg.duration = `${elapsed}s`;
+    lastMsg.items = [...currentStepLogs];
+  } else if (currentStepLogs.length > 0) {
+    current.messages.push({
+      role: 'step',
+      duration: `${elapsed}s`,
+      items: [...currentStepLogs],
+      _isActive: true,
+    });
+  }
+  saveStorage({ sessions: state.sessions });
 }
 
 // ─── UI Render Helpers (Zero Emojis, Google Material) ─────────────────────────
