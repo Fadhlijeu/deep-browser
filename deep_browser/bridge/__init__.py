@@ -1,3 +1,5 @@
-from deep_browser.bridge.server import app
+"""
+Deep-Browser Bridge Module
+"""
 
-__all__ = ["app"]
+__all__ = ["server"]

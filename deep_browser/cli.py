@@ -29,7 +29,7 @@ def cli():
 
 @cli.command()
 @click.option("--host", default="127.0.0.1", help="Host address to bind.")
-@click.option("--port", default=8765, type=int, help="Port to bind.")
+@click.option("--port", default=7788, type=int, help="Port to bind (default: 7788 for Chrome Extension).")
 def serve(host: str, port: int):
     """Start the Deep-Browser companion bridge server for Chrome Extension."""
     console.print(f"[bold cyan]Starting Deep-Browser Bridge Server on http://{host}:{port}[/bold cyan]")
