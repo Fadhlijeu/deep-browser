@@ -713,7 +713,16 @@ function connectExtTransport(taskId) {
  * Returns a plain object that will be JSON-serialized back as the response.
  */
 async function executeTransportCommand(command, params) {
-  const tabId = state.currentTab?.id;
+  let tabId = state.currentTab?.id;
+  if (!tabId) {
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab) {
+        state.currentTab = activeTab;
+        tabId = activeTab.id;
+      }
+    } catch (e) {}
+  }
 
   switch (command) {
     case 'GET_STATE': {

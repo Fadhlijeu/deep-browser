@@ -215,30 +215,40 @@
     return `${fenBoard} ${turn} - - 0 1`;
   }
 
-  // ── 4. Move Execution on Board ─────────────────────────────────────────────
+  // ── 4. Robust Multi-Strategy Move Execution on Board ────────────────────────
+  function algToColRow(sq) {
+    const fileChar = sq[0].toLowerCase();
+    const rankChar = sq[1];
+    const colNum = fileChar.charCodeAt(0) - 96; // 'a'->1, 'b'->2 ... 'h'->8
+    const rowNum = parseInt(rankChar, 10);      // 1..8
+    return { colNum, rowNum, fileIdx: colNum - 1, rankIdx: rowNum - 1 };
+  }
+
   function squareToCoordinates(sq, boardEl) {
     const rect = boardEl.getBoundingClientRect();
     const isFlipped = boardEl.classList.contains('flipped') || boardEl.getAttribute('orientation') === 'black' || lastSide === 'b';
-    const file = sq.charCodeAt(0) - 97; // 0..7 for a..h
-    const rank = parseInt(sq[1], 10) - 1; // 0..7 for 1..8
+    const { fileIdx, rankIdx } = algToColRow(sq);
 
-    const col = isFlipped ? 7 - file : file;
-    const row = isFlipped ? rank : 7 - rank;
+    const col = isFlipped ? 7 - fileIdx : fileIdx;
+    const row = isFlipped ? rankIdx : 7 - rankIdx;
 
-    const sqWidth = rect.width / 8;
-    const sqHeight = rect.height / 8;
+    const sqWidth = rect.width / 8.0;
+    const sqHeight = rect.height / 8.0;
 
     return {
-      x: rect.left + col * sqWidth + sqWidth / 2,
-      y: rect.top + row * sqHeight + sqHeight / 2,
+      x: rect.left + col * sqWidth + sqWidth / 2.0,
+      y: rect.top + row * sqHeight + sqHeight / 2.0,
     };
   }
 
   async function executeMove(fromSq, toSq) {
     const board = document.querySelector('wc-chess-board, chess-board, .board, #board-single');
-    if (!board) throw new Error('Papan catur tidak ditemukan di halaman.');
+    if (!board) throw new Error('Papan catur (wc-chess-board) tidak ditemukan di halaman.');
 
-    // 1. Dispatch page script bridge move
+    const fromInfo = algToColRow(fromSq);
+    const toInfo = algToColRow(toSq);
+
+    // Strategy 1: Injected Page Script API (board.game.move / userMove)
     window.postMessage({
       source: 'DEEP_BROWSER_CHESS_EXEC_PAGE',
       from: fromSq,
@@ -246,32 +256,54 @@
       promotion: 'q',
     }, '*');
 
-    // 2. DOM Pointer / Drag / Click simulation for maximum compatibility
+    // Strategy 2: DOM Square & Piece Element Direct Clicks
+    const fromSelector = `.piece.square-${fromInfo.colNum}${fromInfo.rowNum}, .square-${fromInfo.colNum}${fromInfo.rowNum}, .square-${fromSq}`;
+    const toSelector = `.square-${toInfo.colNum}${toInfo.rowNum}, .piece.square-${toInfo.colNum}${toInfo.rowNum}, .square-${toSq}`;
+
+    const fromEl = board.querySelector(fromSelector);
+    const toEl = board.querySelector(toSelector);
+
+    if (fromEl) {
+      fromEl.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+      fromEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      fromEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    }
+
+    await new Promise(r => setTimeout(r, 120));
+
+    if (toEl) {
+      toEl.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+      toEl.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+      toEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+      toEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    }
+
+    // Strategy 3: Bounding Rect Coordinate Pointer Drag Simulation
     const fromCoords = squareToCoordinates(fromSq, board);
     const toCoords = squareToCoordinates(toSq, board);
 
-    function dispatchMouseEvent(type, x, y) {
-      const el = document.elementFromPoint(x, y) || board;
+    function dispatchMouseEvent(target, type, x, y) {
+      const el = target || document.elementFromPoint(x, y) || board;
       const evt = new MouseEvent(type, {
         bubbles: true,
         cancelable: true,
         view: window,
         clientX: x,
         clientY: y,
+        screenX: x,
+        screenY: y,
       });
       el.dispatchEvent(evt);
     }
 
-    // Step 1: Click source square / piece
-    dispatchMouseEvent('pointerdown', fromCoords.x, fromCoords.y);
-    dispatchMouseEvent('mousedown', fromCoords.x, fromCoords.y);
+    dispatchMouseEvent(fromEl, 'pointerdown', fromCoords.x, fromCoords.y);
+    dispatchMouseEvent(fromEl, 'mousedown', fromCoords.x, fromCoords.y);
     await new Promise(r => setTimeout(r, 80));
 
-    // Step 2: Move to destination square
-    dispatchMouseEvent('mousemove', toCoords.x, toCoords.y);
-    dispatchMouseEvent('pointerup', toCoords.x, toCoords.y);
-    dispatchMouseEvent('mouseup', toCoords.x, toCoords.y);
-    dispatchMouseEvent('click', toCoords.x, toCoords.y);
+    dispatchMouseEvent(board, 'mousemove', toCoords.x, toCoords.y);
+    dispatchMouseEvent(toEl, 'pointerup', toCoords.x, toCoords.y);
+    dispatchMouseEvent(toEl, 'mouseup', toCoords.x, toCoords.y);
+    dispatchMouseEvent(toEl, 'click', toCoords.x, toCoords.y);
 
     return { success: true, from: fromSq, to: toSq };
   }

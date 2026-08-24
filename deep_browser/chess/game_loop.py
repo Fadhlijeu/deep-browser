@@ -66,14 +66,23 @@ class ChessGameController:
         )
 
         try:
+            no_board_retries = 0
             while self.is_running and self.move_count < self.max_moves:
                 # 1. Fetch current board state from web page
                 state = await self._get_web_board_state()
                 fen = state.get("fen")
                 if not fen:
-                    logger.debug("[ChessController] Waiting for chessboard to be loaded on page...")
+                    no_board_retries += 1
+                    if no_board_retries % 5 == 0:
+                        logger.info(f"[ChessController] Menunggu papan catur terdeteksi di tab... ({no_board_retries}/25)")
+                    if no_board_retries >= 25:
+                        err_msg = "Tidak menemukan elemen papan catur aktif di tab ini. Silakan refresh halaman Chess.com dan pastikan pertandingan telah dimulai."
+                        logger.warning(f"[ChessController] {err_msg}")
+                        return {"status": "error", "error": err_msg, "message": err_msg}
                     await asyncio.sleep(self.poll_interval)
                     continue
+
+                no_board_retries = 0
 
                 side = state.get("side", self.playing_side)
                 self.playing_side = side
