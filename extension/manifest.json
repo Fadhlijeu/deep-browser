@@ -35,6 +35,7 @@
       "matches": ["<all_urls>"],
       "js": [
         "content/cdp_executor.js",
+        "content/chess_bridge.js",
         "content/hud_overlay.js",
         "content/agent_cursor.js",
         "content/floating_hud.js"

@@ -1575,5 +1575,146 @@ html, body {
   transition: width 0.3s ease;
 }
 
+/* ─── Chess Copilot Live Chat Card ─── */
+.chat-chess-card-wrapper {
+  margin: 10px 0;
+  width: 100%;
+}
+
+.chess-chat-card {
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chess-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chess-move-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.chess-body-flex {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  justify-content: center;
+}
+
+.chess-eval-bar-wrapper {
+  width: 14px;
+  background: #27272a;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.chess-eval-fill {
+  width: 100%;
+  background: #f4f4f5;
+  transition: height 0.4s ease;
+}
+
+.chess-eval-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  font-size: 8px;
+  font-weight: 800;
+  color: #a1a1aa;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chess-board-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 224px;
+  height: 224px;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.board-sq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  user-select: none;
+}
+
+.board-sq.light {
+  background: #3f3f46;
+}
+
+.board-sq.dark {
+  background: #18181b;
+}
+
+.board-sq.highlight-from {
+  background: rgba(0, 236, 255, 0.45) !important;
+  box-shadow: inset 0 0 0 1.5px #00ecff;
+}
+
+.board-sq.highlight-to {
+  background: rgba(34, 197, 94, 0.45) !important;
+  box-shadow: inset 0 0 0 1.5px #22c55e;
+}
+
+.chess-piece {
+  font-size: 20px;
+  line-height: 1;
+  display: inline-block;
+  transform: translateY(-1px);
+}
+
+.chess-piece.piece-white {
+  color: #f8fafc;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.chess-piece.piece-black {
+  color: #a1a1aa;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+
+.chess-commentary-box {
+  background: #09090b;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chess-comm-line {
+  font-size: 11px;
+  color: #d4d4d8;
+  line-height: 1.4;
+}
+
 
 

@@ -513,7 +513,47 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
                             )
 
 
-        # 4. Domain & operational guidance for autonomous agent
+        # 4. Check for Autonomous Chess Copilot requests
+        task_lower = req.task.lower()
+        if any(kw in task_lower for kw in ("catur", "chess", "chess.com", "lichess")):
+            level = "normal"
+            if any(kw in task_lower for kw in ("casual", "human", "pemula", "santai", "easy")):
+                level = "casual"
+            elif any(kw in task_lower for kw in ("strong", "master", "kuat")):
+                level = "strong"
+            elif any(kw in task_lower for kw in ("grandmaster", "ultra", "max", "hard", "sulit")):
+                level = "grandmaster"
+
+            from deep_browser.chess.game_loop import ChessGameController
+            controller = ChessGameController(
+                browser_session=session,
+                level=level,
+                task_id=task_id,
+                broadcaster=broadcaster,
+            )
+            chess_res = await controller.run_game()
+            ext_ctx.status = "completed"
+            active_tasks[task_id]["status"] = "completed"
+            active_tasks[task_id]["result"] = chess_res.get("message", "Pertandingan catur selesai.")
+
+            await broadcaster.broadcast(
+                DeepBrowserEvent(
+                    task_id=task_id,
+                    session_id=session_id,
+                    owner=owner,
+                    browser_mode=browser_mode,
+                    browser_id=browser_id,
+                    tab_id=tab_id,
+                    event_type=EventType.TASK_COMPLETED,
+                    status="COMPLETED",
+                    summary="Pertandingan catur selesai.",
+                    message=chess_res.get("message", "Pertandingan catur selesai."),
+                    data=chess_res,
+                )
+            )
+            return
+
+        # 5. Domain & operational guidance for autonomous agent
         system_extension_prompt = (
             "Deep-Browser Autonomous Agent Guidelines:\n"
             "1. DETAIL COMPLETION & PROFILE VERIFICATION: When looking up specific records, profiles, students, or lecturers (e.g. on PDDikti or databases), NEVER conclude at the search result table/list. Click into the specific record, wait for the profile/detail page to load, and verify the full data before declaring the task done.\n"
@@ -523,7 +563,8 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
             "5. OUTPUT FORMAT: Present your final result as structured, clean Markdown with clear headings, bullet points, and citations."
         )
 
-        # 5. Instantiate genuine Browser Use Agent
+        # 6. Instantiate genuine Browser Use Agent
+
         agent = Agent(
             task=req.task,
             llm=llm,
@@ -922,7 +963,46 @@ async def submit_confirmation_decision(confirmation_id: str, req: ConfirmationDe
     }
 
 
+# --- Chess Copilot Endpoints ---
+
+class ChessAnalyzeRequest(BaseModel):
+    fen: str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    depth: int = 10
+    multipv: int = 5
+    level: str = "normal"
+
+@app.post("/api/chess/analyze")
+async def api_chess_analyze(req: ChessAnalyzeRequest):
+    import chess
+    from deep_browser.chess.evaluator import analyze_position
+    from deep_browser.chess.policy import ChessPlayPolicy
+    from deep_browser.chess.renderer import render_html_board
+    try:
+        board = chess.Board(req.fen)
+        analysis = analyze_position(board, depth=req.depth, multipv=req.multipv)
+        policy = ChessPlayPolicy(level=req.level)
+        selected = policy.select_move(board, analysis)
+        html_board = render_html_board(
+            board=board,
+            last_move_uci=selected.get("move_uci"),
+            eval_cp=analysis.get("best_cp", 0),
+            move_label=selected.get("label", "BEST"),
+            commentary=analysis.get("commentary", []),
+        )
+        return {
+            "status": "success",
+            "fen": board.fen(),
+            "analysis": analysis,
+            "selected_move": selected,
+            "html_board": html_board,
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing chess position: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Agent Lifecycle Control Endpoints ---
+
 
 @app.post("/api/agent/pause")
 async def pause_agent():

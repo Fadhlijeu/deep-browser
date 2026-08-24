@@ -555,11 +555,14 @@ function renderActiveSessionTimeline() {
       renderHtmlSnippetInChat(msg.html, msg.title, msg.text);
     } else if (msg.role === 'pdf') {
       renderPdfBadgeInChat(msg.fileName, msg.title, msg.url, msg.html);
+    } else if (msg.role === 'chess_board') {
+      renderChessBoardCardInChat(msg.html, msg.label, msg.move_uci, msg.eval_cp, msg.reason);
     } else if (msg.role === 'widget_resolved') {
       renderResolvedWidgetBadge(msg.label || msg.text);
     }
   });
 }
+
 
 function renderResolvedWidgetBadge(label) {
   const div = document.createElement('div');
@@ -865,10 +868,34 @@ async function executeTransportCommand(command, params) {
       return domResult || {};
     }
 
+    case 'GET_CHESS_STATE': {
+      try {
+        const res = await chrome.tabs.sendMessage(tabId, {
+          type: 'DEEP_BROWSER_CMD', command: 'GET_CHESS_STATE'
+        });
+        return res || {};
+      } catch (err) {
+        return { error: err.message || String(err) };
+      }
+    }
+
+    case 'EXECUTE_CHESS_MOVE': {
+      try {
+        const res = await chrome.tabs.sendMessage(tabId, {
+          type: 'DEEP_BROWSER_CMD', command: 'EXECUTE_CHESS_MOVE',
+          move: params.move, from: params.from, to: params.to
+        });
+        return res || {};
+      } catch (err) {
+        return { error: err.message || String(err) };
+      }
+    }
+
     default:
       console.warn(`[ExtTransport] Unknown command: ${command}`);
       return { warning: `Unknown command: ${command}` };
   }
+
 }
 
 /** Capture full page state: DOM elements + screenshot + tabs */
@@ -1233,6 +1260,26 @@ function handleAgentEvent(evt) {
     return;
   }
 
+  // Handle Chess Copilot live board & move events
+  if (t === 'CHESS_BOARD_UPDATED' || t === 'CHESS_MOVE_PLAYED') {
+    renderChessBoardCardInChat(data.html_board, data.label, data.move_uci, data.eval_cp, data.reason);
+    recordMessageToActiveSession({
+      role: 'chess_board',
+      html: data.html_board,
+      label: data.label,
+      move_uci: data.move_uci,
+      eval_cp: data.eval_cp,
+      reason: data.reason,
+    });
+    return;
+  }
+
+  if (t === 'CHESS_GAME_OVER') {
+    renderAgentResult(data.message || msg || 'Pertandingan catur telah selesai.', false);
+    recordMessageToActiveSession({ role: 'agent', text: data.message || msg || 'Pertandingan catur selesai.', isError: false });
+    return;
+  }
+
   if (t === 'CONFIRMATION_REQUIRED' || t === 'USER_INPUT_REQUIRED') {
     updateStatus('Menunggu Respon Anda', false, true);
     const confId = data.confirmation_id || data.interaction_id || ('conf_' + Date.now());
@@ -1454,6 +1501,16 @@ function renderScreenshotInChat(dataUrl, fileName = 'screenshot.png') {
   elTimeline.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
+
+function renderChessBoardCardInChat(htmlContent, label = 'BEST', moveUci = '', evalCp = 0, reason = '') {
+  hideEmptyState();
+  const card = document.createElement('div');
+  card.className = 'chat-chess-card-wrapper';
+  card.innerHTML = htmlContent || `<div class="chess-chat-card"><span style="color:#00ecff;font-weight:700">Langkah: ${moveUci} (${label})</span></div>`;
+  elTimeline.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
 
 function renderHtmlSnippetInChat(htmlContent, title = 'Struktur Informasi Visual', rawText = '') {
   hideEmptyState();
