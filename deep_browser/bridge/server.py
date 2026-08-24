@@ -119,10 +119,62 @@ class ConfirmationDecisionRequest(BaseModel):
 
 
 def _create_llm(provider: str, model_name: Optional[str], api_key: Optional[str]):
-    # Primary model strictly locked to gemini-3.5-flash-lite
+    """
+    Build an LLM instance for any supported provider.
+    Provider is sent by the Extension along with the user-configured API key.
+    """
     import os
-    model = model_name or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash-lite"
-    return ChatGoogle(model=model, api_key=api_key)
+    provider = (provider or "gemini").lower().strip()
+
+    if provider in ("gemini", "google"):
+        model = model_name or os.environ.get("GEMINI_MODEL") or "gemini-2.0-flash"
+        key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        return ChatGoogle(model=model, api_key=key)
+
+    elif provider == "openai":
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            raise RuntimeError("langchain-openai not installed. Run: pip install langchain-openai")
+        model = model_name or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
+        key = api_key or os.environ.get("OPENAI_API_KEY")
+        return ChatOpenAI(model=model, api_key=key)
+
+    elif provider == "anthropic":
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError:
+            raise RuntimeError("langchain-anthropic not installed. Run: pip install langchain-anthropic")
+        model = model_name or os.environ.get("ANTHROPIC_MODEL") or "claude-3-5-haiku-20241022"
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        return ChatAnthropic(model=model, api_key=key)  # type: ignore[call-arg]
+
+    elif provider in ("ollama", "local"):
+        try:
+            from langchain_ollama import ChatOllama
+        except ImportError:
+            raise RuntimeError("langchain-ollama not installed. Run: pip install langchain-ollama")
+        model = model_name or os.environ.get("OLLAMA_MODEL") or "llama3"
+        base_url = api_key or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
+        return ChatOllama(model=model, base_url=base_url)
+
+    elif provider in ("custom_openai", "custom", "deepseek"):
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            raise RuntimeError("langchain-openai not installed. Run: pip install langchain-openai")
+        model = model_name or "deepseek-chat"
+        # For custom_openai, api_key may be "sk-xxx" and baseUrl is stored separately.
+        # The Extension must pass the API key; base_url comes from model config via api_key field convention.
+        key = api_key or os.environ.get("CUSTOM_OPENAI_API_KEY")
+        base_url = os.environ.get("CUSTOM_OPENAI_BASE_URL") or "https://api.deepseek.com/v1"
+        return ChatOpenAI(model=model, api_key=key, base_url=base_url)
+
+    else:
+        logger.warning(f"Unknown provider '{provider}', falling back to Gemini Flash.")
+        model = model_name or "gemini-2.0-flash"
+        key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        return ChatGoogle(model=model, api_key=key)
 
 
 # --- System & Session Management Endpoints ---
@@ -406,21 +458,81 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
                         browser_mode=browser_mode,
                         browser_id=browser_id,
                         tab_id=tab_id,
-                        event_type=EventType.THINKING_STATUS,
+                        event_type=EventType.REASONING,
                         status="THINKING",
-                        summary="Analyzing page...",
-                        message=str(thinking)[:200],
-                        data={"thinking": thinking},
+                        summary="Reasoning...",
+                        message=str(thinking),
+                        data={"thinking": thinking, "next_goal": next_goal},
                     )
                 )
 
-        # 4. Instantiate genuine Browser Use Agent
+            # Broadcast individual actions from agent_output
+            if agent_output and getattr(agent_output, "action", None):
+                for act in agent_output.action:
+                    act_dump = act.model_dump(exclude_unset=True) if hasattr(act, "model_dump") else {}
+                    for act_name, act_params in act_dump.items():
+                        target_str = ""
+                        evt_type = EventType.ACTION_REQUESTED
+                        if act_name == "navigate" or act_name == "go_to_url":
+                            evt_type = EventType.NAVIGATION
+                            target_str = act_params.get("url", "") if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "click_element" or act_name == "click":
+                            evt_type = EventType.CLICK
+                            target_str = f"Element #{act_params.get('index', '')}" if isinstance(act_params, dict) else str(act_params)
+                        elif act_name in ("input_text", "type_text", "type"):
+                            evt_type = EventType.TYPE
+                            text = act_params.get("text", "") if isinstance(act_params, dict) else str(act_params)
+                            target_str = text[:80]
+                        elif act_name == "scroll_page" or act_name == "scroll":
+                            evt_type = EventType.SCROLL
+                            target_str = str(act_params)
+                        elif act_name in ("press_key", "key_press", "send_keys"):
+                            evt_type = EventType.PRESS_KEY
+                            target_str = act_params.get("key", "") if isinstance(act_params, dict) else str(act_params)
+                        elif act_name == "switch_tab":
+                            evt_type = EventType.TAB_SWITCH
+                            target_str = str(act_params)
+
+                        if evt_type != EventType.ACTION_REQUESTED:
+                            await broadcaster.broadcast(
+                                DeepBrowserEvent(
+                                    task_id=task_id,
+                                    session_id=session_id,
+                                    owner=owner,
+                                    browser_mode=browser_mode,
+                                    browser_id=browser_id,
+                                    tab_id=tab_id,
+                                    event_type=evt_type,
+                                    action=act_name,
+                                    target=target_str,
+                                    status="EXECUTING",
+                                    summary=f"{act_name}: {target_str}",
+                                    message=target_str,
+                                    data=act_params if isinstance(act_params, dict) else {},
+                                )
+                            )
+
+
+        # 4. Domain & operational guidance for autonomous agent
+        system_extension_prompt = (
+            "Deep-Browser Autonomous Agent Guidelines:\n"
+            "1. DETAIL COMPLETION & PROFILE VERIFICATION: When looking up specific records, profiles, students, or lecturers (e.g. on PDDikti or databases), NEVER conclude at the search result table/list. Click into the specific record, wait for the profile/detail page to load, and verify the full data before declaring the task done.\n"
+            "2. SCREENSHOT EVIDENCE: If the user asks for a screenshot or visual proof, ensure you have navigated to the final target page, scrolled the relevant information clearly into view, and taken the screenshot of the actual rendered content.\n"
+            "3. RESEARCH ACCURACY: For scientific, historical, or academic research, search and open authoritative, encyclopedic, or published sources (e.g. Wikipedia, scientific papers, official registries). Do not rely on commercial AI landing pages or promotional ads.\n"
+            "4. MULTI-TAB RESEARCH: When tasked with multi-tab or parallel research across topics, open new tabs using navigate(..., new_tab=True), inspect and extract key findings from each, and synthesize a comprehensive markdown summary.\n"
+            "5. OUTPUT FORMAT: Present your final result as structured, clean Markdown with clear headings, bullet points, and citations."
+        )
+
+        # 5. Instantiate genuine Browser Use Agent
         agent = Agent(
             task=req.task,
             llm=llm,
             browser_session=session,
             tools=tools,
             register_new_step_callback=step_callback,
+            extend_system_message=system_extension_prompt,
+            enable_planning=True,
+            use_vision=True,
         )
 
         active_agents[task_id] = agent
@@ -445,6 +557,7 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
         active_tasks[task_id]["status"] = "completed"
         active_tasks[task_id]["result"] = str(result)
 
+        result_text = str(result) if result is not None else "Task completed."
         await broadcaster.broadcast(
             DeepBrowserEvent(
                 task_id=task_id,
@@ -453,9 +566,9 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
                 browser_mode=browser_mode,
                 browser_id=browser_id,
                 tab_id=tab_id,
-                event_type=EventType.COMPLETED,
+                event_type=EventType.TASK_COMPLETED,
                 message="Task completed successfully",
-                data={"result": str(result)},
+                data={"result": result_text},
             )
         )
 
@@ -474,7 +587,7 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
                 browser_mode=browser_mode,
                 browser_id=browser_id,
                 tab_id=tab_id,
-                event_type=EventType.FAILED,
+                event_type=EventType.ERROR,
                 message=f"Extension task failed: {err_msg}",
                 data={"error": err_msg},
             )
@@ -725,6 +838,9 @@ IMPORTANT INSTRUCTIONS:
             browser_session=session,
             tools=tools,
             register_new_step_callback=step_callback,
+            extend_system_message=system_extension_prompt,
+            enable_planning=True,
+            use_vision=True,
         )
 
         active_agents[task_id] = agent

@@ -44,7 +44,18 @@ class EventType(str, Enum):
     RESUMING = "RESUMING"
     STOPPED = "STOPPED"
     COMPLETED = "COMPLETED"
+    TASK_COMPLETED = "TASK_COMPLETED"   # alias used by Extension UI & compact.js
     FAILED = "FAILED"
+    ERROR = "ERROR"                     # alias used by Extension UI for task failures
+    ACTION_FAILED = "ACTION_FAILED"     # individual action failure (shown in step log)
+    NAVIGATION = "NAVIGATION"           # alias for NAVIGATE used by Extension sidepanel
+    # Media / artifact events (emitted when agent captures content)
+    SCREENSHOT_CAPTURED = "SCREENSHOT_CAPTURED"
+    HTML_SNIPPET_CAPTURED = "HTML_SNIPPET_CAPTURED"
+    PDF_SAVED = "PDF_SAVED"
+    # Parallel research
+    PARALLEL_WORKER_PROGRESS = "PARALLEL_WORKER_PROGRESS"
+    PARALLEL_RESEARCH_COMPLETED = "PARALLEL_RESEARCH_COMPLETED"
     SESSION_CREATED = "SESSION_CREATED"
     SESSION_SWITCHED = "SESSION_SWITCHED"
     SESSION_CLOSED = "SESSION_CLOSED"
@@ -52,6 +63,7 @@ class EventType(str, Enum):
     SESSION_HANDOFF_REQUESTED = "SESSION_HANDOFF_REQUESTED"
     SESSION_HANDOFF_COMPLETED = "SESSION_HANDOFF_COMPLETED"
     BROWSER_STATE_UPDATED = "BROWSER_STATE_UPDATED"
+
 
 
 class DeepBrowserEvent(BaseModel):

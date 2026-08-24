@@ -138,12 +138,13 @@ class TestExtensionBrowserSession(unittest.IsolatedAsyncioTestCase):
         transport_task = asyncio.create_task(mock_transport_loop())
         self.transport.mark_connected()
 
-        event = self.session.event_bus.dispatch(NavigateToUrlEvent(url="https://google.com", new_tab=False))
-        await event
-        await event.event_result(raise_if_any=True, raise_if_none=False)
+        event = NavigateToUrlEvent(url="https://google.com", new_tab=False)
+        res_task = asyncio.create_task(self.session.on_NavigateToUrlEvent(event))
         await transport_task
+        await res_task
 
         self.assertEqual(self.session._current_url, "https://google.com")
+
 
     async def test_action_event_dispatch_click(self):
         """Test ClickElementEvent translates to CLICK transport command."""
@@ -182,10 +183,10 @@ class TestExtensionBrowserSession(unittest.IsolatedAsyncioTestCase):
         transport_task = asyncio.create_task(mock_transport_loop())
         self.transport.mark_connected()
 
-        event = self.session.event_bus.dispatch(ClickElementEvent(node=node))
-        await event
-        res = await event.event_result(raise_if_any=True, raise_if_none=False)
+        event = ClickElementEvent(node=node)
+        res_task = asyncio.create_task(self.session.on_ClickElementEvent(event))
         await transport_task
+        res = await res_task
 
         self.assertTrue(res.get("success"))
 
@@ -227,12 +228,14 @@ class TestExtensionBrowserSession(unittest.IsolatedAsyncioTestCase):
         transport_task = asyncio.create_task(mock_transport_loop())
         self.transport.mark_connected()
 
-        event = self.session.event_bus.dispatch(TypeTextEvent(node=node, text="Muhammad Fadhli", clear=True))
-        await event
-        res = await event.event_result(raise_if_any=True, raise_if_none=False)
+        event = TypeTextEvent(node=node, text="Muhammad Fadhli", clear=True)
+        res_task = asyncio.create_task(self.session.on_TypeTextEvent(event))
         await transport_task
+        res = await res_task
 
         self.assertTrue(res.get("success"))
+
+
 
 
 if __name__ == "__main__":

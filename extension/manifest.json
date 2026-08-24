@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Deep-Browser AI Copilot",
-  "version": "0.2.0",
-  "description": "Standalone Browser-Use Autonomous AI Copilot for Chrome",
+  "version": "0.3.0",
+  "description": "Browser-Use Autonomous AI Copilot for Chrome — Backend-Unified Architecture",
   "permissions": [
     "sidePanel",
     "tabs",
@@ -17,6 +17,8 @@
     "https://api.anthropic.com/*",
     "http://localhost:11434/*",
     "http://127.0.0.1:11434/*",
+    "http://localhost:7788/*",
+    "http://127.0.0.1:7788/*",
     "<all_urls>"
   ],
   "background": {
@@ -31,7 +33,12 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/hud_overlay.js", "content/agent_cursor.js", "content/floating_hud.js"],
+      "js": [
+        "content/cdp_executor.js",
+        "content/hud_overlay.js",
+        "content/agent_cursor.js",
+        "content/floating_hud.js"
+      ],
       "css": ["content/hud_overlay.css", "content/agent_cursor.css", "content/floating_hud.css"],
       "run_at": "document_end"
     }

@@ -537,7 +537,7 @@ class ExtensionBrowserSession(BrowserSession):
         self._cached_browser_state_summary = summary
         return summary
 
-    # ─── Query Helpers ────────────────────────────────────────────────────────
+    # ─── Query Helpers & Media Capture ────────────────────────────────────────
 
     async def get_element_by_index(self, index: int) -> Optional[EnhancedDOMTreeNode]:
         """Resolves element by its highlight/backend index from cached selector map."""
@@ -551,6 +551,83 @@ class ExtensionBrowserSession(BrowserSession):
             return self._cached_browser_state_summary.tabs
         return [TabInfo(url=self._current_url, title=self._current_title, target_id=str(self._current_tab_id or "0"))]
 
+    async def get_title(self) -> str:
+        """Returns current page title."""
+        return self._current_title or "Active Tab"
+
+    async def get_url(self) -> str:
+        """Returns current page URL."""
+        return self._current_url or "about:blank"
+
+    async def take_screenshot(
+        self,
+        path: Optional[str] = None,
+        full_page: bool = False,
+        format: str = "png",
+        quality: Optional[int] = None,
+        clip: Optional[dict] = None,
+    ) -> bytes:
+        """
+        Captures a high-resolution screenshot from the active Chrome tab via Extension transport.
+        Saves to path if provided and broadcasts SCREENSHOT_CAPTURED to the chat UI.
+        """
+        import base64
+        from pathlib import Path
+        from deep_browser.events import EventBroadcaster, DeepBrowserEvent, EventType
+
+        logger.info(f"[ExtensionSession] Capturing screenshot (full_page={full_page}, format={format})")
+
+        b64_data = None
+        try:
+            res = await self._transport.request(
+                "TAKE_SCREENSHOT",
+                {"full_page": full_page, "format": format, "quality": quality, "clip": clip},
+                timeout=20.0,
+            )
+            b64_data = res.get("screenshot")
+        except Exception as e:
+            logger.warning(f"[ExtensionSession] TAKE_SCREENSHOT command error: {e}, falling back to GET_STATE")
+
+        if not b64_data:
+            try:
+                state_res = await self._transport.request("GET_STATE", {"include_screenshot": True}, timeout=20.0)
+                b64_data = state_res.get("screenshot")
+            except Exception as e:
+                logger.error(f"[ExtensionSession] Failed to capture fallback screenshot: {e}")
+
+        img_bytes = base64.b64decode(b64_data) if b64_data else b""
+
+        if path and img_bytes:
+            try:
+                file_path = Path(path)
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_bytes(img_bytes)
+            except Exception as e:
+                logger.error(f"[ExtensionSession] Failed to save screenshot file to {path}: {e}")
+
+        # Broadcast SCREENSHOT_CAPTURED to Extension chat UI for rich presentation
+        if b64_data:
+            data_url = f"data:image/{format};base64,{b64_data}"
+            file_name = Path(path).name if path else f"screenshot_{int(time.time())}.png"
+            try:
+                task_id = getattr(self._transport, "task_id", "active")
+                asyncio.create_task(
+                    EventBroadcaster.get_instance().broadcast(
+                        DeepBrowserEvent(
+                            task_id=task_id,
+                            session_id=self.id,
+                            event_type=EventType.SCREENSHOT_CAPTURED,
+                            message="Screenshot captured",
+                            data={"screenshotDataUrl": data_url, "fileName": file_name},
+                        )
+                    )
+                )
+            except Exception:
+                pass
+
+        return img_bytes
+
     async def close(self) -> None:
         """Stops the session."""
         self._transport.close()
+

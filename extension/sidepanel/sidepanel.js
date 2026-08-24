@@ -48,7 +48,8 @@ let state = {
   apiKeys: {},
   sessions: [],
   activeSessionId: null,
-  currentAgent: null,
+  currentAgent: null,     // JS Agent instance (legacy / fallback mode)
+  currentTaskId: null,    // Backend task ID (backend mode)
   agentRunning: false,
   editingModelId: null,
   activeStepDropdown: null,
@@ -106,7 +107,10 @@ async function init() {
   loadSessions();
   updateTabStrip();
   updateStatus('Siap', false);
+  // Connect to backend Python agent event stream (auto-reconnects on disconnect)
+  connectBackendEventStream();
 }
+
 
 // ─── Storage Operations ──────────────────────────────────────────────────────
 async function loadStorage() {
@@ -591,6 +595,343 @@ function closeDrawer() {
   elDrawerOverlay.classList.remove('active');
 }
 
+// ─── Backend Configuration ────────────────────────────────────────────────────
+const BACKEND_URL = 'http://localhost:7788';
+const BACKEND_WS  = 'ws://localhost:7788';
+
+// ─── Backend Event Stream (persistent WS, auto-reconnect) ────────────────────
+let backendEventWs = null;
+let backendReconnectTimer = null;
+
+function connectBackendEventStream() {
+  if (backendEventWs && (backendEventWs.readyState === WebSocket.OPEN || backendEventWs.readyState === WebSocket.CONNECTING)) return;
+  clearTimeout(backendReconnectTimer);
+
+  try {
+    const ws = new WebSocket(`${BACKEND_WS}/ws/extension`);
+    backendEventWs = ws;
+
+    ws.onopen = () => {
+      console.log('[DeepBrowser] Connected to backend event stream.');
+      updateBackendStatus(true);
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        handleAgentEvent(evt);
+      } catch (err) {
+        console.error('[DeepBrowser] Event parse error:', err);
+      }
+    };
+
+    ws.onerror = () => {
+      updateBackendStatus(false);
+    };
+
+    ws.onclose = () => {
+      backendEventWs = null;
+      updateBackendStatus(false);
+      // Auto-reconnect after 3s unless explicitly closed
+      backendReconnectTimer = setTimeout(connectBackendEventStream, 3000);
+    };
+  } catch (err) {
+    console.error('[DeepBrowser] Failed to open backend WS:', err);
+    backendReconnectTimer = setTimeout(connectBackendEventStream, 3000);
+  }
+}
+
+function updateBackendStatus(connected) {
+  // Visual indicator for backend connectivity (optional enhancement)
+  const pill = document.getElementById('status-pill');
+  if (pill) {
+    if (connected) {
+      pill.dataset.backendConnected = 'true';
+    } else {
+      delete pill.dataset.backendConnected;
+    }
+  }
+}
+
+// ─── Ext-Transport WS (CDP command executor for active task) ─────────────────
+let extTransportWs = null;
+let currentTransportTaskId = null;
+
+function connectExtTransport(taskId) {
+  // Close existing transport if any
+  if (extTransportWs) {
+    try { extTransportWs.close(); } catch (_) {}
+    extTransportWs = null;
+  }
+
+  currentTransportTaskId = taskId;
+
+  try {
+    const ws = new WebSocket(`${BACKEND_WS}/ws/ext-transport/${taskId}`);
+    extTransportWs = ws;
+
+    ws.onopen = () => {
+      console.log(`[ExtTransport:${taskId}] Connected. Ready for CDP commands.`);
+    };
+
+    ws.onmessage = async (e) => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch (_) { return; }
+
+      if (msg.type === 'TRANSPORT_COMMAND') {
+        const { request_id, command, params } = msg;
+        try {
+          const result = await executeTransportCommand(command, params || {});
+          ws.send(JSON.stringify({ request_id, result: result || {} }));
+        } catch (err) {
+          ws.send(JSON.stringify({ request_id, error: err.message || String(err) }));
+        }
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error(`[ExtTransport:${taskId}] WS error:`, err);
+    };
+
+    ws.onclose = () => {
+      console.log(`[ExtTransport:${taskId}] Disconnected.`);
+      if (currentTransportTaskId === taskId) {
+        extTransportWs = null;
+        currentTransportTaskId = null;
+      }
+    };
+  } catch (err) {
+    console.error('[ExtTransport] Failed to open WS:', err);
+  }
+}
+
+/**
+ * Execute a CDP command sent by the backend's ExtensionBrowserSession.
+ * Returns a plain object that will be JSON-serialized back as the response.
+ */
+async function executeTransportCommand(command, params) {
+  const tabId = state.currentTab?.id;
+
+  switch (command) {
+    case 'GET_STATE': {
+      return await capturePageState(tabId, params.include_screenshot !== false);
+    }
+
+    case 'NAVIGATE': {
+      const { url, new_tab } = params;
+      if (new_tab) {
+        const tab = await chrome.tabs.create({ url, active: true });
+        state.currentTab = tab;
+        updateTabStrip();
+        await waitForTabLoad(tab.id, 10000);
+        const updatedTab = await chrome.tabs.get(tab.id);
+        return { url: updatedTab.url, title: updatedTab.title };
+      } else {
+        await chrome.tabs.update(tabId, { url });
+        await waitForTabLoad(tabId, 10000);
+        const updatedTab = await chrome.tabs.get(tabId);
+        return { url: updatedTab.url, title: updatedTab.title };
+      }
+    }
+
+    case 'CLICK': {
+      const { index, xpath, button } = params;
+      const res = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'CLICK', index, xpath, button: button || 'left'
+      });
+      return res || {};
+    }
+
+    case 'CLICK_COORDINATE': {
+      const { x, y, button } = params;
+      const res = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'CLICK_COORDINATE', x, y, button: button || 'left'
+      });
+      return res || {};
+    }
+
+    case 'TYPE': {
+      const { index, xpath, text, clear } = params;
+      const res = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'TYPE', index, xpath, text, clear: !!clear
+      });
+      return res || {};
+    }
+
+    case 'SCROLL': {
+      const { direction, amount } = params;
+      const res = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'SCROLL', direction, amount: amount || 300
+      });
+      return res || {};
+    }
+
+    case 'SCROLL_TO_TEXT': {
+      const { text: scrollText, direction: scrollDir } = params;
+      const res = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'SCROLL_TO_TEXT', text: scrollText, direction: scrollDir
+      });
+      return res || {};
+    }
+
+    case 'SEND_KEYS': {
+      const { keys } = params;
+      const res = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'SEND_KEYS', keys
+      });
+      return res || {};
+    }
+
+    case 'GO_BACK': {
+      await chrome.tabs.sendMessage(tabId, { type: 'DEEP_BROWSER_CMD', command: 'GO_BACK' });
+      await new Promise(r => setTimeout(r, 800));
+      const t = await chrome.tabs.get(tabId);
+      return { url: t.url, title: t.title };
+    }
+
+    case 'GO_FORWARD': {
+      await chrome.tabs.sendMessage(tabId, { type: 'DEEP_BROWSER_CMD', command: 'GO_FORWARD' });
+      await new Promise(r => setTimeout(r, 800));
+      const t = await chrome.tabs.get(tabId);
+      return { url: t.url, title: t.title };
+    }
+
+    case 'REFRESH': {
+      await chrome.tabs.reload(tabId);
+      await waitForTabLoad(tabId, 10000);
+      const t = await chrome.tabs.get(tabId);
+      return { url: t.url, title: t.title };
+    }
+
+    case 'SWITCH_TAB': {
+      const { target_id } = params;
+      const tabs = await chrome.tabs.query({ currentWindow: true });
+      const found = tabs.find(t => String(t.id) === String(target_id) || String(t.url).includes(target_id));
+      if (found) {
+        await chrome.tabs.update(found.id, { active: true });
+        state.currentTab = found;
+        updateTabStrip();
+        return { tab_id: found.id, url: found.url, title: found.title };
+      }
+      return { tab_id: target_id };
+    }
+
+    case 'CLOSE_TAB': {
+      const { target_id } = params;
+      if (target_id) {
+        await chrome.tabs.remove(parseInt(target_id, 10));
+      }
+      return {};
+    }
+
+    case 'TAKE_SCREENSHOT': {
+      try {
+        const dataUrl = await chrome.tabs.captureVisibleTab(null, {
+          format: params.format === 'jpeg' ? 'jpeg' : 'png',
+          quality: params.quality || 90,
+        });
+        const cleanB64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+        return { screenshot: cleanB64, format: params.format || 'png' };
+      } catch (err) {
+        console.warn('[ExtTransport] TAKE_SCREENSHOT failed:', err);
+        return { error: err.message || String(err) };
+      }
+    }
+
+    case 'SAVE_AS_PDF': {
+      try {
+        const domResult = await chrome.tabs.sendMessage(tabId, {
+          type: 'DEEP_BROWSER_CMD', command: 'GET_PAGE_HTML'
+        });
+        const html = domResult?.html || '<html><body>PDF Document</body></html>';
+        const title = state.currentTab?.title || 'Dokumen';
+        const url = state.currentTab?.url || '';
+        const fileName = (params.file_name || 'dokumen').replace(/\.pdf$/i, '') + '.pdf';
+        handleAgentEvent({
+          event_type: 'PDF_SAVED',
+          message: `Dokumen PDF disimpan: ${fileName}`,
+          data: { fileName, title, url, html },
+        });
+        return { success: true, fileName, title };
+      } catch (err) {
+        return { error: err.message || String(err) };
+      }
+    }
+
+    case 'GET_PAGE_HTML': {
+      const domResult = await chrome.tabs.sendMessage(tabId, {
+        type: 'DEEP_BROWSER_CMD', command: 'GET_PAGE_HTML'
+      });
+      return domResult || {};
+    }
+
+    default:
+      console.warn(`[ExtTransport] Unknown command: ${command}`);
+      return { warning: `Unknown command: ${command}` };
+  }
+}
+
+/** Capture full page state: DOM elements + screenshot + tabs */
+async function capturePageState(tabId, includeScreenshot) {
+  const tab = tabId ? await chrome.tabs.get(tabId) : state.currentTab;
+  const activeTabId = tab?.id;
+
+  // Get DOM elements via content script
+  let elements = [];
+  let pageInfo = {};
+  try {
+    const domResult = await chrome.tabs.sendMessage(activeTabId, {
+      type: 'DEEP_BROWSER_CMD', command: 'GET_DOM_STATE'
+    });
+    elements = domResult?.elements || [];
+    pageInfo = domResult?.pageInfo || {};
+  } catch (err) {
+    console.warn('[capturePageState] DOM capture failed:', err.message);
+  }
+
+  // Screenshot
+  let screenshot = null;
+  if (includeScreenshot) {
+    try {
+      const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 85 });
+      screenshot = dataUrl.replace(/^data:image\/png;base64,/, '');
+    } catch (err) {
+      console.warn('[capturePageState] Screenshot failed:', err.message);
+    }
+  }
+
+  // All open tabs
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const tabs = allTabs.map(t => ({ id: t.id, url: t.url, title: t.title, active: t.active }));
+
+  return {
+    url: tab?.url || '',
+    title: tab?.title || '',
+    screenshot,
+    elements,
+    page_info: pageInfo,
+    tabs,
+  };
+}
+
+/** Wait for a tab to finish loading, with timeout */
+function waitForTabLoad(tabId, timeout = 10000) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeout;
+    function check(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(check);
+        resolve();
+      } else if (Date.now() > deadline) {
+        chrome.tabs.onUpdated.removeListener(check);
+        resolve();
+      }
+    }
+    chrome.tabs.onUpdated.addListener(check);
+    setTimeout(() => { chrome.tabs.onUpdated.removeListener(check); resolve(); }, timeout);
+  });
+}
+
 // ─── Task Execution ──────────────────────────────────────────────────────────
 async function submitTask(explicitGoal = null) {
   if (state.agentRunning) {
@@ -625,10 +966,70 @@ async function submitTask(explicitGoal = null) {
   resizeTextarea();
   setAgentRunning(true);
   updateStatus('Bekerja...', true);
-
-
   state.stepStartTime = Date.now();
 
+  // ── Backend Path ──────────────────────────────────────────────────────────
+  // Check if backend is available; fall back to standalone JS Agent if not.
+  const backendAvailable = backendEventWs && backendEventWs.readyState === WebSocket.OPEN;
+
+  if (backendAvailable) {
+    // BACKEND PATH: Delegate task to Python browser_use.Agent
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task: goal,
+          owner: 'EXTENSION',
+          browser_mode: 'ATTACHED',
+          tab_id: state.currentTab?.id ?? null,
+          window_id: state.currentTab?.windowId ?? null,
+          url: state.currentTab?.url ?? null,
+          title: state.currentTab?.title ?? null,
+          model_provider: provider,
+          model_name: activeModel.modelId || activeModel.id,
+          api_key: apiKey,
+          base_url: activeModel.baseUrl || '',
+          safe_mode: state.selectedMode === 'hitl',
+          safe_timeout_seconds: 60.0,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`Backend /api/tasks returned ${resp.status}: ${errBody}`);
+      }
+
+      const { task_id } = await resp.json();
+      state.currentTaskId = task_id;
+      state.currentAgent = null; // No JS agent — backend owns execution
+
+      // Connect ext-transport WS so backend can issue CDP commands to this tab
+      connectExtTransport(task_id);
+
+    } catch (err) {
+      console.error('[SidePanel] Backend task submission failed:', err);
+      // Show error immediately — don't silently swallow
+      handleAgentEvent({
+        event_type: 'ERROR',
+        message: `Gagal terhubung ke backend: ${err.message}. Pastikan server berjalan di port 7788.`,
+        data: { error: err.message },
+      });
+      setAgentRunning(false);
+      updateStatus('Error', false);
+    }
+    // Task running via backend; UI updates come via /ws/extension event stream.
+    // setAgentRunning(false) is called when TASK_COMPLETED or ERROR arrives.
+
+  } else {
+    // FALLBACK PATH: No backend — run standalone JS Agent (legacy mode)
+    console.warn('[SidePanel] Backend not connected. Running standalone JS Agent (legacy mode).');
+    await _runStandaloneAgent(goal, activeModel, provider, apiKey);
+  }
+}
+
+/** Legacy standalone JS Agent (used only when backend is unavailable) */
+async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
   const browserSession = new window.BrowserSession({
     tabId: state.currentTab?.id,
     windowId: state.currentTab?.windowId,
@@ -692,12 +1093,31 @@ async function submitTask(explicitGoal = null) {
 }
 
 
-function stopAgent() {
+async function stopAgent() {
+  // Stop backend task if running via backend
+  if (state.currentTaskId) {
+    try {
+      await fetch(`${BACKEND_URL}/api/agent/stop`, { method: 'POST' });
+    } catch (_) {}
+    state.currentTaskId = null;
+  }
+
+  // Stop standalone JS agent if running
   if (state.currentAgent) {
     state.currentAgent.stop();
+    state.currentAgent = null;
   }
+
+  // Close ext-transport WS
+  if (extTransportWs) {
+    try { extTransportWs.close(); } catch (_) {}
+    extTransportWs = null;
+    currentTransportTaskId = null;
+  }
+
   setAgentRunning(false);
   updateStatus('Dihentikan', false);
+
   state.currentAgent = null;
   widgetManager.clear();
 }
@@ -719,6 +1139,8 @@ function handleAgentEvent(evt) {
   if (t === 'TASK_STARTED') {
     state.stepStartTime = Date.now();
     currentStepLogs = [];
+    state.activeStepDropdown = null;
+    state.activeStepBody = null;
     return;
   }
 
@@ -755,15 +1177,29 @@ function handleAgentEvent(evt) {
     state.activeStepDropdown = null;
     state.activeStepBody = null;
     currentStepLogs = [];
+    // Backend task finished — reset running state
+    setAgentRunning(false);
+    updateStatus('Siap', false);
+    state.currentTaskId = null;
+    state.currentAgent = null;
+    widgetManager.clear();
+    updateTabStrip();
     return;
   }
 
-  // Handle error
-  if (t === 'ERROR') {
+  // Handle error / failure
+  if (t === 'ERROR' || t === 'FAILED') {
     renderAgentResult(data.error || msg, true);
     recordMessageToActiveSession({ role: 'agent', text: data.error || msg, isError: true });
     state.activeStepDropdown = null;
     state.activeStepBody = null;
+    currentStepLogs = [];
+    // Backend task failed — reset running state
+    setAgentRunning(false);
+    updateStatus('Error', false);
+    state.currentTaskId = null;
+    state.currentAgent = null;
+    widgetManager.clear();
     return;
   }
 
@@ -797,65 +1233,99 @@ function handleAgentEvent(evt) {
     return;
   }
 
-  if (t === 'USER_INPUT_REQUIRED') {
+  if (t === 'CONFIRMATION_REQUIRED' || t === 'USER_INPUT_REQUIRED') {
     updateStatus('Menunggu Respon Anda', false, true);
+    const confId = data.confirmation_id || data.interaction_id || ('conf_' + Date.now());
     const interactionObj = data.interaction || {
-      type: data.type || 'choice',
-      question: data.question || msg,
+      type: t === 'CONFIRMATION_REQUIRED' ? 'approval' : (data.type || 'choice'),
+      question: data.reason || data.question || msg || 'Konfirmasi aksi sensitif',
+      action_name: data.action || 'Aksi Sensitif',
+      parameters: data.parameters || {},
+      category: data.category,
+      interaction_id: confId,
       options: data.options || [],
-      interaction_id: data.interaction_id || ('ix_' + Date.now()),
     };
-    widgetManager.renderInteraction(interactionObj).then((res) => {
-      // Transition widget resolution into the active "Worked for Xs" step log
+    widgetManager.renderInteraction(interactionObj).then(async (res) => {
+      const isApproved = res.approved !== false && res.value !== 'reject' && res.value !== false;
+      const decision = isApproved ? 'CONFIRM' : 'REJECT';
+
+      // 1. Dispatch decision over WebSocket to backend SafeModeManager
+      if (backendEventWs && backendEventWs.readyState === WebSocket.OPEN) {
+        backendEventWs.send(JSON.stringify({
+          type: 'CONFIRMATION_DECISION',
+          confirmation_id: confId,
+          decision: decision,
+        }));
+      }
+
+      // 2. Fallback HTTP confirmation resolution
+      try {
+        fetch(`${BACKEND_URL}/api/confirmations/${confId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision }),
+        }).catch(() => {});
+      } catch (_) {}
+
+      // 3. Move widget resolution into the step dropdown (anti-clutter)
       if (!state.activeStepDropdown) {
         const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-        state.activeStepDropdown = renderStepDropdown(`${elapsed}s`, true);
+        state.activeStepDropdown = renderStepDropdown(elapsed + 's', true);
         state.activeStepBody = state.activeStepDropdown.body;
       }
-      const label = res.label || String(res.value);
-      renderStepSubItem(state.activeStepBody, 'check_circle', `Input Pengguna: "${label}"`);
-      currentStepLogs.push({ icon: 'check_circle', text: `Input Pengguna: "${label}"` });
+      const label = res.label || String(res.value || decision);
+      renderStepSubItem(state.activeStepBody, 'check_circle', 'Input Pengguna: "' + label + '"');
+      currentStepLogs.push({ icon: 'check_circle', text: 'Input Pengguna: "' + label + '"' });
       saveActiveStepState();
       updateStatus('Memproses respon...', true);
+
+      // Record to active session for reload persistence
+      recordMessageToActiveSession({ role: 'widget_resolved', label: label });
     });
     return;
   }
 
-  // Filter ONLY relevant items: REASONING, CLICK, TYPE, NAVIGATION, SCROLL, EXTRACTION, ACTION_FAILED
   let iconName = null;
   let text = '';
   let isReasoning = false;
 
   if (t === 'REASONING') {
     isReasoning = true;
-    text = msg;
+    text = data.thinking || msg;
   } else if (t === 'CLICK') {
     iconName = 'touch_app';
-    text = `Click [${data.index || ''}] ${data.target || ''}`.trim();
+    const clickTarget = data.target || evt.target || '';
+    text = ('Click [' + (data.index || '') + '] ' + clickTarget).trim();
   } else if (t === 'TYPE') {
     iconName = 'edit';
-    text = `Type "${data.text || ''}" into [${data.index || ''}]`;
-  } else if (t === 'NAVIGATION') {
+    const typeText = (data.text || evt.target || '').slice(0, 50);
+    text = 'Type "' + typeText + '" into [' + (data.index || '') + ']';
+  } else if (t === 'NAVIGATION' || t === 'NAVIGATE') {
     iconName = 'navigation';
-    text = `Navigate to ${data.url || msg}`;
+    text = 'Navigate to ' + (data.url || evt.target || msg);
   } else if (t === 'SCROLL') {
     iconName = 'swap_vert';
-    text = `Scroll ${data.down !== false ? 'down' : 'up'}`;
+    const scrollDir = data.direction || '';
+    text = 'Scroll ' + (scrollDir.toLowerCase().startsWith('up') ? 'up' : 'down');
+  } else if (t === 'PRESS_KEY') {
+    iconName = 'keyboard';
+    text = 'Key: ' + (data.key || evt.target || msg);
+  } else if (t === 'TAB_SWITCH') {
+    iconName = 'tab';
+    text = 'Switch to tab: ' + (data.url || evt.target || msg);
   } else if (t === 'EXTRACTION') {
     iconName = 'dataset';
-    text = `Extract: ${data.query || ''}`;
+    text = 'Extract: ' + (data.query || '');
   } else if (t === 'ACTION_FAILED') {
     iconName = 'error';
-    text = `Failed: ${msg}`;
+    text = 'Failed: ' + msg;
   } else {
-    // Ignore all other noisy telemetry (ATTACH_TAB, OBSERVATION, PLAN, WAITING, VERIFICATION, ACTION_EXECUTED)
     return;
   }
 
-  // Ensure dropdown exists
   if (!state.activeStepDropdown) {
-    const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-    state.activeStepDropdown = renderStepDropdown(`${elapsed}s`, true);
+    const el = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
+    state.activeStepDropdown = renderStepDropdown(el + 's', true);
     state.activeStepBody = state.activeStepDropdown.body;
   }
 
@@ -867,16 +1337,13 @@ function handleAgentEvent(evt) {
     currentStepLogs.push({ icon: iconName, text });
   }
 
-  // Save active step real-time to storage
   saveActiveStepState();
 
-  // Update elapsed time header
   const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
   if (state.activeStepDropdown) {
-    state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
+    state.activeStepDropdown.headerText.textContent = 'Worked for ' + elapsed + 's';
   }
 }
-
 function saveActiveStepState() {
   const current = getActiveSession();
   if (!current) return;
