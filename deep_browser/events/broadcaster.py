@@ -5,7 +5,7 @@ Event broadcaster for real-time telemetry streaming to WebSockets and extension.
 import asyncio
 import json
 import logging
-from typing import Set, Callable
+from typing import Any, Callable, Set
 from deep_browser.events.models import DeepBrowserEvent
 
 logger = logging.getLogger(__name__)
@@ -52,9 +52,31 @@ class EventBroadcaster:
 
         for async_listener in list(self._async_listeners):
             try:
-                await async_listener(event)
+                res = async_listener(event)
+                if asyncio.iscoroutine(res):
+                    await res
             except Exception as e:
                 logger.error(f"Error in async event listener: {e}")
+
+    async def register_client(self) -> asyncio.Queue:
+        """Creates a client subscription queue for real-time WebSocket event streaming."""
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def _listener(event: DeepBrowserEvent):
+            try:
+                await queue.put(event)
+            except Exception:
+                pass
+
+        self._async_listeners.add(_listener)
+        setattr(queue, "_listener_cb", _listener)
+        return queue
+
+    async def unregister_client(self, queue: asyncio.Queue) -> None:
+        """Unregisters a client subscription queue."""
+        cb = getattr(queue, "_listener_cb", None)
+        if cb and cb in self._async_listeners:
+            self._async_listeners.discard(cb)
 
     def get_history(self, task_id: str | None = None) -> list[DeepBrowserEvent]:
         if task_id:
