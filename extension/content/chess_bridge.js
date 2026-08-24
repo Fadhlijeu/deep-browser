@@ -1,7 +1,7 @@
 /**
  * Deep-Browser Chess Bridge — Content Script
  * ==========================================
- * Real-time FEN perception, side detection, and move execution for Chess.com & Lichess.
+ * Real-time FEN perception, side detection, and autonomous piece movement for Chess.com & Lichess.
  */
 
 (function () {
@@ -75,6 +75,31 @@
               board.game.on('NewGame', checkBoard);
             }
           }
+
+          // Handle move execution command from extension
+          window.addEventListener('message', function(evt) {
+            if (evt.data && evt.data.source === 'DEEP_BROWSER_CHESS_EXEC_PAGE') {
+              const { from, to, promotion } = evt.data;
+              try {
+                const board = document.querySelector('wc-chess-board, chess-board');
+                if (board && board.game) {
+                  let executed = false;
+                  if (typeof board.game.move === 'function') {
+                    board.game.move({ from: from, to: to, promotion: promotion || 'q' });
+                    executed = true;
+                  } else if (typeof board.game.userMove === 'function') {
+                    board.game.userMove({ from: from, to: to });
+                    executed = true;
+                  }
+                  if (executed) {
+                    setTimeout(checkBoard, 100);
+                  }
+                }
+              } catch(err) {
+                console.warn('[ChessBridgePage] Page move error:', err);
+              }
+            }
+          });
 
           setInterval(() => {
             hookEvents();
@@ -211,8 +236,17 @@
 
   async function executeMove(fromSq, toSq) {
     const board = document.querySelector('wc-chess-board, chess-board, .board, #board-single');
-    if (!board) throw new Error('Chessboard element not found on page.');
+    if (!board) throw new Error('Papan catur tidak ditemukan di halaman.');
 
+    // 1. Dispatch page script bridge move
+    window.postMessage({
+      source: 'DEEP_BROWSER_CHESS_EXEC_PAGE',
+      from: fromSq,
+      to: toSq,
+      promotion: 'q',
+    }, '*');
+
+    // 2. DOM Pointer / Drag / Click simulation for maximum compatibility
     const fromCoords = squareToCoordinates(fromSq, board);
     const toCoords = squareToCoordinates(toSq, board);
 
@@ -228,12 +262,12 @@
       el.dispatchEvent(evt);
     }
 
-    // Step 1: Click / Mousedown on source square
+    // Step 1: Click source square / piece
     dispatchMouseEvent('pointerdown', fromCoords.x, fromCoords.y);
     dispatchMouseEvent('mousedown', fromCoords.x, fromCoords.y);
-    await new Promise(r => setTimeout(r, 60));
+    await new Promise(r => setTimeout(r, 80));
 
-    // Step 2: Click / Mouseup on target square
+    // Step 2: Move to destination square
     dispatchMouseEvent('mousemove', toCoords.x, toCoords.y);
     dispatchMouseEvent('pointerup', toCoords.x, toCoords.y);
     dispatchMouseEvent('mouseup', toCoords.x, toCoords.y);
