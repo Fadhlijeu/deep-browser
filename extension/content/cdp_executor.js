@@ -246,14 +246,49 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
+        case 'GET_CHESS_STATE': {
+          if (typeof window.__deepBrowserGetChessState === 'function') {
+            sendResponse(window.__deepBrowserGetChessState());
+          } else {
+            // Direct DOM check fallback
+            const board = document.querySelector('wc-chess-board, chess-board, .board');
+            if (board) {
+              sendResponse({
+                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                side: 'w',
+                turn: 'w',
+                isGameOver: false,
+                url: window.location.href,
+              });
+            } else {
+              sendResponse({ error: 'No chessboard found on page' });
+            }
+          }
+          break;
+        }
+
+        case 'EXECUTE_CHESS_MOVE': {
+          if (typeof window.__deepBrowserExecuteChessMove === 'function') {
+            const fromSq = msg.from || (msg.move ? msg.move.slice(0, 2) : '');
+            const toSq = msg.to || (msg.move ? msg.move.slice(2, 4) : '');
+            window.__deepBrowserExecuteChessMove(fromSq, toSq)
+              .then(res => sendResponse(res))
+              .catch(err => sendResponse({ error: err.message }));
+          } else {
+            sendResponse({ error: 'Chess move executor not available on this page' });
+          }
+          break;
+        }
+
         default:
-          sendResponse({ error: `Unknown command: ${command}` });
+          sendResponse({ warning: `Unhandled command: ${command}` });
       }
     } catch (err) {
       sendResponse({ error: err.message || String(err) });
     }
 
   })();
+
 
   return true; // keep channel open for async response
 });

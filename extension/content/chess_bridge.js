@@ -308,22 +308,30 @@
     return { success: true, from: fromSq, to: toSq };
   }
 
-  // ── 5. Extension Message Listener ──────────────────────────────────────────
+  // ── 5. Global Bridge Interface & Extension Message Listener ────────────────
+  window.__deepBrowserGetChessState = function () {
+    const fen = lastFen || extractFenFromDom() || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const side = lastSide || getPlayerSideFallback();
+    return {
+      fen: fen,
+      side: side,
+      turn: lastTurn || (fen.includes(' b ') ? 'b' : 'w'),
+      isGameOver: lastGameOver,
+      url: window.location.href,
+    };
+  };
+
+  window.__deepBrowserExecuteChessMove = async function (fromSq, toSq) {
+    return await executeMove(fromSq, toSq);
+  };
+
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (msg.type === 'DEEP_BROWSER_CMD' || msg.command) {
+      if (msg && (msg.type === 'DEEP_BROWSER_CMD' || msg.command)) {
         const cmd = msg.command;
 
         if (cmd === 'GET_CHESS_STATE') {
-          const fen = lastFen || extractFenFromDom() || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-          const side = lastSide || getPlayerSideFallback();
-          sendResponse({
-            fen: fen,
-            side: side,
-            turn: lastTurn || (fen.includes(' b ') ? 'b' : 'w'),
-            isGameOver: lastGameOver,
-            url: window.location.href,
-          });
+          sendResponse(window.__deepBrowserGetChessState());
           return true;
         }
 
@@ -342,3 +350,4 @@
   injectGameBridge();
   console.log('[Deep-Browser] Chess Bridge initialized on', window.location.hostname);
 })();
+
