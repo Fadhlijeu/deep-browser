@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface AssistantMessageProps {
   message: ChatMessage;
@@ -90,8 +91,8 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
                 </span>
               </button>
             </div>
-            <div className="markdown-body" style={{ whiteSpace: 'pre-wrap' }}>
-              {message.text}
+            <div className="markdown-body">
+              <MarkdownRenderer content={message.text} />
             </div>
           </div>
         )}

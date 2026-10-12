@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChatMessage } from '../../types';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface UserMessageProps {
   message: ChatMessage;
@@ -17,7 +18,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
   return (
     <div className="user-message-row">
       <div className="user-bubble">
-        {message.text}
+        <MarkdownRenderer content={message.text} />
       </div>
       <div className="user-meta">
         <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>

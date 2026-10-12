@@ -552,17 +552,21 @@ html, body, #root {
   flex-direction: column;
   align-items: flex-end;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .user-bubble {
   max-width: 88%;
+  min-width: 0;
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg) var(--radius-lg) 2px var(--radius-lg);
   padding: 8px 12px;
   color: var(--text-primary);
   font-size: 12.5px;
-  line-height: 1.45;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
   word-break: break-word;
   position: relative;
   box-shadow: var(--shadow-sm);
@@ -584,11 +588,15 @@ html, body, #root {
   flex-direction: column;
   align-items: flex-start;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   gap: 8px;
 }
 
 .assistant-card {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -597,6 +605,229 @@ html, body, #root {
   flex-direction: column;
   gap: 8px;
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ─── Rich Markdown & LaTeX Math Rendering ────────────────────────────── */
+.markdown-body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-rendered-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.user-bubble .markdown-rendered-content {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.markdown-rendered-content p {
+  margin: 0 0 7px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.markdown-rendered-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-rendered-content h1,
+.markdown-rendered-content h2,
+.markdown-rendered-content h3,
+.markdown-rendered-content h4 {
+  margin: 10px 0 5px 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.markdown-rendered-content h1 { font-size: 14.5px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; }
+.markdown-rendered-content h2 { font-size: 13.5px; }
+.markdown-rendered-content h3 { font-size: 12.5px; }
+.markdown-rendered-content h4 { font-size: 12px; }
+
+.markdown-rendered-content ul,
+.markdown-rendered-content ol {
+  margin: 4px 0 8px 18px;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.markdown-rendered-content li {
+  margin-bottom: 3px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-rendered-content blockquote {
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-left: 3px solid var(--accent);
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  color: var(--text-secondary);
+  font-style: italic;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  border-bottom: 1px dashed rgba(37, 99, 235, 0.4);
+  transition: all 0.12s ease;
+}
+.markdown-link:hover {
+  color: #60a5fa;
+  border-bottom-style: solid;
+}
+
+/* Inline Code */
+.inline-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1.5px 5px;
+  border-radius: 4px;
+  color: #93c5fd;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Multi-line Code Block */
+.code-block-container {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  margin: 8px 0;
+  background: var(--bg-base);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.code-lang-tag {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: var(--radius-xs);
+  transition: all 0.12s ease;
+}
+.code-copy-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.code-block-pre {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 8px 10px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre;
+}
+
+/* Responsive Table */
+.table-responsive-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  margin: 8px 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: left;
+}
+.markdown-table th {
+  background: var(--bg-surface-elevated);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.markdown-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.markdown-table tr:last-child td {
+  border-bottom: none;
+}
+.markdown-table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* LaTeX KaTeX Equations Anti-Piercing & Styling */
+.katex-display {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 6px 0 !important;
+  margin: 8px 0 !important;
+  text-align: center;
+}
+
+.katex {
+  font-size: 1.05em !important;
+  max-width: 100% !important;
+}
+
+.katex-html {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
 }
 
 .assistant-meta-strip {
