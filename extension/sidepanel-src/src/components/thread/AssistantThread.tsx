@@ -57,14 +57,15 @@ export const AssistantThread: React.FC<AssistantThreadProps> = ({
   const runtime = useExternalStoreRuntime({
     messages: auiMessages,
     isRunning: runState === 'running',
-    onNew: (msg) => {
+    convertMessage: (m) => m,
+    onNew: async (msg) => {
       const textContent = msg.content
         .filter((c: any) => c.type === 'text')
         .map((c: any) => c.text)
         .join('');
       onSendMessage(textContent);
     },
-    onCancel: () => {
+    onCancel: async () => {
       onCancelRun();
     },
   });

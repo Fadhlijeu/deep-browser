@@ -311,7 +311,19 @@ export class SidepanelStateManager {
   }
 
   public getActiveSession(): Session {
-    return this.state.sessions.find((s) => String(s.id) === String(this.state.activeSessionId)) || this.state.sessions[0];
+    let session = this.state.sessions.find((s) => String(s.id) === String(this.state.activeSessionId)) || this.state.sessions[0];
+    if (!session) {
+      session = {
+        id: 'session_' + Date.now(),
+        name: 'Sesi Baru',
+        createdAt: Date.now(),
+        messages: [],
+        events: [],
+      };
+      this.state.sessions = [session];
+      this.state.activeSessionId = session.id;
+    }
+    return session;
   }
 
   public setView(view: 'chat' | 'logs') {
@@ -641,10 +653,10 @@ export class SidepanelStateManager {
           func: () => {
             const desc = document.querySelector('meta[name="description"]')?.getAttribute('content') ||
                          document.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-            const h1s = Array.from(document.querySelectorAll('h1')).map((h) => h.innerText.trim()).filter(Boolean).slice(0, 3);
-            const h2s = Array.from(document.querySelectorAll('h2')).map((h) => h.innerText.trim()).filter(Boolean).slice(0, 5);
-            const main = document.querySelector('main, article, #content, .content, #readme, [role="main"]') || document.body;
-            const text = (main?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+            const h1s = Array.from(document.querySelectorAll('h1')).map((h) => ((h as HTMLElement).innerText || h.textContent || '').trim()).filter(Boolean).slice(0, 3);
+            const h2s = Array.from(document.querySelectorAll('h2')).map((h) => ((h as HTMLElement).innerText || h.textContent || '').trim()).filter(Boolean).slice(0, 5);
+            const main = (document.querySelector('main, article, #content, .content, #readme, [role="main"]') || document.body) as HTMLElement | null;
+            const text = ((main?.innerText || main?.textContent || '')).replace(/\s+/g, ' ').trim().slice(0, 2000);
             return {
               title: document.title || '',
               description: desc,

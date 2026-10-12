@@ -12,5 +12,5 @@
     "noEmit": true,
     "types": ["chrome", "vite/client"]
   },
-  "include": ["sidepanel-src/**/*", "src/**/*", "sidepanel/**/*", "vite.config.ts"]
+  "include": ["sidepanel-src/**/*", "src/**/*", "sidepanel/**/*"]
 }

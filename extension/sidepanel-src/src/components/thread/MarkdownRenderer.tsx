@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Component, ReactNode, ErrorInfo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -8,6 +8,41 @@ import { normalizeMathDelimiters } from '@assistant-ui/react-markdown';
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+}
+
+interface MarkdownErrorBoundaryProps {
+  fallbackText: string;
+  children: ReactNode;
+}
+
+interface MarkdownErrorBoundaryState {
+  hasError: boolean;
+}
+
+class MarkdownErrorBoundary extends Component<MarkdownErrorBoundaryProps, MarkdownErrorBoundaryState> {
+  constructor(props: MarkdownErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error): MarkdownErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.warn('[MarkdownRenderer] Markdown/LaTeX parse error caught, falling back to raw text:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text-primary)' }}>
+          {this.props.fallbackText}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = '' }) => {
@@ -28,50 +63,52 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
   }, [content]);
 
   return (
-    <div className={`markdown-rendered-content ${className}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
-          code({ node, inline, className, children, ...props }: any) {
-            const match = /language-(\w+)/.exec(className || '');
-            const codeString = String(children).replace(/\n$/, '');
-            const isMultiLine = codeString.includes('\n') || Boolean(match && match[1]);
+    <MarkdownErrorBoundary fallbackText={content}>
+      <div className={`markdown-rendered-content ${className}`}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: '#ef4444' }]]}
+          components={{
+            code({ node, inline, className, children, ...props }: any) {
+              const match = /language-(\w+)/.exec(className || '');
+              const codeString = String(children).replace(/\n$/, '');
+              const isMultiLine = codeString.includes('\n') || Boolean(match && match[1]);
 
-            if (!inline && isMultiLine) {
-              return <CodeBlock language={match ? match[1] : ''} code={codeString} />;
-            }
-            return (
-              <code className="inline-code" {...props}>
-                {children}
-              </code>
-            );
-          },
-          table({ children }) {
-            return (
-              <div className="table-responsive-wrapper">
-                <table className="markdown-table">{children}</table>
-              </div>
-            );
-          },
-          a({ href, children, ...props }) {
-            return (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="markdown-link"
-                {...props}
-              >
-                {children}
-              </a>
-            );
-          },
-        }}
-      >
-        {processedContent}
-      </ReactMarkdown>
-    </div>
+              if (!inline && isMultiLine) {
+                return <CodeBlock language={match ? match[1] : ''} code={codeString} />;
+              }
+              return (
+                <code className="inline-code" {...props}>
+                  {children}
+                </code>
+              );
+            },
+            table({ children }) {
+              return (
+                <div className="table-responsive-wrapper">
+                  <table className="markdown-table">{children}</table>
+                </div>
+              );
+            },
+            a({ href, children, ...props }) {
+              return (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="markdown-link"
+                  {...props}
+                >
+                  {children}
+                </a>
+              );
+            },
+          }}
+        >
+          {processedContent}
+        </ReactMarkdown>
+      </div>
+    </MarkdownErrorBoundary>
   );
 };
 
