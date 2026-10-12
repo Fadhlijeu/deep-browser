@@ -14,6 +14,7 @@ interface TopbarProps {
   onOpenApikeys: () => void;
   onOpenSettings: () => void;
   onReconnect: () => void;
+  onToggleOnline: () => void;
   onToggleDetach: () => void;
 }
 
@@ -30,6 +31,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenApikeys,
   onOpenSettings,
   onReconnect,
+  onToggleOnline,
   onToggleDetach,
 }) => {
   const getBrowserIcon = () => {
@@ -59,24 +61,42 @@ export const Topbar: React.FC<TopbarProps> = ({
   const getConnectionTitle = () => {
     switch (connectionStatus) {
       case 'connected':
-        return 'Terhubung ke Backend Daemon (ws://127.0.0.1:7788)';
+        return 'Backend Daemon Terhubung (ws://127.0.0.1:7788) • Klik untuk beralih ke Mode In-Browser';
+      case 'standalone':
+        return 'Online (Mode In-Browser - Siap pakai tanpa backend) • Klik untuk hubungkan ke Backend Daemon';
       case 'reconnecting':
-        return 'Sedang mencoba menghubungkan ke daemon (Klik untuk coba lagi)...';
+        return 'Sedang mencari Backend Daemon... • Klik untuk langsung Online Mandiri';
       case 'disconnected':
       default:
-        return 'Daemon Offline / Disconnected (Klik untuk Reconnect)';
+        return 'Backend Offline • Klik untuk LANGSUNG ONLINE di Browser (tanpa perlu backend)!';
     }
   };
 
   const getConnectionSymbol = () => {
     switch (connectionStatus) {
       case 'connected':
-        return 'check';
+        return 'lan';
+      case 'standalone':
+        return 'bolt';
       case 'reconnecting':
         return 'sync';
       case 'disconnected':
       default:
         return 'link_off';
+    }
+  };
+
+  const getConnectionLabel = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Daemon';
+      case 'standalone':
+        return 'Online';
+      case 'reconnecting':
+        return 'Connecting';
+      case 'disconnected':
+      default:
+        return 'Offline';
     }
   };
 
@@ -96,17 +116,29 @@ export const Topbar: React.FC<TopbarProps> = ({
           {/* Functional Connection Status Pill */}
           <button
             className={`status-pill status-${connectionStatus}`}
-            onClick={onReconnect}
+            onClick={onToggleOnline}
             title={getConnectionTitle()}
           >
             <div className={`status-dot dot-${connectionStatus}`}></div>
             <span className={`material-symbols-outlined status-symbol symbol-${connectionStatus}`}>
               {getConnectionSymbol()}
             </span>
-            <span className="status-label" style={{ textTransform: 'capitalize' }}>
-              {connectionStatus}
+            <span className="status-label">
+              {getConnectionLabel()}
             </span>
           </button>
+
+          {/* Quick Online Action if Disconnected */}
+          {connectionStatus === 'disconnected' && (
+            <button
+              className="quick-online-btn"
+              onClick={onToggleOnline}
+              title="Aktifkan Mode Online In-Browser langsung tanpa backend Python"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>bolt</span>
+              <span>Go Online</span>
+            </button>
+          )}
 
           {/* Step Counter — visible only while running */}
           {runState === 'running' && stepCount > 0 && (

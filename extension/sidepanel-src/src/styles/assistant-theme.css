@@ -152,6 +152,15 @@ html, body, #root {
   border-color: rgba(16, 185, 129, 0.35);
   color: var(--status-success);
 }
+.status-pill.status-standalone {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--status-success);
+}
+.status-pill.status-standalone:hover {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.6);
+}
 .status-pill.status-disconnected {
   border-color: rgba(239, 68, 68, 0.35);
   color: var(--status-error);
@@ -171,6 +180,10 @@ html, body, #root {
 .status-dot.dot-connected {
   background: var(--status-success);
   box-shadow: 0 0 5px rgba(16, 185, 129, 0.6);
+}
+.status-dot.dot-standalone {
+  background: var(--status-success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
 }
 .status-dot.dot-disconnected {
   background: var(--status-error);
@@ -193,12 +206,41 @@ html, body, #root {
 .status-symbol.symbol-connected {
   color: var(--status-success);
 }
+.status-symbol.symbol-standalone {
+  color: var(--status-success);
+}
 .status-symbol.symbol-disconnected {
   color: var(--status-error);
 }
 .status-symbol.symbol-reconnecting {
   color: var(--status-warning);
   animation: spinSymbol 1.2s infinite linear;
+}
+
+.quick-online-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.4);
+  animation: pulse-quick-btn 2s infinite ease-in-out;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.quick-online-btn:hover {
+  filter: brightness(1.15);
+  transform: translateY(-0.5px);
+}
+@keyframes pulse-quick-btn {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.97); }
 }
 
 @keyframes spinSymbol {
@@ -1109,6 +1151,8 @@ html, body, #root {
 @media (max-width: 440px) {
   .status-pill .status-label { display: none; }
   .status-pill { padding: 3px 6px; gap: 4px; }
+  .quick-online-btn span:not(.material-symbols-outlined) { display: none; }
+  .quick-online-btn { padding: 3px 5px; }
   .pill-selector-btn { max-width: 95px; }
 }
 

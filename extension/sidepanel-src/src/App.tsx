@@ -38,6 +38,7 @@ export const App: React.FC = () => {
         onOpenApikeys={() => sidepanelStore.setModal('apikeys', true)}
         onOpenSettings={() => sidepanelStore.setModal('settings', true)}
         onReconnect={() => sidepanelStore.reconnect()}
+        onToggleOnline={() => sidepanelStore.toggleOnline()}
         onToggleDetach={() => sidepanelStore.toggleDetach()}
       />
 

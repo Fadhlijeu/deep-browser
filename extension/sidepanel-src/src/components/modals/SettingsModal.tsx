@@ -112,6 +112,69 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, selectedMo
               <span>{sidepanelStore.getState().isDetached ? 'Pasang Kembali ke Sidepanel' : 'Lepas ke Jendela Melayang (Pop Out)'}</span>
             </button>
           </div>
+
+          {/* Connection Mode Settings */}
+          <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              Mode Koneksi Engine
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {[
+                {
+                  id: 'auto',
+                  name: 'Auto-On (Rekomendasi)',
+                  desc: 'Otomatis Online di browser. Hubungkan ke backend Python jika aktif.',
+                  icon: 'auto_awesome',
+                },
+                {
+                  id: 'standalone',
+                  name: 'In-Browser Mandiri (Tanpa Backend)',
+                  desc: 'Selalu Online langsung di browser tanpa perlu menjalankan terminal python.',
+                  icon: 'bolt',
+                },
+                {
+                  id: 'daemon',
+                  name: 'Backend Daemon Saja (ws://127.0.0.1:7788)',
+                  desc: 'Hanya terhubung ke server backend lokal deep-browser serve.',
+                  icon: 'lan',
+                },
+              ].map((opt) => {
+                const isSelected = sidepanelStore.getState().connectionMode === opt.id;
+                return (
+                  <div
+                    key={opt.id}
+                    onClick={() => sidepanelStore.setConnectionMode(opt.id as any)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: isSelected ? 'var(--bg-surface-elevated)' : 'var(--bg-base)',
+                      border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.12s ease',
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: '16px', color: isSelected ? 'var(--accent)' : 'var(--text-tertiary)', marginTop: '2px' }}
+                    >
+                      {opt.icon}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '11.5px', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                        {opt.name}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '1px', lineHeight: 1.3 }}>
+                        {opt.desc}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="modal-footer">

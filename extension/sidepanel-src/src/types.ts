@@ -66,7 +66,9 @@ export interface TabItem {
 
 export type RunState = 'idle' | 'running' | 'paused' | 'error' | 'done';
 
-export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
+export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting' | 'standalone';
+
+export type ConnectionMode = 'auto' | 'standalone' | 'daemon';
 
 export type PresetId = 'default' | 'research' | 'data_extraction' | 'form_filling' | 'read_only';
 
