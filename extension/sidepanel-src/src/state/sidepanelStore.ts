@@ -60,6 +60,8 @@ export class SidepanelStateManager {
   private currentRunId: string | null = null;
   private extTransportWs: WebSocket | null = null;
   private currentTransportTaskId: string | null = null;
+  private activeAgent: any = null;
+  private coreLoadedPromise: Promise<void> | null = null;
 
   constructor() {
     const initId = 'session_' + Date.now();
@@ -89,6 +91,50 @@ export class SidepanelStateManager {
     this.loadFromStorage();
     this.initTabsListener();
     this.initWebSocket();
+    this.ensureCoreRuntimeLoaded().catch((err) => {
+      console.warn('[DeepBrowser] Core runtime background preload notice:', err);
+    });
+  }
+
+  public async ensureCoreRuntimeLoaded(): Promise<void> {
+    if (typeof window !== 'undefined' && (window as any).Agent) return;
+    if (this.coreLoadedPromise) return this.coreLoadedPromise;
+
+    this.coreLoadedPromise = (async () => {
+      const scripts = [
+        'core/interaction_manager.js',
+        'core/dom_service.js',
+        'core/browser_session.js',
+        'core/extractor.js',
+        'core/research_engine.js',
+        'core/skills/skill_base.js',
+        'core/skills/research_skill.js',
+        'core/security_policy.js',
+        'core/state_machine.js',
+        'core/widgets.js',
+        'core/tools.js',
+        'core/message_manager.js',
+        'core/llm_client.js',
+        'core/agent.js',
+      ];
+
+      for (const file of scripts) {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = typeof chrome !== 'undefined' && chrome.runtime?.getURL
+            ? chrome.runtime.getURL(file)
+            : `../../${file}`;
+          s.onload = () => resolve();
+          s.onerror = (e) => {
+            console.error(`[DeepBrowser] Failed to load core script: ${file}`, e);
+            reject(new Error(`Failed to load ${file}`));
+          };
+          document.head.appendChild(s);
+        });
+      }
+    })();
+
+    return this.coreLoadedPromise;
   }
 
   public getState(): SidepanelState {
@@ -719,12 +765,16 @@ export class SidepanelStateManager {
       }
     }
 
-    // Standalone In-Browser Automation with Real Browser Tools
-    this.executeLocalFallback(runId, prompt, assistantMsg);
+    // Standalone In-Browser Autonomous Agent Loop (Browser-Use Core)
+    this._runStandaloneAgent(runId, prompt, assistantMsg);
   }
 
   public cancelRun() {
     if (this.state.runState !== 'running') return;
+    if (this.activeAgent) {
+      try { this.activeAgent.stop(); } catch (_) {}
+      this.activeAgent = null;
+    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.currentRunId) {
       try {
         fetch('http://127.0.0.1:7788/api/agent/stop', { method: 'POST' }).catch(() => {});
@@ -740,6 +790,11 @@ export class SidepanelStateManager {
   }
 
   public respondHitl(interactionId: string, value: unknown) {
+    if (this.activeAgent && (this.activeAgent as any).interactionManager) {
+      try {
+        (this.activeAgent as any).interactionManager.resolveInteraction(interactionId, value);
+      } catch (_) {}
+    }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
         type: 'RESOLVE_INTERACTION',
@@ -762,7 +817,7 @@ export class SidepanelStateManager {
     const type = evt.event_type || evt.type || '';
     const payload = evt.data || evt.payload || {};
 
-    // Add to logs
+    // Add to event logs
     const logEvt: LogEvent = {
       id: 'log_' + Date.now() + Math.random().toString(36).slice(2, 5),
       timestamp: Date.now(),
@@ -773,20 +828,79 @@ export class SidepanelStateManager {
     };
     active.events.push(logEvt);
 
+    // Forward to in-page Floating HUD Island if active
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {
+        if (tabs?.[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, evt).catch(() => {});
+        }
+      });
+    }
+
     const lastMsg = active.messages[active.messages.length - 1];
     if (!lastMsg || lastMsg.role !== 'assistant') return;
 
-    // Handle tool steps with icons and timing
-    if (type.includes('TOOL') || type.includes('NAV') || type.includes('CLICK') || type.includes('TYPE') || type.includes('SCROLL') || type.includes('EXTRACT') || type.includes('SEARCH') || type.includes('TAB')) {
+    // 1. Genuine LLM Reasoning / Thinking emission
+    if (type === 'REASONING') {
+      const thinkingText = payload.thinking || evt.message || '';
+      if (thinkingText) {
+        lastMsg.thought = (lastMsg.thought ? lastMsg.thought + '\n\n' : '') + thinkingText;
+      }
+    }
+
+    // 2. Observations & Page Perception
+    if (type === 'OBSERVATION') {
       this.state.stepCount++;
+      const step: ToolStep = {
+        id: 'step_obs_' + Date.now(),
+        name: evt.message || `Membaca Halaman (${payload.elementsCount || 0} elemen interaktif)`,
+        icon: 'visibility',
+        status: 'succeeded',
+        duration: '120ms',
+        args: { url: payload.url, elementsCount: payload.elementsCount },
+        result: { scroll_y: payload.scroll_y, pixels_below: payload.pixels_below },
+        timestamp: Date.now(),
+      };
+      if (!lastMsg.steps) lastMsg.steps = [];
+      lastMsg.steps.push(step);
+    }
+
+    // 3. Parallel Multi-Tab Research Started
+    if (type === 'PARALLEL_RESEARCH_STARTED') {
+      this.state.stepCount++;
+      const step: ToolStep = {
+        id: 'step_par_' + Date.now(),
+        name: `Riset Paralel Multi-Tab (${payload.totalTopics || 3} worker simultan)`,
+        icon: 'view_carousel',
+        status: 'running',
+        duration: 'paralel',
+        args: { topics: payload.topics, maxParallel: payload.maxParallel },
+        result: { status: 'in_progress' },
+        timestamp: Date.now(),
+      };
+      if (!lastMsg.steps) lastMsg.steps = [];
+      lastMsg.steps.push(step);
+    }
+
+    // 4. Handle tool steps with icons and verification
+    if (type.includes('TOOL') || type.includes('NAV') || type.includes('CLICK') || type.includes('TYPE') || type.includes('SCROLL') || type.includes('EXTRACT') || type.includes('SEARCH') || type.includes('TAB') || type === 'ACTION_EXECUTED') {
+      this.state.stepCount++;
+      const icon = type.includes('NAV') ? 'navigation'
+        : type.includes('CLICK') ? 'touch_app'
+        : type.includes('TYPE') ? 'edit'
+        : type.includes('SCROLL') ? 'swap_vert'
+        : type.includes('EXTRACT') ? 'dataset'
+        : type.includes('SEARCH') ? 'search'
+        : 'terminal';
+
       const step: ToolStep = {
         id: 'step_' + Date.now(),
         name: evt.action || payload.tool_name || payload.action || evt.message || type.toLowerCase(),
-        icon: type.includes('NAV') ? 'navigation' : type.includes('CLICK') ? 'touch_app' : type.includes('TYPE') ? 'edit' : type.includes('EXTRACT') ? 'dataset' : type.includes('SEARCH') ? 'search' : 'terminal',
+        icon,
         status: 'succeeded',
-        duration: payload.duration ? `${payload.duration}ms` : '160ms',
+        duration: payload.duration ? `${payload.duration}ms` : '180ms',
         args: payload.args || payload.parameters,
-        result: payload.result,
+        result: payload.result || payload.data,
         verification: payload.verification,
         timestamp: Date.now(),
       };
@@ -794,27 +908,75 @@ export class SidepanelStateManager {
       lastMsg.steps.push(step);
     }
 
+    // 5. Deterministic Verification Evidence
+    if (type === 'VERIFICATION') {
+      if (lastMsg.steps && lastMsg.steps.length > 0) {
+        const latestStep = lastMsg.steps[lastMsg.steps.length - 1];
+        latestStep.verification = payload;
+      }
+    }
+
+    // 6. Action Failed
+    if (type === 'ACTION_FAILED') {
+      if (lastMsg.steps && lastMsg.steps.length > 0) {
+        const latestStep = lastMsg.steps[lastMsg.steps.length - 1];
+        latestStep.status = 'failed';
+        latestStep.error = payload.error || evt.message;
+      }
+    }
+
+    // 7. Progress text
     if (type === 'TASK_PROGRESS' && payload.text) {
       lastMsg.text = (lastMsg.text ? lastMsg.text + '\n' : '') + payload.text;
     }
 
+    // 8. Visual Artifacts
+    if (type === 'SCREENSHOT_CAPTURED' || type === 'SCREENSHOT') {
+      if (!lastMsg.steps) lastMsg.steps = [];
+      lastMsg.steps.push({
+        id: 'step_sc_' + Date.now(),
+        name: 'Tangkapan Layar Viewport',
+        icon: 'screenshot',
+        status: 'succeeded',
+        duration: '100ms',
+        result: { screenshot: payload.screenshot ? 'Captured' : 'OK' },
+        timestamp: Date.now(),
+      });
+    }
+
+    if (type === 'PDF_SAVED') {
+      if (!lastMsg.steps) lastMsg.steps = [];
+      lastMsg.steps.push({
+        id: 'step_pdf_' + Date.now(),
+        name: `Ekspor PDF: ${payload.fileName || 'document.pdf'}`,
+        icon: 'picture_as_pdf',
+        status: 'succeeded',
+        duration: '350ms',
+        result: payload,
+        timestamp: Date.now(),
+      });
+    }
+
+    // 9. Completion
     if (type === 'TASK_COMPLETED' || type === 'DONE') {
-      lastMsg.text = payload.result || lastMsg.text || 'Tugas browser selesai dieksekusi dan terverifikasi.';
+      lastMsg.text = payload.result || evt.message || lastMsg.text || 'Tugas browser selesai dieksekusi dan terverifikasi.';
       this.state.runState = 'done';
     }
 
+    // 10. Failure / Error
     if (type === 'TASK_FAILED' || type === 'ERROR') {
       lastMsg.isError = true;
       lastMsg.text = payload.error || evt.message || 'Eksekusi gagal.';
       this.state.runState = 'error';
     }
 
-    if (type === 'INTERACTION_REQUIRED') {
+    // 11. HITL Gate
+    if (type === 'INTERACTION_REQUIRED' || type === 'USER_INPUT_REQUIRED' || type === 'USER_APPROVAL_REQUIRED' || type === 'CONFIRMATION_REQUIRED') {
       this.state.runState = 'paused';
       lastMsg.hitl = {
-        id: payload.interaction_id || 'hitl_' + Date.now(),
+        id: payload.confirmation_id || payload.interaction_id || 'hitl_' + Date.now(),
         type: payload.type || 'approval',
-        question: payload.question || 'Konfirmasi tindakan agen di browser:',
+        question: payload.reason || payload.question || evt.message || 'Konfirmasi tindakan agen di browser:',
         options: payload.options,
       };
     }
@@ -823,7 +985,22 @@ export class SidepanelStateManager {
     this.saveStorage();
   }
 
-  private async executeLocalFallback(runId: string, prompt: string, assistantMsg: ChatMessage) {
+  private async _runStandaloneAgent(runId: string, prompt: string, assistantMsg: ChatMessage) {
+    try {
+      await this.ensureCoreRuntimeLoaded();
+    } catch (err: any) {
+      this.handleIncomingAgentEvent({
+        event_type: 'ERROR',
+        message: `Gagal memuat modul autonomous agent: ${err.message}`,
+        data: { error: err.message },
+      });
+      return;
+    }
+
+    const activeModel = this.state.models.find((m) => m.id === this.state.selectedModelId) || this.state.models[0];
+    const provider = activeModel.provider;
+    const apiKey = this.state.apiKeys[provider] || this.state.apiKeys.gemini || '';
+
     let activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       try {
@@ -832,327 +1009,63 @@ export class SidepanelStateManager {
       } catch (_) {}
     }
 
-    const tabId = activeTab?.id;
-    const pLower = prompt.toLowerCase();
-
-    // 1. Detect navigation / search intent
-    let targetUrl = '';
-    let targetSiteName = '';
-    let searchQuery = '';
-
-    if (pLower.includes('pddikti') || pLower.includes('dikti')) {
-      targetUrl = 'https://pddikti.kemdiktisaintek.go.id/';
-      targetSiteName = 'PDDIKTI Kemdiktisaintek';
-    } else if (pLower.includes('google')) {
-      targetUrl = 'https://www.google.com';
-      targetSiteName = 'Google';
-    } else if (pLower.includes('youtube')) {
-      targetUrl = 'https://www.youtube.com';
-      targetSiteName = 'YouTube';
-    } else if (pLower.includes('github')) {
-      targetUrl = 'https://github.com';
-      targetSiteName = 'GitHub';
-    } else if (pLower.includes('wikipedia')) {
-      targetUrl = 'https://id.wikipedia.org';
-      targetSiteName = 'Wikipedia';
-    } else {
-      const urlMatch = prompt.match(/https?:\/\/[^\s]+/i) || prompt.match(/(?:www\.)?[a-zA-Z0-9-]+\.(?:com|org|id|gov|edu|net|io|co\.id)/i);
-      if (urlMatch) {
-        targetUrl = urlMatch[0].startsWith('http') ? urlMatch[0] : 'https://' + urlMatch[0];
-        targetSiteName = urlMatch[0];
-      }
-    }
-
-    // Extract search query
-    const searchMatch = prompt.match(/(?:cari(?:\s+nama)?|search|temukan|tentang)\s+([^\n\r,\.;]+?)(?:\s+(?:dan|lalu|serta|secara|biodata|lengkap|informasi|$))/i) ||
-                        prompt.match(/(?:cari(?:\s+nama)?|search)\s+(.*)/i);
-    if (searchMatch && searchMatch[1]) {
-      searchQuery = searchMatch[1].trim().replace(/^nama\s+/i, '');
-    }
-
-    if (!targetUrl && (pLower.startsWith('buka') || pLower.startsWith('cari'))) {
-      const bukaMatch = prompt.match(/buka\s+([^\s]+)/i);
-      if (bukaMatch && bukaMatch[1]) {
-        targetSiteName = bukaMatch[1];
-        if (targetSiteName.includes('.')) {
-          targetUrl = targetSiteName.startsWith('http') ? targetSiteName : 'https://' + targetSiteName;
-        } else {
-          targetUrl = `https://www.google.com/search?q=${encodeURIComponent(prompt)}`;
-        }
-      }
-    }
-
-    assistantMsg.steps = [];
-
-    // --- Action 1: Real Navigation Tool ---
-    if (targetUrl && typeof chrome !== 'undefined' && chrome.tabs && tabId) {
-      this.state.stepCount++;
-      const navStep: ToolStep = {
-        id: 'step_nav_' + Date.now(),
-        name: `Navigasi ke ${targetSiteName || targetUrl}`,
-        icon: 'navigation',
-        status: 'succeeded',
-        duration: '380ms',
-        args: { url: targetUrl, site: targetSiteName },
-        result: { status: 'opened', target: targetUrl },
-        timestamp: Date.now(),
-      };
-      assistantMsg.steps.push(navStep);
-      this.notify();
-
-      try {
-        await chrome.tabs.update(tabId, { url: targetUrl });
-        await this.waitForTabLoad(tabId, 8000);
-      } catch (err) {
-        console.warn('[DeepBrowser] Tab navigation warning:', err);
-      }
-    } else {
-      this.state.stepCount++;
-      assistantMsg.steps.push({
-        id: 'step_read_' + Date.now(),
-        name: 'Membaca Halaman Aktif',
-        icon: 'visibility',
-        status: 'succeeded',
-        duration: '120ms',
-        args: { url: activeTab?.url || 'Tab Aktif', title: activeTab?.title || '' },
-        result: { status: 'ok' },
-        timestamp: Date.now(),
+    try {
+      const browserSession = new (window as any).BrowserSession({
+        tabId: activeTab?.id,
+        windowId: activeTab?.windowId,
       });
-      this.notify();
-    }
 
-    // --- Action 2: Real Type / Search Tool ---
-    if (searchQuery && typeof chrome !== 'undefined' && chrome.scripting && tabId) {
-      this.state.stepCount++;
-      const typeStep: ToolStep = {
-        id: 'step_type_' + Date.now(),
-        name: `Ketik Pencarian: "${searchQuery}"`,
-        icon: 'edit',
-        status: 'succeeded',
-        duration: '260ms',
-        args: { query: searchQuery, action: 'input_text' },
-        result: { status: 'submitted' },
-        timestamp: Date.now(),
-      };
-      assistantMsg.steps.push(typeStep);
-      this.notify();
+      const llmClient = new (window as any).LLMClient({
+        provider,
+        model: activeModel.modelId || activeModel.id,
+        apiKey,
+        baseUrl: activeModel.baseUrl || this.state.apiKeys.custom_openai || '',
+        ollamaHost: this.state.apiKeys.ollama || 'http://localhost:11434',
+        temperature: 0.1,
+      });
 
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          args: [searchQuery],
-          func: (queryText: string) => {
-            const inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="search"], input:not([type]), textarea')) as HTMLInputElement[];
-            const searchInput = inputs.find((inp) => {
-              const p = (inp.placeholder || '').toLowerCase();
-              const n = (inp.name || '').toLowerCase();
-              const id = (inp.id || '').toLowerCase();
-              return p.includes('cari') || p.includes('search') || p.includes('mahasiswa') || n.includes('search') || id.includes('search') || inp.offsetWidth > 150;
-            }) || inputs[0];
-
-            if (searchInput) {
-              searchInput.focus();
-              searchInput.value = queryText;
-              searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-              searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-              const form = searchInput.closest('form');
-              const searchBtn = form?.querySelector('button, [type="submit"]') ||
-                                document.querySelector('button[type="submit"], [aria-label*="search" i], .search-btn, button.btn-search');
-              if (searchBtn) {
-                (searchBtn as HTMLElement).click();
-                return { submitted: true };
-              } else if (form) {
-                form.submit();
-                return { submitted: true };
-              } else {
-                searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                return { submitted: true };
-              }
-            }
-            return { submitted: false };
-          },
-        });
-        await new Promise((r) => setTimeout(r, 2000));
-      } catch (err) {
-        console.warn('[DeepBrowser] Search input notice:', err);
-      }
-    }
-
-    // --- Action 3: Real Click / Result Inspection Tool ---
-    if (searchQuery && typeof chrome !== 'undefined' && chrome.scripting && tabId) {
-      this.state.stepCount++;
-      const clickStep: ToolStep = {
-        id: 'step_click_' + Date.now(),
-        name: `Pilih Hasil Profil: "${searchQuery}"`,
-        icon: 'touch_app',
-        status: 'succeeded',
-        duration: '180ms',
-        args: { target: searchQuery },
-        result: { status: 'opened' },
-        timestamp: Date.now(),
-      };
-      assistantMsg.steps.push(clickStep);
-      this.notify();
-
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          args: [searchQuery.toLowerCase()],
-          func: (targetLower: string) => {
-            const rows = Array.from(document.querySelectorAll('tr, .result-item, .card, [role="row"], a')) as HTMLElement[];
-            for (const r of rows) {
-              const text = (r.textContent || '').toLowerCase();
-              if (text.includes(targetLower)) {
-                const link = r.tagName === 'A' ? r : r.querySelector('a') || r;
-                link.click();
-                return { clicked: true };
-              }
-            }
-            return { clicked: false };
-          },
-        });
-        await new Promise((r) => setTimeout(r, 1500));
-      } catch (_) {}
-    }
-
-    // --- Action 4: Real Data Extraction Tool ---
-    this.state.stepCount++;
-    const extractStep: ToolStep = {
-      id: 'step_extract_' + Date.now(),
-      name: 'Ekstraksi Informasi & Biodata',
-      icon: 'dataset',
-      status: 'succeeded',
-      duration: '210ms',
-      args: { scope: 'full_page_context' },
-      result: { extracted: true },
-      timestamp: Date.now(),
-    };
-    assistantMsg.steps.push(extractStep);
-    this.notify();
-
-    let extractedData = {
-      title: '',
-      url: targetUrl || activeTab?.url || '',
-      headings: [] as string[],
-      tables: [] as string[],
-      text: '',
-    };
-
-    if (typeof chrome !== 'undefined' && chrome.scripting && tabId) {
-      try {
-        const extRes = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: () => {
-            const h1s = Array.from(document.querySelectorAll('h1, h2, h3')).map((h) => (h.textContent || '').trim()).filter(Boolean).slice(0, 8);
-            const tables = Array.from(document.querySelectorAll('table, .table, dl, .profile-info, .biodata')).map((t) => (t.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 4);
-            const main = document.querySelector('main, article, #content, .content, #app, [role="main"]') || document.body;
-            const text = (main?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 2500);
-            return {
-              title: document.title || '',
-              url: window.location.href,
-              headings: h1s,
-              tables,
-              text,
-            };
-          },
-        });
-        if (extRes?.[0]?.result) {
-          extractedData = extRes[0].result;
-        }
-      } catch (err) {
-        console.warn('[DeepBrowser] DOM extract notice:', err);
-      }
-    }
-
-    // --- Step 5: Format Final User Response ---
-    const geminiKey = this.state.apiKeys.gemini;
-    if (geminiKey) {
-      try {
-        const modelName = this.state.selectedModelId.replace(/^gemini\//, '') || 'gemini-2.0-flash';
-        const systemPrompt = `Anda adalah Deep Browser Copilot, asisten browser AI otonom yang ramah, profesional, dan to the point.
-Tugas Anda adalah merangkum hasil penelusuran aksi browser yang baru saja dijalankan untuk pengguna.
-ATURAN JAWABAN:
-- Bahasa Indonesia yang rapi dan user-friendly.
-- Tampilkan informasi yang berhasil ditemukan (biodata, status akademik, perguruan tinggi, dll).
-- Gunakan format markdown tabel atau bullet points yang sangat terstruktur.
-- Jangan berhalusinasi data yang tidak ada; jelaskan apa yang berhasil dimuat dan apa langkah lanjutan yang dapat dilakukan.`;
-
-        const userPrompt = `Tugas Pengguna: "${prompt}"
-
-Langkah yang telah dijalankan:
-- Navigasi ke: ${extractedData.url || targetUrl}
-- Judul Halaman: ${extractedData.title}
-- Query Pencarian: ${searchQuery}
-- Data Tabel/Profil Terdeteksi: ${extractedData.tables.join('\n')}
-- Cuplikan Konten Halaman: ${extractedData.text.slice(0, 1500)}`;
-
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(geminiKey)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const generated = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (generated) {
-            assistantMsg.text = generated;
-            this.state.runState = 'done';
+      const interactionManager = (window as any).InteractionManager ? new (window as any).InteractionManager({
+        taskId: runId,
+        onStateChange: (newState: string) => {
+          if (newState === 'WAITING_FOR_USER') {
+            this.state.runState = 'paused';
             this.notify();
-            this.saveStorage();
-            return;
+          } else if (newState === 'RUNNING') {
+            this.state.runState = 'running';
+            this.notify();
           }
-        }
-      } catch (err) {
-        console.warn('[DeepBrowser] Gemini call fallback:', err);
+        },
+      }) : null;
+
+      const agent = new (window as any).Agent({
+        taskId: runId,
+        task: prompt,
+        preset: this.state.selectedPreset,
+        browserSession,
+        llmClient,
+        interactionManager,
+        maxSteps: 25,
+        mode: this.state.selectedMode,
+        onEvent: (evt: any) => this.handleIncomingAgentEvent(evt),
+      });
+
+      this.activeAgent = agent;
+      await agent.run();
+    } catch (err: any) {
+      console.error('[DeepBrowser] Autonomous agent execution error:', err);
+      this.handleIncomingAgentEvent({
+        event_type: 'ERROR',
+        message: err.message || String(err),
+        data: { error: err.message },
+      });
+    } finally {
+      this.activeAgent = null;
+      if (this.state.runState === 'running') {
+        this.state.runState = 'idle';
       }
+      this.notify();
+      this.saveStorage();
     }
-
-    // Default Rich Formatted Result
-    let finalAnswer = '';
-    if (pLower.includes('pddikti') || pLower.includes('dikti')) {
-      finalAnswer = `### 🎓 Penelusuran PDDIKTI Kemdiktisaintek\n\n`;
-      finalAnswer += `Tab browser Anda telah berhasil dinavigasikan ke laman resmi **[PDDIKTI Kemdiktisaintek](${extractedData.url || targetUrl})** dan menjalankan pencarian untuk nama **"${searchQuery || 'Muhammad Fadhli Rizaldy'}"**.\n\n`;
-      finalAnswer += `**Ringkasan Eksekusi Tindakan Browser:**\n`;
-      finalAnswer += `- **Target URL:** [${extractedData.url || targetUrl}](${extractedData.url || targetUrl})\n`;
-      finalAnswer += `- **Judul Halaman:** ${extractedData.title || 'PDDikti - Pangkalan Data Pendidikan Tinggi'}\n`;
-      finalAnswer += `- **Kata Kunci:** \`${searchQuery || 'Muhammad Fadhli Rizaldy'}\`\n\n`;
-
-      if (extractedData.tables && extractedData.tables.length > 0) {
-        finalAnswer += `#### 📋 Data Profil Terdeteksi di Halaman:\n`;
-        extractedData.tables.forEach((tb) => {
-          finalAnswer += `> ${tb.slice(0, 300)}\n\n`;
-        });
-      } else {
-        finalAnswer += `#### ℹ️ Catatan Hasil Pencarian:\n`;
-        finalAnswer += `Portal PDDikti membatasi penelusuran nama umum jika terdapat banyak kesamaan atau tanpa spesifikasi kampus. Untuk mendapatkan data biodata akademik yang paling presisi (NIM, Program Studi, Status Keaktifan, Riwayat Semester):\n`;
-        finalAnswer += `1. Masukkan juga nama **Perguruan Tinggi** (misalnya: *Universitas Gunadarma*) atau **Nomor Induk Mahasiswa (NIM)**.\n`;
-        finalAnswer += `2. Anda dapat langsung mengklik salah satu baris hasil di tab yang sudah terbuka di sebelah kiri!\n\n`;
-      }
-
-      finalAnswer += `> 💡 *Tips:* Tab di sebelah kini berada langsung di laman pencarian PDDIKTI. Anda dapat memberi tahu saya langkah selanjutnya seperti: *"klik hasil pertama"*, *"buka detail semester"*, atau *"salin data diri"*!`;
-    } else {
-      finalAnswer = `### 🌐 Tindakan Browser Selesai Dieksekusi\n\n`;
-      finalAnswer += `Tugas browser untuk permintaan Anda: *"**${prompt}**"* telah diproses.\n\n`;
-      finalAnswer += `- **Halaman Aktif:** [${extractedData.title || targetSiteName || 'Tab Browser'}](${extractedData.url || targetUrl})\n`;
-      if (searchQuery) finalAnswer += `- **Kata Kunci Pencarian:** \`${searchQuery}\`\n`;
-      if (extractedData.headings.length > 0) {
-        finalAnswer += `\n**Topik / Bagian Ditemukan:**\n`;
-        extractedData.headings.slice(0, 4).forEach((h) => {
-          finalAnswer += `- ${h}\n`;
-        });
-      }
-      finalAnswer += `\nSilakan beri tahu saya jika Anda ingin saya mengklik tautan tertentu, mengisi form tambahan, atau mengekstrak rincian lainnya dari halaman ini!`;
-    }
-
-    assistantMsg.text = finalAnswer;
-    this.state.runState = 'done';
-    this.notify();
-    this.saveStorage();
   }
 }
 

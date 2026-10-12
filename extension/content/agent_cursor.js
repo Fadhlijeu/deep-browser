@@ -59,4 +59,17 @@
       if (cursorEl) cursorEl.style.opacity = '0';
     }
   });
+
+  window.addEventListener('__DEEP_BROWSER_CURSOR__', (e) => {
+    const detail = (e && e.detail) || {};
+    if (detail.x !== undefined && detail.y !== undefined) {
+      moveCursorTo(detail.x, detail.y);
+      if (detail.click) {
+        setTimeout(() => createClickRipple(detail.x, detail.y), 260);
+      }
+    }
+  });
+
+  window.__deep_browser_move_cursor = moveCursorTo;
+  window.__deep_browser_ripple = createClickRipple;
 })();

@@ -10,6 +10,7 @@ interface AssistantMessageProps {
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) => {
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [thoughtOpen, setThoughtOpen] = useState(true);
   const [copied, setCopied] = useState(false);
 
   const copyText = () => {
@@ -78,6 +79,27 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
         {/* HITL Review Card */}
         {message.hitl && (
           <HitlApprovalCard hitl={message.hitl} />
+        )}
+
+        {/* Thought / Reasoning Block */}
+        {message.thought && (
+          <div className="thought-accordion" style={{ margin: '6px 0', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: '6px', background: 'rgba(139, 92, 246, 0.05)', overflow: 'hidden' }}>
+            <div
+              onClick={() => setThoughtOpen(!thoughtOpen)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px', cursor: 'pointer', fontSize: '11px', color: '#a78bfa', fontWeight: 600, userSelect: 'none' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '13px', transform: thoughtOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
+                chevron_right
+              </span>
+              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>psychology</span>
+              <span>Penalaran Agen (Reasoning)</span>
+            </div>
+            {thoughtOpen && (
+              <div style={{ padding: '6px 10px 8px 10px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(139, 92, 246, 0.15)', maxHeight: '180px', overflowY: 'auto' }}>
+                {message.thought}
+              </div>
+            )}
+          </div>
         )}
 
         {/* User-Friendly Response Body */}

@@ -21,9 +21,15 @@
 const assert = require('assert');
 const path = require('path');
 
+// Mock browser global environment for Node.js
+global.window = global;
+
 // Load modules
-const stateMachineModule = require('../../extension/core/state_machine.js');
-const SecurityPolicy = require('../../extension/core/security_policy.js');
+require('../../extension/core/state_machine.js');
+require('../../extension/core/security_policy.js');
+
+const stateMachineModule = global.DeepBrowserState || {};
+const SecurityPolicy = global.SecurityPolicy;
 
 const {
   RUN_STATES,

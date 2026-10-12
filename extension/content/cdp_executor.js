@@ -167,12 +167,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           if (!el) throw new Error(`Element [${index}] not found`);
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           await new Promise(r => setTimeout(r, 120));
+          const rect = el.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top  + rect.height / 2;
+          if (typeof window.__deep_browser_move_cursor === 'function') {
+            window.__deep_browser_move_cursor(cx, cy);
+            if (typeof window.__deep_browser_ripple === 'function') {
+              setTimeout(() => window.__deep_browser_ripple(cx, cy), 260);
+            }
+          }
+          await new Promise(r => setTimeout(r, 280));
           simulateClick(el, button || 'left');
           sendResponse({ success: true, index });
           break;
         }
 
         case 'CLICK_COORDINATE': {
+          if (typeof window.__deep_browser_move_cursor === 'function') {
+            window.__deep_browser_move_cursor(x, y);
+            if (typeof window.__deep_browser_ripple === 'function') {
+              setTimeout(() => window.__deep_browser_ripple(x, y), 260);
+            }
+          }
+          await new Promise(r => setTimeout(r, 280));
           const el = document.elementFromPoint(x - window.scrollX, y - window.scrollY);
           if (el) simulateClick(el, button || 'left');
           else document.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x - window.scrollX, clientY: y - window.scrollY }));
@@ -185,6 +202,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           if (!el) throw new Error(`Element [${index}] not found for typing`);
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           await new Promise(r => setTimeout(r, 80));
+          const rect = el.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top  + rect.height / 2;
+          if (typeof window.__deep_browser_move_cursor === 'function') {
+            window.__deep_browser_move_cursor(cx, cy);
+          }
+          await new Promise(r => setTimeout(r, 200));
           simulateType(el, text || '', !!clear);
           sendResponse({ success: true, index });
           break;

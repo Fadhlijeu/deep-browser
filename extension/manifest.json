@@ -43,6 +43,15 @@
       "css": ["content/hud_overlay.css", "content/agent_cursor.css", "content/floating_hud.css"],
       "run_at": "document_end"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "core/*",
+        "core/skills/*",
+        "content/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
   ]
-
 }

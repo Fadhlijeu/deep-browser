@@ -39,6 +39,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  thought?: string;
   timestamp: number;
   steps?: ToolStep[];
   modelName?: string;
