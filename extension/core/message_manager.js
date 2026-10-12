@@ -25,10 +25,12 @@
      * Returns the Browser Use system prompt.
      */
     getSystemPrompt() {
-      const toolSchemas = global.Tools.getActionSchemas();
+      const toolSchemas = (global.Tools && global.Tools.getActionSchemas) ? global.Tools.getActionSchemas() : [];
       const toolsDoc = toolSchemas.map(t => {
-        const paramDoc = Object.entries(t.parameters)
-          .map(([k, v]) => `    - ${k} (${v.type}${v.required ? ', required' : ''}): ${v.description || ''}`)
+        const props = t.parameters?.properties || {};
+        const requiredList = t.parameters?.required || [];
+        const paramDoc = Object.entries(props)
+          .map(([k, v]) => `    - ${k} (${v.type || 'any'}${requiredList.includes(k) ? ', required' : ''}): ${v.description || ''}`)
           .join('\n');
         return `* \`${t.name}\`: ${t.description}\n${paramDoc}`;
       }).join('\n\n');
@@ -44,36 +46,54 @@ At each step, you receive:
 4. An optional visual screenshot of the current viewport.
 
 ### DEEP REASONING & CORE DIRECTIVES
-1. **Search Results vs. Detail Profile Pages (CRITICAL)**:
-   - When the user asks for a profile, biodata, or specific information (e.g. "Cari nama Muhammad Fadhli Rizaldy di PDDIKTI dan screenshot informasinya"):
-   - If you are on a search results page containing a list/table of results, **YOU ARE NOT FINISHED YET**.
-   - **DO NOT** screenshot or summarize the search results table if the user asked for a profile/detail!
-   - You **MUST CLICK** the target person's name or detail link \`[index]\` to navigate into their actual profile page first!
-   - Only when you have reached the actual profile/detail view (where full biodata, NIM, university, study status appear), proceed to capture the screenshot or extract the data.
+1. **Domain Resilience & Search Fallback (NEVER GIVE UP ON 1 URL)**:
+   - If a specific website address (such as \`pddikti.kemdikbud.go.id\` or university portals) encounters a connection failure, DNS error (NXDOMAIN), or returns 0 interactive elements, **DO NOT CONCLUDE THAT THE SITE IS DOWN OR INVENT STATIC EXCUSES**.
+   - Websites, particularly government and educational portals, frequently undergo migration or domain restructuring (e.g., migrating to \`kemdiktisaintek.go.id\` or specialized subdomains).
+   - Immediately navigate to a search engine: \`navigate\` to \`https://www.google.com/search?q=<relevant search query>\` and investigate active links.
 
-2. **Semantic Screenshot & Layout Rules**:
+2. **Form Submission & Search Input Rules (ALWAYS SUBMIT)**:
+   - When entering text into search fields, ALWAYS submit the form!
+   - You MUST pass \`"press_enter": true\` in \`input_text\` (e.g. \`{"action_name": "input_text", "parameters": {"index": 4, "text": "muhammad fadhli rizaldy", "press_enter": true}}\`), OR immediately dispatch \`send_keys\` with \`{"keys": "Enter"}\`, OR click the search button \`[index]\`.
+   - Never repeatedly type into search boxes without submitting!
+
+3. **EXPLORING & CLICKING SEARCH RESULT LINKS (MANDATORY)**:
+   - When search results appear on Google, Bing, or an internal search page:
+   - Read the search results in the Simplified DOM tree.
+   - You **MUST CLICK** (\`click_element [index]\`) on the most relevant result link (e.g. candidate profile link, migrated portal URL) to enter the target site!
+   - **DO NOT** re-type another query into the search box if relevant search result links are right in front of you.
+   - **DO NOT** conclude with \`done\` on a search results page claiming no data exists without clicking and visiting candidate links first.
+
+4. **Search Results vs. Detail Profile Pages (CRITICAL)**:
+   - When the user asks for a profile, biodata, or specific record (e.g. "Cari nama Muhammad Fadhli Rizaldy di PDDIKTI dan berikan informasi biodata"):
+   - If you are on a search results table or list, **YOU ARE NOT FINISHED YET**.
+   - You **MUST CLICK** the target person's name or detail link \`[index]\` to navigate into their actual profile page first!
+   - Only when you have reached the actual profile/detail view (where full biodata, NIM, university, study program, semester status appear), extract the complete data or capture the screenshot.
+
+5. **Semantic Screenshot & Layout Rules**:
    - When the user requests a screenshot of a specific section/card/profile:
    - First, ensure you are on the actual detail view, not a search list.
    - Identify the 1-based index \`[index]\` or selector of the target information container (e.g. biodata card, info table).
    - Call \`screenshot\` passing the \`index\` parameter (e.g. \`{"action_name": "screenshot", "parameters": {"index": 5}}\`). The runtime will automatically scroll the container into the optimal center position before capturing.
    - Once the screenshot is captured, immediately conclude with \`done\` — **DO NOT loop or repeat screenshots**.
 
-3. **Balanced Autonomy & Asking the User**:
-   - Be fully autonomous: If the user provides a task (e.g. "cari nama X", "buka website Y", "screenshot bagian Z"), execute it from start to finish without asking unnecessary questions.
-   - ONLY call \`ask_user\` if:
-     a) The user explicitly requested an interactive prompt (e.g. "tanyakan saya sesuatu...", "minta pilihan saya...").
-     b) There are multiple conflicting options and the user's intent is genuinely ambiguous.
-   - In all other cases, reason and choose the best matching option autonomously.
+6. **Interactive Clarification via Widgets (\`ask_user\`)**:
+   - If a search query yields multiple distinct matching persons or ambiguous options (e.g. multiple students named "Muhammad Fadhli Rizaldy" at different universities), or if additional credentials are required:
+   - Call \`ask_user\` with the appropriate widget type:
+     - \`choice\`: when presenting specific options for the user to choose (e.g. \`options: ["Universitas Gunadarma - Sistem Informasi", "Universitas Indonesia - Ilmu Komputer"]\`).
+     - \`multi_choice\`: when multiple selections are applicable.
+     - \`confirm\`: for binary Yes/No confirmation.
+     - \`text_input\`: when requesting user input (e.g. "Mohon berikan NIM atau nama universitas:").
+     - \`waiting\`: when waiting for manual user intervention (e.g. solving CAPTCHA or completing MFA login).
+   - The runtime will pause, display the interactive widget card in the sidepanel, and resume execution seamlessly as soon as the user responds — **WITHOUT TERMINATING THE SESSION**.
 
-4. **Interactive Elements**: Interact with elements ONLY using their 1-based index (e.g. \`[1]\`, \`[2]\`). Look carefully at the index prefix \`[N]\` next to the tag in the DOM tree.
+7. **Interactive Elements**: Interact with elements ONLY using their 1-based index (e.g. \`[1]\`, \`[2]\`). Look carefully at the index prefix \`[N]\` next to the tag in the DOM tree.
 
-5. **Form Inputs & Searches**: To search or fill inputs, use \`input_text\` with the target index and text. You can follow with \`send_keys\` (e.g. \`{"keys": "Enter"}\`) or click the search/submit button.
-
-6. **Completion & Markdown Formatting**:
+8. **Completion & Markdown Formatting**:
    - When the user goal is completely achieved, call the \`done\` action.
    - Format your answer in the \`text\` parameter using clean, structured Markdown (with bolding, bullet points, headers, tables where appropriate).
+   - Never terminate prematurely with excuses after only 1-2 steps without thoroughly exploring search results.
 
-7. **Language**: Respond and provide answers in Indonesian or the language requested by the user.
+9. **Language**: Respond and provide answers in Indonesian or the language requested by the user.
 
 ### AVAILABLE ACTIONS
 ${toolsDoc}
@@ -82,7 +102,7 @@ ${toolsDoc}
 You MUST always output a SINGLE valid JSON object with the following schema:
 \`\`\`json
 {
-  "thinking": "Deep step-by-step reasoning: 1. Current state analysis (list vs detail page). 2. Goal progress. 3. Target element selection and why.",
+  "thinking": "Deep step-by-step reasoning: 1. Current state analysis (list vs detail page, domain verification). 2. Exploration plan. 3. Target element selection and why.",
   "action_name": "<one of the action names above, e.g. click_element | input_text | navigate | scroll_page | screenshot | parallel_research | ask_user | done>",
   "parameters": {
     "<param_name>": "<param_value>"

@@ -40,6 +40,7 @@ export interface SidepanelState {
   connectionStatus: ConnectionStatus;
   connectionMode: ConnectionMode;
   sidepanelEnabled: boolean;
+  indexLabelingEnabled: boolean;
   isDetached: boolean;
   stepCount: number;
   currentView: 'chat' | 'logs';
@@ -80,6 +81,7 @@ export class SidepanelStateManager {
       connectionStatus: 'standalone',
       connectionMode: 'auto',
       sidepanelEnabled: true,
+      indexLabelingEnabled: true,
       isDetached,
       stepCount: 0,
       currentView: 'chat',
@@ -153,7 +155,7 @@ export class SidepanelStateManager {
   private async loadFromStorage() {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
-        const stored = await chrome.storage.local.get(['sessions', 'activeSessionId', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled', 'connectionMode']);
+        const stored = await chrome.storage.local.get(['sessions', 'activeSessionId', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled', 'indexLabelingEnabled', 'connectionMode']);
         if (stored.sessions && stored.sessions.length > 0) {
           this.state.sessions = stored.sessions;
         }
@@ -166,6 +168,7 @@ export class SidepanelStateManager {
         if (stored.apiKeys) this.state.apiKeys = stored.apiKeys;
         if (stored.models && stored.models.length > 0) this.state.models = stored.models;
         if (typeof stored.sidepanelEnabled === 'boolean') this.state.sidepanelEnabled = stored.sidepanelEnabled;
+        if (typeof stored.indexLabelingEnabled === 'boolean') this.state.indexLabelingEnabled = stored.indexLabelingEnabled;
         if (stored.connectionMode) {
           this.state.connectionMode = stored.connectionMode;
           if (stored.connectionMode === 'standalone') {
@@ -191,12 +194,36 @@ export class SidepanelStateManager {
           apiKeys: this.state.apiKeys,
           models: this.state.models,
           sidepanelEnabled: this.state.sidepanelEnabled,
+          indexLabelingEnabled: this.state.indexLabelingEnabled,
           connectionMode: this.state.connectionMode,
         });
       } catch (err) {
         console.warn('[DeepBrowser] Error saving storage:', err);
       }
     }
+  }
+
+  public toggleIndexLabeling(enabled?: boolean) {
+    const nextVal = enabled !== undefined ? enabled : !this.state.indexLabelingEnabled;
+    this.state.indexLabelingEnabled = nextVal;
+    if (this.activeAgent?.browserSession?.setHighlightsEnabled) {
+      this.activeAgent.browserSession.setHighlightsEnabled(nextVal);
+    }
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]: any[]) => {
+        if (tab?.id && !nextVal) {
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              const overlay = document.getElementById('__deep_browser_highlight_overlay__');
+              if (overlay) overlay.remove();
+            },
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+    this.notify();
+    this.saveStorage();
   }
 
   private async initTabsListener() {
@@ -791,9 +818,16 @@ export class SidepanelStateManager {
 
   public respondHitl(interactionId: string, value: unknown) {
     if (this.activeAgent && (this.activeAgent as any).interactionManager) {
+      const im = (this.activeAgent as any).interactionManager;
       try {
-        (this.activeAgent as any).interactionManager.resolveInteraction(interactionId, value);
-      } catch (_) {}
+        if (typeof im.submitResponse === 'function') {
+          im.submitResponse(interactionId, value);
+        } else if (typeof im.resolveInteraction === 'function') {
+          im.resolveInteraction(interactionId, value);
+        }
+      } catch (err) {
+        console.warn('[DeepBrowser] Error submitting interaction response:', err);
+      }
     }
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
@@ -970,14 +1004,33 @@ export class SidepanelStateManager {
       this.state.runState = 'error';
     }
 
-    // 11. HITL Gate
+    // 11. HITL Gate / Interactive Widget
     if (type === 'INTERACTION_REQUIRED' || type === 'USER_INPUT_REQUIRED' || type === 'USER_APPROVAL_REQUIRED' || type === 'CONFIRMATION_REQUIRED') {
       this.state.runState = 'paused';
+      const ixData = payload.interaction || payload;
+      const rawOptions = ixData.options || payload.options || [];
+      const formattedOptions = rawOptions.map((opt: any, idx: number) => {
+        if (typeof opt === 'string') {
+          return { id: opt, label: opt, index: idx + 1 };
+        }
+        return {
+          id: opt.id || opt.value || opt.label || String(idx + 1),
+          label: opt.label || opt.name || opt.text || String(opt),
+          description: opt.description || '',
+          index: idx + 1,
+        };
+      });
+
       lastMsg.hitl = {
-        id: payload.confirmation_id || payload.interaction_id || 'hitl_' + Date.now(),
-        type: payload.type || 'approval',
-        question: payload.reason || payload.question || evt.message || 'Konfirmasi tindakan agen di browser:',
-        options: payload.options,
+        id: ixData.interaction_id || payload.interaction_id || payload.confirmation_id || 'hitl_' + Date.now(),
+        type: ixData.type || payload.type || (type === 'USER_APPROVAL_REQUIRED' ? 'approval' : 'confirm'),
+        question: ixData.question || payload.question || payload.reason || evt.message || 'Interaksi diperlukan:',
+        description: ixData.description || payload.description || '',
+        action_name: ixData.action_name || payload.action_name,
+        parameters: ixData.parameters || payload.parameters,
+        options: formattedOptions,
+        defaultValue: ixData.defaultValue || payload.defaultValue,
+        isMultiSelect: ixData.type === 'multi_choice' || payload.isMultiSelect,
       };
     }
 
@@ -1013,6 +1066,7 @@ export class SidepanelStateManager {
       const browserSession = new (window as any).BrowserSession({
         tabId: activeTab?.id,
         windowId: activeTab?.windowId,
+        highlightsEnabled: this.state.indexLabelingEnabled,
       });
 
       const llmClient = new (window as any).LLMClient({

@@ -40,6 +40,8 @@ export const App: React.FC = () => {
         onReconnect={() => sidepanelStore.reconnect()}
         onToggleOnline={() => sidepanelStore.toggleOnline()}
         onToggleDetach={() => sidepanelStore.toggleDetach()}
+        indexLabelingEnabled={state.indexLabelingEnabled}
+        onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
       />
 
       {/* Tabs Strip */}

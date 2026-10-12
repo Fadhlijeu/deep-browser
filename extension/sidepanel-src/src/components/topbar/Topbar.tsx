@@ -8,6 +8,7 @@ interface TopbarProps {
   stepCount: number;
   currentView: 'chat' | 'logs';
   logsCount: number;
+  indexLabelingEnabled?: boolean;
   onSetView: (v: 'chat' | 'logs') => void;
   onOpenDrawer: () => void;
   onNewSession: () => void;
@@ -16,6 +17,7 @@ interface TopbarProps {
   onReconnect: () => void;
   onToggleOnline: () => void;
   onToggleDetach: () => void;
+  onToggleIndexLabeling?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -25,6 +27,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   stepCount,
   currentView,
   logsCount,
+  indexLabelingEnabled = true,
   onSetView,
   onOpenDrawer,
   onNewSession,
@@ -33,6 +36,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onReconnect,
   onToggleOnline,
   onToggleDetach,
+  onToggleIndexLabeling,
 }) => {
   const getBrowserIcon = () => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
@@ -192,6 +196,15 @@ export const Topbar: React.FC<TopbarProps> = ({
         </button>
         <button className="icon-btn" onClick={onOpenApikeys} title="Kelola Kunci API">
           <span className="material-symbols-outlined">key</span>
+        </button>
+        <button
+          className={`icon-btn ${indexLabelingEnabled ? 'active' : ''}`}
+          onClick={onToggleIndexLabeling}
+          title={indexLabelingEnabled ? 'Matikan Label Indeks Elemen ([1], [2])' : 'Aktifkan Label Indeks Elemen ([1], [2])'}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '16px', color: indexLabelingEnabled ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+            {indexLabelingEnabled ? 'label' : 'label_off'}
+          </span>
         </button>
         <button className="icon-btn" onClick={onOpenSettings} title="Pengaturan & Mode">
           <span className="material-symbols-outlined">tune</span>

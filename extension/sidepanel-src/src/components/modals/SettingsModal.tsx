@@ -98,6 +98,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, selectedMo
               </span>
             </div>
 
+            <div
+              onClick={() => sidepanelStore.toggleIndexLabeling()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-base)',
+                border: '1px solid var(--border-subtle)',
+                cursor: 'pointer',
+                marginBottom: '6px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 500, fontSize: '11.5px', color: 'var(--text-primary)' }}>
+                  Visual Index Labeling ([1], [2], ...)
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
+                  {sidepanelStore.getState().indexLabelingEnabled ? 'Aktif (Tampilkan badge angka interaktif di atas halaman web)' : 'Nonaktif (Sembunyikan seluruh badge visual di web)'}
+                </div>
+              </div>
+              <span className="material-symbols-outlined" style={{ fontSize: '22px', color: sidepanelStore.getState().indexLabelingEnabled ? 'var(--status-success)' : 'var(--text-tertiary)' }}>
+                {sidepanelStore.getState().indexLabelingEnabled ? 'toggle_on' : 'toggle_off'}
+              </span>
+            </div>
+
             <button
               className="btn-secondary"
               onClick={() => {

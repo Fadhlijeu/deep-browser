@@ -24,14 +24,18 @@ export interface HitlOption {
   id: string;
   label: string;
   description?: string;
+  index?: number;
 }
 
 export interface HitlInteraction {
   id: string;
-  type: 'approval' | 'confirm' | 'choice' | 'text_input' | 'waiting';
+  type: 'approval' | 'confirm' | 'choice' | 'multi_choice' | 'text_input' | 'number_input' | 'waiting';
   question: string;
+  description?: string;
+  action_name?: string;
+  parameters?: Record<string, unknown>;
   options?: HitlOption[];
-  defaultValue?: string | boolean;
+  defaultValue?: string | boolean | number;
   isMultiSelect?: boolean;
 }
 

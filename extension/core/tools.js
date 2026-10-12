@@ -59,6 +59,7 @@
               index: { type: 'integer', description: 'Element index from DOM snapshot.' },
               text: { type: 'string', description: 'Text string to type into the element.' },
               clear: { type: 'boolean', description: 'Whether to clear existing text first (default: true).' },
+              press_enter: { type: 'boolean', description: 'Whether to press Enter key immediately after typing to submit a search or form (default: false).' },
             },
             required: ['index', 'text'],
           },
@@ -328,7 +329,15 @@
             const clear = params.clear !== false;
             const res = await this.browserSession.typeText(index, text, clear);
             if (res.error) return { success: false, error: res.error };
-            return { success: true, message: `Typed "${text}" into element [${index}]`, data: res };
+            if (params.press_enter || params.submit || params.enter) {
+              await this.browserSession.wait(0.15);
+              await this.browserSession.sendKeys('Enter');
+            }
+            return {
+              success: true,
+              message: `Typed "${text}" into element [${index}]${params.press_enter || params.submit ? ' and pressed Enter' : ''}`,
+              data: res,
+            };
           }
 
           case 'navigate':

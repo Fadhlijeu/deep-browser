@@ -33,6 +33,7 @@
       this.activeTabInfo = null;
       this.isAttached = false;
       this.downloadListeners = [];
+      this.highlightsEnabled = options.highlightsEnabled !== false;
 
       this._assertNoBrowserProcessSpawned();
     }
@@ -220,9 +221,42 @@
       this.lastState = stateSummary;
 
       // Update in-page element badges if highlights are enabled
-      this.updateInPageHighlights(domResult.elements || []);
+      if (this.highlightsEnabled !== false) {
+        this.updateInPageHighlights(domResult.elements || []);
+      } else {
+        this.clearInPageHighlights();
+      }
 
       return stateSummary;
+    }
+
+    /**
+     * Dynamically enable or disable in-page highlight labels.
+     * @param {boolean} enabled
+     */
+    setHighlightsEnabled(enabled) {
+      this.highlightsEnabled = !!enabled;
+      if (!this.highlightsEnabled) {
+        this.clearInPageHighlights();
+      } else if (this.lastState && this.lastState.elements) {
+        this.updateInPageHighlights(this.lastState.elements);
+      }
+    }
+
+    /**
+     * Clears all in-page visual badges on the active tab.
+     */
+    async clearInPageHighlights() {
+      if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) return;
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: this.tabId },
+          func: () => {
+            const overlay = document.getElementById('__deep_browser_highlight_overlay__');
+            if (overlay) overlay.remove();
+          },
+        });
+      } catch {}
     }
 
     /**
