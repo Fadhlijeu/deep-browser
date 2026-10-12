@@ -62,6 +62,7 @@ export interface TabItem {
   url: string;
   active: boolean;
   favIconUrl?: string;
+  windowId?: number;
 }
 
 export type RunState = 'idle' | 'running' | 'paused' | 'error' | 'done';
