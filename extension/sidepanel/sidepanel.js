@@ -554,18 +554,50 @@ async function switchSession(sessionId) {
 }
 
 async function deleteSession(sessionId, e) {
-  e.stopPropagation();
-  if (state.sessions.length <= 1) {
-    alert('Minimal harus ada 1 sesi');
-    return;
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
   }
-  state.sessions = state.sessions.filter((s) => s.id !== sessionId);
-  if (state.activeSessionId === sessionId) {
-    state.activeSessionId = state.sessions[0].id;
+  const idStr = String(sessionId);
+  if (state.sessions.length <= 1) {
+    // If only 1 session exists, reset it cleanly instead of blocking with an alert
+    const initId = 'session_' + Date.now();
+    state.sessions = [{ id: initId, name: 'Sesi Baru', createdAt: Date.now(), messages: [], events: [] }];
+    state.activeSessionId = initId;
+  } else {
+    state.sessions = state.sessions.filter((s) => String(s.id) !== idStr);
+    if (String(state.activeSessionId) === idStr) {
+      state.activeSessionId = state.sessions[0].id;
+    }
   }
   await saveStorage({ sessions: state.sessions, activeSessionId: state.activeSessionId });
   renderSessionList();
   renderActiveSessionTimeline();
+  if (stateMachine) {
+    stateMachine.runState = 'idle';
+    syncStatusFromStateMachine(stateMachine);
+  } else {
+    updateStatus('idle', 'Siap');
+  }
+}
+
+async function clearActiveSession() {
+  const current = getActiveSession();
+  if (current) {
+    current.messages = [];
+    current.events = [];
+    current.name = 'Sesi Baru';
+    await saveStorage({ sessions: state.sessions });
+    renderSessionList();
+    renderActiveSessionTimeline();
+    if (stateMachine) {
+      stateMachine.runState = 'idle';
+      syncStatusFromStateMachine(stateMachine);
+    } else {
+      updateStatus('idle', 'Siap');
+    }
+    closeDrawer();
+  }
 }
 
 function renderSessionList() {
@@ -573,18 +605,27 @@ function renderSessionList() {
   elSessionList.innerHTML = '';
   state.sessions.forEach((s) => {
     const div = document.createElement('div');
-    div.className = 'session-row' + (s.id === state.activeSessionId ? ' active' : '');
+    const isActive = String(s.id) === String(state.activeSessionId);
+    div.className = 'session-row' + (isActive ? ' active' : '');
     div.innerHTML = `
-      <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
-        <div style="font-weight:500">${escHtml(s.name)}</div>
-        <div style="font-size:10px;color:var(--text-tertiary)">${new Date(s.createdAt).toLocaleDateString('id-ID')}</div>
+      <div class="session-row-info">
+        <div class="session-name">${escHtml(s.name)}</div>
+        <div class="session-date">${new Date(s.createdAt).toLocaleDateString('id-ID')}</div>
       </div>
-      <button class="icon-btn session-delete-btn" data-id="${s.id}" title="Hapus Sesi" style="color:var(--status-error)">
+      <button class="icon-btn session-delete-btn" data-id="${s.id}" title="${state.sessions.length > 1 ? 'Hapus Sesi' : 'Reset Sesi'}" style="color:var(--status-error)">
         <span class="material-symbols-outlined" style="font-size:14px">delete</span>
       </button>
     `;
-    div.addEventListener('click', () => switchSession(s.id));
-    div.querySelector('.session-delete-btn').addEventListener('click', (e) => deleteSession(s.id, e));
+    div.addEventListener('click', (e) => {
+      if (e.target.closest('.session-delete-btn')) return;
+      switchSession(s.id);
+    });
+    const delBtn = div.querySelector('.session-delete-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        deleteSession(s.id, e);
+      });
+    }
     elSessionList.appendChild(div);
   });
 }
@@ -620,7 +661,17 @@ function syncStatusFromStateMachine(sm) {
 function updateStatus(stateKey, text) {
   if (!elStatusPill || !elStatusText) return;
   elStatusPill.setAttribute('data-state', stateKey);
+  elStatusPill.setAttribute('title', `Status: ${text}`);
   elStatusText.textContent = text;
+
+  if (elStepCounter) {
+    if (stateKey === 'running' && state.activeTimeline?.stepCount > 0) {
+      elStepCounter.style.display = 'inline-block';
+      elStepCounter.textContent = `${state.activeTimeline.stepCount} / 25`;
+    } else {
+      elStepCounter.style.display = 'none';
+    }
+  }
 }
 
 // ─── Backend WebSocket & Event Stream ────────────────────────────────────────
@@ -1814,6 +1865,7 @@ function bindEvents() {
   $('drawer-close')?.addEventListener('click', closeDrawer);
   if (elDrawerOverlay) elDrawerOverlay.addEventListener('click', closeDrawer);
   $('btn-new-session')?.addEventListener('click', createNewSession);
+  $('btn-clear-active-session')?.addEventListener('click', clearActiveSession);
 
   // Settings
   const chkShowTabs = $('chk-show-parallel-tabs');

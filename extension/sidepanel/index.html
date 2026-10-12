@@ -22,10 +22,14 @@
       </button>
     </div>
     <div class="drawer-body" id="session-list"></div>
-    <div style="padding:8px 10px;border-top:1px solid var(--border-subtle)">
+    <div style="padding:8px 10px;border-top:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:6px">
       <button class="btn-secondary" id="btn-new-session" style="width:100%;justify-content:center">
         <span class="material-symbols-outlined" style="font-size:14px">add</span>
         Buat Sesi Baru
+      </button>
+      <button class="btn-ghost" id="btn-clear-active-session" style="width:100%;justify-content:center;color:var(--status-error);font-size:11px">
+        <span class="material-symbols-outlined" style="font-size:13px">delete_sweep</span>
+        Bersihkan Sesi Ini
       </button>
     </div>
   </div>
@@ -43,7 +47,7 @@
           <div id="status-dot"></div>
           <span id="status-text">Siap</span>
         </div>
-        <span id="step-counter" title="Step counter">0 / 25</span>
+        <span id="step-counter" title="Step counter" style="display:none">0 / 25</span>
       </div>
     </div>
 
@@ -64,9 +68,8 @@
       <button class="icon-btn" id="btn-popout" title="Pop Out (Mini Overlay Mode)">
         <span class="material-symbols-outlined">open_in_new</span>
       </button>
-      <button class="btn-secondary" id="btn-new" title="Sesi baru">
-        <span class="material-symbols-outlined" style="font-size:14px">add</span>
-        Sesi
+      <button class="icon-btn" id="btn-new" title="Sesi Baru">
+        <span class="material-symbols-outlined">add</span>
       </button>
       <button class="icon-btn" id="btn-open-apikeys" title="Kelola API Key">
         <span class="material-symbols-outlined">key</span>

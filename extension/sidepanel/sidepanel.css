@@ -94,59 +94,70 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 4px;
+  padding: 6px 8px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   z-index: 20;
+  white-space: nowrap;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 #brand-wrap {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
+  white-space: nowrap;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 #brand-title {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.2px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #browser-badge {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-muted);
   border: 1px solid rgba(139, 140, 248, 0.25);
-  padding: 1px 4px;
+  padding: 0 3px;
   border-radius: var(--radius-xs);
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 #status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
+  gap: 3px;
+  padding: 2px 5px;
   border-radius: 9999px;
   background: var(--status-success-bg);
   border: 1px solid rgba(34, 197, 94, 0.25);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 500;
   color: var(--status-success);
   transition: all 0.15s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 #status-pill[data-state="running"] {
@@ -175,6 +186,7 @@ html, body {
   height: 5px;
   border-radius: 50%;
   background: currentColor;
+  flex-shrink: 0;
 }
 
 #status-pill[data-state="running"] #status-dot {
@@ -188,9 +200,10 @@ html, body {
 
 #step-counter {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-tertiary);
-  padding-left: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* View Switcher */
@@ -202,20 +215,22 @@ html, body {
   border-radius: var(--radius-sm);
   padding: 2px;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .view-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
+  gap: 3px;
+  padding: 2px 6px;
   border-radius: var(--radius-xs);
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.12s ease;
 }
 
@@ -245,7 +260,30 @@ html, body {
 #topbar-actions {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments for narrow SidePanel widths */
+@media (max-width: 375px) {
+  #browser-badge {
+    display: none;
+  }
+  #status-text {
+    display: none;
+  }
+  #status-pill {
+    padding: 3px 4px;
+  }
+  #btn-popout {
+    display: none;
+  }
+}
+
+@media (max-width: 310px) {
+  #brand-title {
+    display: none;
+  }
 }
 
 /* Icon Buttons & Buttons */
@@ -1134,27 +1172,64 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .footer-left {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .model-select-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
+  gap: 3px;
+  padding: 2px 6px;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 10.5px;
   cursor: pointer;
+  max-width: 130px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
   transition: all 0.12s ease;
+}
+
+#model-badge-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#btn-select-mode {
+  max-width: 110px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+#mode-badge-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .model-select-btn:hover {
@@ -1257,6 +1332,8 @@ html, body {
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 11.5px;
+  gap: 8px;
+  transition: background 0.12s ease;
 }
 
 .session-row:hover {
@@ -1268,6 +1345,40 @@ html, body {
   background: var(--bg-surface-elevated);
   color: var(--accent);
   font-weight: 500;
+}
+
+.session-row-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.session-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-date {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.session-delete-btn {
+  color: var(--text-tertiary);
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.session-delete-btn * {
+  pointer-events: none;
+}
+
+.session-delete-btn:hover {
+  color: var(--status-error) !important;
+  background: var(--status-error-bg);
 }
 
 .modal-overlay {
