@@ -14,7 +14,7 @@
   <div id="session-drawer">
     <div class="drawer-header">
       <div style="display:flex;gap:6px;align-items:center">
-        <span class="material-symbols-outlined" style="font-size:16px;color:var(--muted-foreground)">folder</span>
+        <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-secondary)">folder</span>
         <span style="font-weight:600;font-size:12.5px">Riwayat Sesi</span>
       </div>
       <button class="icon-btn" id="drawer-close" title="Tutup">
@@ -22,7 +22,7 @@
       </button>
     </div>
     <div class="drawer-body" id="session-list"></div>
-    <div style="padding:8px 10px;border-top:1px solid var(--border)">
+    <div style="padding:8px 10px;border-top:1px solid var(--border-subtle)">
       <button class="btn-secondary" id="btn-new-session" style="width:100%;justify-content:center">
         <span class="material-symbols-outlined" style="font-size:14px">add</span>
         Buat Sesi Baru
@@ -32,17 +32,32 @@
 
   <!-- Top Bar -->
   <div id="topbar">
-    <button class="icon-btn" id="btn-menu" title="Menu Sesi">
-      <span class="material-symbols-outlined">menu</span>
-    </button>
-    <div id="brand-wrap">
-      <span id="brand-title">Deep Browser</span>
-      <span id="browser-badge">Edge</span>
-      <div id="status-pill">
-        <div id="status-dot"></div>
-        <span id="status-text">Siap</span>
+    <div class="topbar-left">
+      <button class="icon-btn" id="btn-menu" title="Menu Sesi">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <div id="brand-wrap">
+        <span id="brand-title">Deep Browser</span>
+        <span id="browser-badge">Edge</span>
+        <div id="status-pill" data-state="idle" title="Authoritative Runtime Status">
+          <div id="status-dot"></div>
+          <span id="status-text">Siap</span>
+        </div>
+        <span id="step-counter" title="Step counter">0 / 25</span>
       </div>
-      <span id="step-counter">0 / 25</span>
+    </div>
+
+    <!-- View Switcher: Chat vs Event Logs -->
+    <div id="view-switcher" role="tablist">
+      <button class="view-btn active" id="btn-view-chat" role="tab" aria-selected="true" title="Tampilan Chat &amp; Timeline">
+        <span class="material-symbols-outlined" style="font-size:14px">chat</span>
+        <span>Chat</span>
+      </button>
+      <button class="view-btn" id="btn-view-logs" role="tab" aria-selected="false" title="Tampilan Event Logs &amp; Verifikasi">
+        <span class="material-symbols-outlined" style="font-size:14px">terminal</span>
+        <span>Logs</span>
+        <span id="logs-badge" class="badge-count" style="display:none">0</span>
+      </button>
     </div>
 
     <div id="topbar-actions">
@@ -65,38 +80,106 @@
   <!-- Multi-Tab Strip -->
   <div id="tab-strip"></div>
 
-  <!-- Main Content -->
+  <!-- Main Content Area -->
   <div id="main">
-    <!-- Empty State -->
-    <div id="empty-state">
-      <div class="empty-icon-box">
-        <span class="material-symbols-outlined" style="font-size:22px">explore</span>
+    
+    <!-- VIEW 1: Primary Chat & Execution Timeline -->
+    <div id="chat-view" class="view-panel active">
+      <!-- Empty State -->
+      <div id="empty-state">
+        <div class="empty-icon-box">
+          <span class="material-symbols-outlined" style="font-size:22px">explore</span>
+        </div>
+        <div>
+          <h2 class="empty-title">Deep Browser Copilot</h2>
+          <p class="empty-desc">Otonom menjelajah, menganalisis data, dan mengeksekusi aksi terverifikasi pada Microsoft Edge.</p>
+        </div>
+        <div class="quick-prompts-grid">
+          <button class="quick-chip" data-prompt="Cari website pddikti yang benar lalu cari nama muhammad fadhli rizaldy lalu ambil informasinya">
+            <span>Cari data mahasiswa di PDDIKTI</span>
+            <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
+          </button>
+          <button class="quick-chip" data-prompt="Jelajahi halaman ini dan rangkum poin-poin pentingnya secara terstruktur">
+            <span>Rangkum konten halaman aktif</span>
+            <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
+          </button>
+          <button class="quick-chip" data-prompt="Buka 3 tab secara paralel untuk meriset perkembangan AI reasoning terkini">
+            <span>Riset paralel multi-tab AI terkini</span>
+            <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
+          </button>
+        </div>
       </div>
-      <div>
-        <h2 class="empty-title">Deep Browser Copilot</h2>
-        <p class="empty-desc">Otonom menjelajah, menganalisis data, dan mengeksekusi aksi langsung pada Microsoft Edge.</p>
+
+      <!-- Timeline messages & execution timeline container -->
+      <div id="timeline"></div>
+    </div>
+
+    <!-- VIEW 2: Dedicated Real-time Event Log View -->
+    <div id="logs-view" class="view-panel" style="display:none">
+      <div class="logs-toolbar">
+        <div class="logs-search-wrap">
+          <span class="material-symbols-outlined logs-search-icon">search</span>
+          <input type="text" id="logs-search-input" placeholder="Cari event, tool, atau argumen..." />
+          <button class="icon-btn" id="logs-search-clear" style="display:none" title="Hapus pencarian">
+            <span class="material-symbols-outlined" style="font-size:13px">close</span>
+          </button>
+        </div>
+        <div class="logs-actions">
+          <button class="btn-ghost" id="btn-copy-all-logs" title="Salin semua log ke Clipboard">
+            <span class="material-symbols-outlined" style="font-size:13px">content_copy</span>
+            <span>Salin</span>
+          </button>
+        </div>
       </div>
-      <div class="quick-prompts-grid">
-        <button class="quick-chip" data-prompt="Cari website pddikti yang benar lalu cari nama muhammad fadhli rizaldy lalu ambil informasinya">
-          <span>Cari data mahasiswa di PDDIKTI</span>
-          <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
-        </button>
-        <button class="quick-chip" data-prompt="Jelajahi halaman ini dan rangkum poin-poin pentingnya">
-          <span>Rangkum konten halaman aktif</span>
-          <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
-        </button>
-        <button class="quick-chip" data-prompt="Cari artikel terbaru mengenai perkembangan AI di Google">
-          <span>Cari artikel terbaru AI di Google</span>
-          <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
-        </button>
+
+      <!-- Log filter pills -->
+      <div class="logs-filter-strip">
+        <button class="filter-chip active" data-filter="all">Semua</button>
+        <button class="filter-chip" data-filter="tools">Tools</button>
+        <button class="filter-chip" data-filter="approvals">Approvals</button>
+        <button class="filter-chip" data-filter="errors">Errors</button>
+        <button class="filter-chip" data-filter="verifications">Verifikasi</button>
+      </div>
+
+      <!-- Chronological Event Table -->
+      <div id="logs-container">
+        <div class="logs-empty-state">Belum ada log eksekusi runtime.</div>
       </div>
     </div>
 
-    <!-- Timeline messages container -->
-    <div id="timeline"></div>
   </div>
 
-  <!-- Bottom Input Bar -->
+  <!-- Tool Presets Strip (above Composer) -->
+  <div id="presets-strip">
+    <div class="presets-label">
+      <span class="material-symbols-outlined" style="font-size:12px">tune</span>
+      <span>Preset:</span>
+    </div>
+    <div class="presets-chips" id="presets-chips-container">
+      <button class="preset-chip active" data-preset="default" title="Agent Decide: Otonom dengan persetujuan adaptif">
+        <span class="material-symbols-outlined">smart_toy</span>
+        <span>Auto</span>
+      </button>
+      <button class="preset-chip" data-preset="research" title="Research: Multi-sumber &amp; analisis data read-only">
+        <span class="material-symbols-outlined">manage_search</span>
+        <span>Research</span>
+      </button>
+      <button class="preset-chip" data-preset="data_extraction" title="Data Extraction: Ekstraksi schema, tabel, dan markdown terstruktur">
+        <span class="material-symbols-outlined">dataset</span>
+        <span>Extraction</span>
+      </button>
+      <button class="preset-chip" data-preset="form_filling" title="Form Filling: Input form &amp; selektor dengan konfirmasi sebelum submit">
+        <span class="material-symbols-outlined">edit_note</span>
+        <span>Form Fill</span>
+      </button>
+      <button class="preset-chip" data-preset="read_only" title="Read-only: Nol mutasi DOM. Khusus navigasi &amp; inspeksi aman">
+        <span class="material-symbols-outlined">visibility</span>
+        <span>Read-only</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom Input Bar / Composer -->
   <div id="bottom-bar">
     <div id="prompt-container">
       <textarea id="goal-input" placeholder="Perintahkan agent (contoh: Cari data di PDDIKTI)..." rows="1"></textarea>
@@ -107,7 +190,7 @@
             <span id="model-badge-name">Gemini 2.0 Flash</span>
             <span class="material-symbols-outlined" style="font-size:14px">expand_more</span>
           </button>
-          <button class="btn-secondary" id="btn-select-mode" style="padding:2px 6px;font-size:10.5px" title="Mode Eksekusi">
+          <button class="btn-secondary" id="btn-select-mode" style="padding:2px 6px;font-size:10.5px" title="Mode Eksekusi &amp; Safety Review">
             <span class="material-symbols-outlined" id="mode-badge-icon" style="font-size:13px">smart_toy</span>
             <span id="mode-badge-name">Agent Decide</span>
           </button>
@@ -134,7 +217,7 @@
       <!-- View 1: Model List -->
       <div class="modal-body" id="model-list-view">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:11px;color:var(--muted-foreground)">Daftar Model Tersedia</span>
+          <span style="font-size:11px;color:var(--text-secondary)">Daftar Model Tersedia</span>
           <button class="btn-primary" id="btn-add-model" style="padding:3px 7px;font-size:11px">
             <span class="material-symbols-outlined" style="font-size:12px;vertical-align:-1px">add</span> Tambah Model
           </button>
@@ -203,7 +286,7 @@
   <div class="modal-overlay" id="modal-settings">
     <div class="modal-dialog">
       <div class="modal-header">
-        <span class="modal-title">Mode Eksekusi Agent</span>
+        <span class="modal-title">Mode Eksekusi &amp; Safety Review</span>
         <button class="icon-btn" id="close-modal-settings">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -214,18 +297,18 @@
           <div class="model-list-group" id="mode-options-container"></div>
         </div>
 
-        <div class="form-group" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="form-group" style="margin-top:14px;border-top:1px solid var(--border-subtle);padding-top:12px">
           <label class="form-label">Riset Paralel Multi-Tab</label>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
-            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:var(--foreground)">
+            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:var(--text-primary)">
               <span>Buka Tab Terlihat (Show Process)</span>
-              <input type="checkbox" id="chk-show-parallel-tabs" checked style="accent-color:#8b5cf6;width:16px;height:16px" />
+              <input type="checkbox" id="chk-show-parallel-tabs" checked style="accent-color:#8b8cf8;width:16px;height:16px" />
             </label>
-            <div style="font-size:10.5px;color:var(--muted-foreground)">Jika dinonaktifkan, riset berjalan di latar belakang tanpa membuka tab aktif baru di layar Anda.</div>
+            <div style="font-size:10.5px;color:var(--text-secondary)">Jika dinonaktifkan, riset berjalan di latar belakang tanpa membuka tab aktif baru di layar Anda.</div>
             
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
-              <span style="font-size:11.5px;color:var(--foreground)">Maksimal Worker Paralel:</span>
-              <select id="sel-max-parallel-workers" style="background:#18181b;border:1px solid #27272a;border-radius:4px;color:#f4f4f5;padding:3px 8px;font-size:11px">
+              <span style="font-size:11.5px;color:var(--text-primary)">Maksimal Worker Paralel:</span>
+              <select id="sel-max-parallel-workers" style="background:#191B1F;border:1px solid #292C32;border-radius:4px;color:#ECEEF2;padding:3px 8px;font-size:11px">
                 <option value="2">2 Tab Simultan</option>
                 <option value="3" selected>3 Tab Simultan</option>
                 <option value="4">4 Tab Simultan</option>
@@ -241,6 +324,33 @@
     </div>
   </div>
 
+  <!-- Modal: Side-effect Retry Confirmation -->
+  <div class="modal-overlay" id="modal-retry-confirm">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="material-symbols-outlined" style="font-size:18px;color:var(--status-warning)">warning</span>
+          <span class="modal-title">Konfirmasi Ulangi Aksi</span>
+        </div>
+        <button class="icon-btn" id="close-modal-retry-confirm">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12.5px;line-height:1.5;color:var(--text-primary)" id="retry-confirm-message">
+          Hasil aksi sebelumnya tidak dapat dipastikan (outcome unknown). Mengulangi aksi yang memodifikasi data (seperti submit form atau klik transaksi) berpotensi menghasilkan duplikasi data.
+        </p>
+        <div style="margin-top:10px;padding:8px 10px;background:var(--status-warning-bg);border:1px solid rgba(245,158,11,0.25);border-radius:6px;font-size:11px;color:var(--status-warning)">
+          Pastikan Anda telah memeriksa status halaman sebelum melanjutkan percobaan ulang.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="btn-cancel-retry">Batal</button>
+        <button class="btn-primary" id="btn-confirm-retry" style="background:var(--status-warning);border-color:var(--status-warning);color:#000">Lanjutkan &amp; Ulangi</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Core Runtime Modules -->
@@ -252,6 +362,7 @@
 <script src="../core/skills/skill_base.js"></script>
 <script src="../core/skills/research_skill.js"></script>
 <script src="../core/security_policy.js"></script>
+<script src="../core/state_machine.js"></script>
 <script src="../core/widgets.js"></script>
 <script src="../core/tools.js"></script>
 <script src="../core/message_manager.js"></script>

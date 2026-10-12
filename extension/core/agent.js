@@ -35,8 +35,11 @@
       this.llmClient = options.llmClient || new global.LLMClient();
       this.tools = new global.Tools(this.browserSession);
       this.messageManager = new global.MessageManager({ task: this.task });
-      this.extractor = new global.Extractor(this.browserSession, this.llmClient);
-      this.securityPolicy = global.SecurityPolicy ? new global.SecurityPolicy() : null;
+      this.preset = options.preset || 'default';
+      this.securityPolicy = options.securityPolicy || (global.SecurityPolicy ? new global.SecurityPolicy({ preset: this.preset }) : null);
+      if (this.securityPolicy && typeof this.securityPolicy.setPreset === 'function') {
+        this.securityPolicy.setPreset(this.preset);
+      }
 
       this.interactionManager = options.interactionManager || (global.InteractionManager ? new global.InteractionManager({ taskId: this.taskId }) : null);
 
@@ -244,6 +247,15 @@
             }
           }
 
+
+          if (this.securityPolicy && typeof this.securityPolicy.isActionAllowed === 'function') {
+            if (!this.securityPolicy.isActionAllowed(actionName, params)) {
+              const blockedMsg = `Aksi "${actionName}" tidak diizinkan oleh kebijakan preset aktif: ${this.preset}`;
+              this._emit('ACTION_FAILED', blockedMsg, { error: blockedMsg, action_name: actionName, preset: this.preset });
+              this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: blockedMsg });
+              continue;
+            }
+          }
 
           // ─── 5. EMIT SPECIFIC ACTION EVENT ──────────────────────────────────────
           this._emitActionSpecificEvent(actionName, params);

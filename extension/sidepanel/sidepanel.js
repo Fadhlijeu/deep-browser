@@ -3,11 +3,15 @@
  * =============================================================
  *
  * Implements:
- *   - Google Material Symbols (zero emojis)
- *   - Streamlined, clean "Worked for Xs >" thought & action logs (Reasoning + concrete actions only)
- *   - Full Model CRUD (ability to delete and edit any model)
- *   - Full Session Management (persistence, switching, and deleting sessions)
- *   - Multi-tab strip and live Edge tab controller
+ *   - Dark-First Modern AI Workspace (Linear / ChatGPT / Dev-tool aesthetic)
+ *   - Deterministic Authoritative State Machine & Verification Engine
+ *   - Collapsible Execution Timeline with truthful tool states & verification evidence
+ *   - Dedicated Real-time Searchable & Filterable Event Log View
+ *   - Functional Reusable Tool Presets (Auto, Research, Extraction, Form Fill, Read-only)
+ *   - Safe Retry Protocol & Side-effect Warning Modal (Class A, B, C)
+ *   - Atomic Human-in-the-Loop (HITL) Approval & Review Gate
+ *   - Full Model CRUD & Multi-Session History Persistence
+ *   - Live Edge Multi-Tab Strip & In-Page Floating Island Bridge
  */
 
 'use strict';
@@ -25,9 +29,9 @@ const DEFAULT_MODELS = [
 ];
 
 const MODES = [
-  { id: 'agent_decide', name: 'Agent Decide',    desc: 'Agent mengambil keputusan adaptif.', icon: 'smart_toy' },
-  { id: 'auto',         name: 'Always Proceed',  desc: 'Eksekusi cepat otomatis.', icon: 'bolt' },
-  { id: 'hitl',         name: 'Request Review',  desc: 'Review proposal sebelum eksekusi.', icon: 'shield' },
+  { id: 'agent_decide', name: 'Agent Decide',    desc: 'Agent mengambil keputusan adaptif dengan konfirmasi dinamis.', icon: 'smart_toy' },
+  { id: 'auto',         name: 'Always Proceed',  desc: 'Eksekusi cepat otomatis tanpa jeda manual.', icon: 'bolt' },
+  { id: 'hitl',         name: 'Request Review',  desc: 'Review proposal sebelum eksekusi setiap aksi browser.', icon: 'shield' },
 ];
 
 const PROVIDERS = [
@@ -38,6 +42,15 @@ const PROVIDERS = [
   { id: 'ollama',        name: 'Ollama Host',            placeholder: 'http://localhost:11434' },
 ];
 
+// Presets definition reference
+const PRESET_DEFS = (typeof window !== 'undefined' && window.DeepBrowserState?.PRESETS) || {
+  DEFAULT:         { id: 'default',         name: 'Auto',        icon: 'smart_toy',    readOnly: false },
+  RESEARCH:        { id: 'research',        name: 'Research',    icon: 'manage_search',readOnly: true },
+  DATA_EXTRACTION: { id: 'data_extraction', name: 'Extraction',  icon: 'dataset',      readOnly: true },
+  FORM_FILLING:    { id: 'form_filling',    name: 'Form Fill',   icon: 'edit_note',    readOnly: false },
+  READ_ONLY:       { id: 'read_only',       name: 'Read-only',   icon: 'visibility',   readOnly: true },
+};
+
 // ─── State ───────────────────────────────────────────────────────────────────
 let state = {
   currentTab: null,
@@ -45,21 +58,30 @@ let state = {
   models: [...DEFAULT_MODELS],
   selectedModelId: 'gemini/gemini-2.0-flash',
   selectedMode: 'agent_decide',
+  selectedPreset: 'default',
   apiKeys: {},
   sessions: [],
   activeSessionId: null,
-  currentAgent: null,     // JS Agent instance (legacy / fallback mode)
-  currentTaskId: null,    // Backend task ID (backend mode)
+  currentAgent: null,     // JS Agent instance (fallback)
+  currentTaskId: null,    // Backend task ID
   agentRunning: false,
   editingModelId: null,
-  activeStepDropdown: null,
-  activeStepBody: null,
-  stepStartTime: 0,
+  currentView: 'chat',    // 'chat' | 'logs'
+  logFilter: 'all',       // 'all' | 'tools' | 'approvals' | 'errors' | 'verifications'
+  logSearchQuery: '',
+  retryPendingAction: null,
+  activeTimeline: null,   // Current DOM timeline element
 };
+
+// State Machine Engine instance
+const StateMachineClass = (typeof window !== 'undefined' && window.DeepBrowserState?.StateMachine) || null;
+let stateMachine = StateMachineClass ? new StateMachineClass() : null;
 
 // ─── DOM References ──────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const elMain                = $('main');
+const elChatView            = $('chat-view');
+const elLogsView            = $('logs-view');
 const elTimeline            = $('timeline');
 const elEmptyState          = $('empty-state');
 const elGoalInput           = $('goal-input');
@@ -69,16 +91,23 @@ const elStatusPill          = $('status-pill');
 const elStatusText          = $('status-text');
 const elStepCounter         = $('step-counter');
 const elTabStrip            = $('tab-strip');
-const elWidgetContainer     = $('widget-container');
 const elModelBadgeIcon      = $('model-badge-icon');
 const elModelBadgeName      = $('model-badge-name');
 const elModeBadgeIcon       = $('mode-badge-icon');
 const elModeBadgeName       = $('mode-badge-name');
+const elBtnViewChat         = $('btn-view-chat');
+const elBtnViewLogs         = $('btn-view-logs');
+const elLogsBadge           = $('logs-badge');
+const elLogsContainer       = $('logs-container');
+const elLogsSearchInput     = $('logs-search-input');
+const elLogsSearchClear     = $('logs-search-clear');
+const elPresetsContainer    = $('presets-chips-container');
 
 // Modals
 const elModalModels         = $('modal-models');
 const elModalApikeys        = $('modal-apikeys');
 const elModalSettings       = $('modal-settings');
+const elModalRetryConfirm   = $('modal-retry-confirm');
 const elModelListView       = $('model-list-view');
 const elModelFormView       = $('model-form-view');
 const elModelsModalFooter   = $('models-modal-footer');
@@ -95,34 +124,46 @@ let widgetManager = null;
 
 // ─── Initialization ──────────────────────────────────────────────────────────
 async function init() {
-  widgetManager = new window.WidgetManager(elTimeline);
+  if (window.WidgetManager) {
+    widgetManager = new window.WidgetManager(elTimeline);
+  }
+
+  // Subscribe state machine to UI updates
+  if (stateMachine) {
+    stateMachine.subscribe((sm) => {
+      syncStatusFromStateMachine(sm);
+    });
+  }
+
   await loadStorage();
   bindEvents();
   renderModelPill();
   renderModePill();
+  renderPresets();
   renderModelsList();
   renderApikeys();
   renderModeOptions();
   detectCurrentTab();
   loadSessions();
   updateTabStrip();
-  updateStatus('Siap', false);
-  // Connect to backend Python agent event stream (auto-reconnects on disconnect)
+  updateStatus('idle', 'Siap');
+
+  // Connect to backend Python agent event stream
   connectBackendEventStream();
 }
-
 
 // ─── Storage Operations ──────────────────────────────────────────────────────
 async function loadStorage() {
   return new Promise((resolve) => {
     chrome.storage?.local?.get(
-      ['models', 'selectedModelId', 'selectedMode', 'apiKeys', 'sessions', 'activeSessionId'],
+      ['models', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'sessions', 'activeSessionId'],
       (data) => {
         if (data?.models && Array.isArray(data.models) && data.models.length > 0) {
           state.models = data.models;
         }
         if (data?.selectedModelId) state.selectedModelId = data.selectedModelId;
         if (data?.selectedMode) state.selectedMode = data.selectedMode;
+        if (data?.selectedPreset) state.selectedPreset = data.selectedPreset;
         if (data?.apiKeys) state.apiKeys = data.apiKeys;
         if (data?.sessions && Array.isArray(data.sessions)) state.sessions = data.sessions;
         if (data?.activeSessionId) state.activeSessionId = data.activeSessionId;
@@ -130,7 +171,7 @@ async function loadStorage() {
         // Ensure at least one active session
         if (!state.sessions || state.sessions.length === 0) {
           const initId = 'session_' + Date.now();
-          state.sessions = [{ id: initId, name: 'Sesi Baru', createdAt: Date.now(), messages: [] }];
+          state.sessions = [{ id: initId, name: 'Sesi Baru', createdAt: Date.now(), messages: [], events: [] }];
           state.activeSessionId = initId;
         }
         resolve();
@@ -141,6 +182,46 @@ async function loadStorage() {
 
 async function saveStorage(keys) {
   return new Promise((resolve) => chrome.storage?.local?.set(keys, resolve));
+}
+
+// ─── Presets ─────────────────────────────────────────────────────────────────
+function renderPresets() {
+  if (!elPresetsContainer) return;
+  const chips = elPresetsContainer.querySelectorAll('.preset-chip');
+  chips.forEach((chip) => {
+    const pId = chip.dataset.preset;
+    if (pId === state.selectedPreset) {
+      chip.classList.add('active');
+    } else {
+      chip.classList.remove('active');
+    }
+    chip.addEventListener('click', () => {
+      state.selectedPreset = pId;
+      saveStorage({ selectedPreset: pId });
+      renderPresets();
+    });
+  });
+}
+
+// ─── View Switching (Chat vs Logs) ───────────────────────────────────────────
+function switchView(viewName) {
+  state.currentView = viewName;
+  if (viewName === 'chat') {
+    elChatView.style.display = 'flex';
+    elLogsView.style.display = 'none';
+    elBtnViewChat.classList.add('active');
+    elBtnViewChat.setAttribute('aria-selected', 'true');
+    elBtnViewLogs.classList.remove('active');
+    elBtnViewLogs.setAttribute('aria-selected', 'false');
+  } else {
+    elChatView.style.display = 'none';
+    elLogsView.style.display = 'flex';
+    elBtnViewChat.classList.remove('active');
+    elBtnViewChat.setAttribute('aria-selected', 'false');
+    elBtnViewLogs.classList.add('active');
+    elBtnViewLogs.setAttribute('aria-selected', 'true');
+    renderLogsList();
+  }
 }
 
 // ─── Tab Strip & Active Tab Tracking ─────────────────────────────────────────
@@ -170,14 +251,14 @@ function setCurrentTab(tab) {
 }
 
 async function updateTabStrip() {
-  if (!chrome.tabs) return;
+  if (!chrome.tabs || !elTabStrip) return;
 
   chrome.tabs.query({ currentWindow: true }, (tabs) => {
     state.tabsList = tabs || [];
     elTabStrip.innerHTML = '';
 
     tabs.forEach((tab) => {
-      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) return;
+      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('edge://')) return;
 
       const pill = document.createElement('div');
       const isActive = state.currentTab && tab.id === state.currentTab.id;
@@ -207,11 +288,18 @@ function getActiveModel() {
 
 function renderModelPill() {
   const m = getActiveModel();
-  elModelBadgeIcon.textContent = m.icon || 'bolt';
-  elModelBadgeName.textContent = m.name;
+  if (elModelBadgeIcon) elModelBadgeIcon.textContent = m.icon || 'bolt';
+  if (elModelBadgeName) elModelBadgeName.textContent = m.name;
+}
+
+function renderModePill() {
+  const mode = MODES.find((m) => m.id === state.selectedMode) || MODES[0];
+  if (elModeBadgeIcon) elModeBadgeIcon.textContent = mode.icon || 'smart_toy';
+  if (elModeBadgeName) elModeBadgeName.textContent = mode.name;
 }
 
 function renderModelsList() {
+  if (!elModelsContainer) return;
   elModelsContainer.innerHTML = '';
 
   state.models.forEach((m) => {
@@ -219,27 +307,27 @@ function renderModelsList() {
     const card = document.createElement('div');
     card.className = 'model-card-item' + (isSelected ? ' selected' : '');
 
-    let badgeText = m.provider.toUpperCase();
+    let badgeText = (m.provider || 'gemini').toUpperCase();
     if (m.provider === 'custom_openai') badgeText = 'CUSTOM URL';
     if (m.provider === 'ollama') badgeText = 'LOCAL';
 
     card.innerHTML = `
       <div class="model-card-info" style="flex:1">
         <div class="model-card-name">
-          <span class="material-symbols-outlined" style="font-size:15px;color:var(--muted-foreground)">${m.icon || 'bolt'}</span>
+          <span class="material-symbols-outlined" style="font-size:15px;color:var(--text-secondary)">${m.icon || 'bolt'}</span>
           <span>${escHtml(m.name)}</span>
-          ${isSelected ? '<span style="color:var(--primary);font-size:10.5px;font-weight:600;margin-left:4px">Aktif</span>' : ''}
+          ${isSelected ? '<span style="color:var(--accent);font-size:10px;font-weight:600;margin-left:4px">Aktif</span>' : ''}
         </div>
         <div class="model-card-meta">
-          <span style="background:var(--secondary);padding:1px 4px;border-radius:3px">${badgeText}</span>
-          <span>${escHtml(m.modelId || m.id)}</span>
+          <span style="background:var(--bg-surface-elevated);padding:1px 4px;border-radius:3px">${badgeText}</span>
+          <span style="font-family:var(--font-mono)">${escHtml(m.modelId || m.id)}</span>
         </div>
       </div>
       <div class="model-card-actions">
         <button class="icon-btn btn-edit-model" data-id="${m.id}" title="Edit Model">
           <span class="material-symbols-outlined" style="font-size:14px">edit</span>
         </button>
-        <button class="icon-btn btn-delete-model" data-id="${m.id}" title="Hapus Model" style="color:var(--destructive)">
+        <button class="icon-btn btn-delete-model" data-id="${m.id}" title="Hapus Model" style="color:var(--status-error)">
           <span class="material-symbols-outlined" style="font-size:14px">delete</span>
         </button>
       </div>
@@ -350,16 +438,15 @@ async function saveModelForm() {
 
   await saveStorage({ models: state.models, selectedModelId: state.selectedModelId });
   renderModelPill();
-  renderModelsList();
   closeModelForm();
+  renderModelsList();
 }
 
 async function deleteModel(modelId) {
   if (state.models.length <= 1) {
-    alert('Minimal harus ada 1 model di daftar.');
+    alert('Minimal harus ada 1 model tersedia');
     return;
   }
-  if (!confirm('Hapus model ini dari daftar?')) return;
   state.models = state.models.filter((m) => m.id !== modelId);
   if (state.selectedModelId === modelId) {
     state.selectedModelId = state.models[0].id;
@@ -370,7 +457,6 @@ async function deleteModel(modelId) {
 }
 
 async function resetDefaultModels() {
-  if (!confirm('Reset semua model ke pengaturan default?')) return;
   state.models = [...DEFAULT_MODELS];
   state.selectedModelId = DEFAULT_MODELS[0].id;
   await saveStorage({ models: state.models, selectedModelId: state.selectedModelId });
@@ -378,68 +464,47 @@ async function resetDefaultModels() {
   renderModelsList();
 }
 
-// ─── API Key Management ──────────────────────────────────────────────────────
+// ─── API Keys Manager ────────────────────────────────────────────────────────
 function renderApikeys() {
+  if (!elApikeysContainer) return;
   elApikeysContainer.innerHTML = '';
-  PROVIDERS.forEach((p) => {
-    const savedKey = state.apiKeys[p.id] || '';
-    const row = document.createElement('div');
-    row.className = 'form-group';
-    row.innerHTML = `
-      <label class="form-label">${escHtml(p.name)}</label>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input class="form-input" type="password" id="apikey-input-${p.id}"
-          placeholder="${escHtml(p.placeholder)}" value="${escHtml(savedKey)}" />
-        <button class="icon-btn btn-toggle-key" data-target="apikey-input-${p.id}" title="Lihat / Sembunyikan">
-          <span class="material-symbols-outlined" style="font-size:14px">visibility</span>
-        </button>
-      </div>
+  PROVIDERS.forEach((prov) => {
+    const div = document.createElement('div');
+    div.className = 'form-group';
+    const val = state.apiKeys[prov.id] || '';
+    div.innerHTML = `
+      <label class="form-label">${escHtml(prov.name)}</label>
+      <input class="form-input" type="password" id="key-${prov.id}" value="${escHtml(val)}" placeholder="${escHtml(prov.placeholder)}" />
     `;
-
-    row.querySelector('.btn-toggle-key').addEventListener('click', function () {
-      const inp = document.getElementById(this.dataset.target);
-      inp.type = inp.type === 'password' ? 'text' : 'password';
-    });
-
-    row.querySelector(`#apikey-input-${p.id}`).addEventListener('input', function () {
-      state.apiKeys[p.id] = this.value.trim();
-    });
-
-    elApikeysContainer.appendChild(row);
+    elApikeysContainer.appendChild(div);
   });
 }
 
 async function saveApikeys() {
-  PROVIDERS.forEach((p) => {
-    const inp = document.getElementById(`apikey-input-${p.id}`);
-    if (inp) state.apiKeys[p.id] = inp.value.trim();
+  PROVIDERS.forEach((prov) => {
+    const input = $(`key-${prov.id}`);
+    if (input) state.apiKeys[prov.id] = input.value.trim();
   });
   await saveStorage({ apiKeys: state.apiKeys });
   closeModal('modal-apikeys');
 }
 
-// ─── Mode Selector ───────────────────────────────────────────────────────────
-function renderModePill() {
-  const m = MODES.find((x) => x.id === state.selectedMode) || MODES[0];
-  elModeBadgeIcon.textContent = m.icon;
-  elModeBadgeName.textContent = m.name;
-}
-
+// ─── Mode & Execution Options ────────────────────────────────────────────────
 function renderModeOptions() {
+  if (!elModeOptionsContainer) return;
   elModeOptionsContainer.innerHTML = '';
   MODES.forEach((m) => {
     const isSelected = m.id === state.selectedMode;
     const card = document.createElement('div');
     card.className = 'model-card-item' + (isSelected ? ' selected' : '');
     card.innerHTML = `
-      <div class="model-card-info">
-        <div class="model-card-name">
-          <span class="material-symbols-outlined" style="font-size:15px">${m.icon}</span>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px">
+          <span class="material-symbols-outlined" style="font-size:15px;color:var(--text-secondary)">${m.icon}</span>
           <span>${escHtml(m.name)}</span>
-          ${isSelected ? '<span style="color:var(--primary);font-size:10.5px;font-weight:600;margin-left:4px">Aktif</span>' : ''}
+          ${isSelected ? '<span style="color:var(--accent);font-size:10px;font-weight:600;margin-left:4px">Aktif</span>' : ''}
         </div>
-
-        <div class="model-card-meta">${escHtml(m.desc)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escHtml(m.desc)}</div>
       </div>
     `;
     card.addEventListener('click', () => {
@@ -447,66 +512,64 @@ function renderModeOptions() {
       saveStorage({ selectedMode: m.id });
       renderModePill();
       renderModeOptions();
-      closeModal('modal-settings');
     });
     elModeOptionsContainer.appendChild(card);
   });
 }
 
-// ─── Session Management (Switch, Delete, Persist) ────────────────────────────
+// ─── Session Management ──────────────────────────────────────────────────────
+function getActiveSession() {
+  return state.sessions.find((s) => s.id === state.activeSessionId) || state.sessions[0];
+}
+
 function loadSessions() {
   renderSessionList();
   renderActiveSessionTimeline();
 }
 
-function getActiveSession() {
-  return state.sessions.find((s) => s.id === state.activeSessionId) || state.sessions[0];
-}
-
-function createNewSession() {
-  const id = 'session_' + Date.now();
-  const session = {
-    id,
-    name: 'Sesi ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+async function createNewSession() {
+  const newId = 'session_' + Date.now();
+  const newSession = {
+    id: newId,
+    name: 'Sesi ' + (state.sessions.length + 1),
     createdAt: Date.now(),
     messages: [],
+    events: [],
   };
-  state.sessions.unshift(session);
-  state.activeSessionId = id;
-  saveStorage({ sessions: state.sessions, activeSessionId: id });
+  state.sessions.unshift(newSession);
+  state.activeSessionId = newId;
+  await saveStorage({ sessions: state.sessions, activeSessionId: state.activeSessionId });
+  closeDrawer();
   renderSessionList();
   renderActiveSessionTimeline();
-  closeDrawer();
-  return id;
+  updateStatus('idle', 'Siap');
 }
 
-function switchSession(sessionId) {
+async function switchSession(sessionId) {
   state.activeSessionId = sessionId;
-  saveStorage({ activeSessionId: sessionId });
+  await saveStorage({ activeSessionId: sessionId });
+  closeDrawer();
   renderSessionList();
   renderActiveSessionTimeline();
-  closeDrawer();
 }
 
 async function deleteSession(sessionId, e) {
-  if (e) e.stopPropagation();
-  if (!confirm('Hapus sesi ini?')) return;
-
+  e.stopPropagation();
+  if (state.sessions.length <= 1) {
+    alert('Minimal harus ada 1 sesi');
+    return;
+  }
   state.sessions = state.sessions.filter((s) => s.id !== sessionId);
-  if (state.sessions.length === 0) {
-    const newId = 'session_' + Date.now();
-    state.sessions = [{ id: newId, name: 'Sesi Baru', createdAt: Date.now(), messages: [] }];
-    state.activeSessionId = newId;
-  } else if (state.activeSessionId === sessionId) {
+  if (state.activeSessionId === sessionId) {
     state.activeSessionId = state.sessions[0].id;
   }
-
   await saveStorage({ sessions: state.sessions, activeSessionId: state.activeSessionId });
   renderSessionList();
   renderActiveSessionTimeline();
 }
 
 function renderSessionList() {
+  if (!elSessionList) return;
   elSessionList.innerHTML = '';
   state.sessions.forEach((s) => {
     const div = document.createElement('div');
@@ -514,9 +577,9 @@ function renderSessionList() {
     div.innerHTML = `
       <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
         <div style="font-weight:500">${escHtml(s.name)}</div>
-        <div style="font-size:10px;color:var(--muted-foreground)">${new Date(s.createdAt).toLocaleDateString('id-ID')}</div>
+        <div style="font-size:10px;color:var(--text-tertiary)">${new Date(s.createdAt).toLocaleDateString('id-ID')}</div>
       </div>
-      <button class="session-delete-btn" data-id="${s.id}" title="Hapus Sesi">
+      <button class="icon-btn session-delete-btn" data-id="${s.id}" title="Hapus Sesi" style="color:var(--status-error)">
         <span class="material-symbols-outlined" style="font-size:14px">delete</span>
       </button>
     `;
@@ -526,83 +589,43 @@ function renderSessionList() {
   });
 }
 
-function renderActiveSessionTimeline() {
-  elTimeline.innerHTML = '';
-  const current = getActiveSession();
-  if (!current || !current.messages || current.messages.length === 0) {
-    elEmptyState.style.display = 'flex';
-    return;
-  }
-
-  elEmptyState.style.display = 'none';
-  current.messages.forEach((msg) => {
-    if (msg.role === 'user') {
-      renderUserMessage(msg.text);
-    } else if (msg.role === 'step') {
-      const dd = renderStepDropdown(msg.duration || '2s', false);
-      (msg.items || []).forEach((item) => {
-        if (item.isReasoning) {
-          renderReasoningBlock(dd.body, item.text);
-        } else {
-          renderStepSubItem(dd.body, item.icon, item.text);
-        }
-      });
-    } else if (msg.role === 'agent') {
-      renderAgentResult(msg.text, msg.isError);
-    } else if (msg.role === 'screenshot') {
-      renderScreenshotInChat(msg.dataUrl, msg.fileName);
-    } else if (msg.role === 'snippet') {
-      renderHtmlSnippetInChat(msg.html, msg.title, msg.text);
-    } else if (msg.role === 'pdf') {
-      renderPdfBadgeInChat(msg.fileName, msg.title, msg.url, msg.html);
-    } else if (msg.role === 'chess_board') {
-      renderChessBoardCardInChat(msg.html, msg.label, msg.move_uci, msg.eval_cp, msg.reason);
-    } else if (msg.role === 'widget_resolved') {
-      renderResolvedWidgetBadge(msg.label || msg.text);
-    }
-  });
-}
-
-
-function renderResolvedWidgetBadge(label) {
-  const div = document.createElement('div');
-  div.className = 'agent-widget-card resolved';
-  div.innerHTML = `
-    <div class="widget-resolved-status">
-      <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">check_circle</span>
-      <div style="flex:1">
-        <span style="color:#a1a1aa">Respon Anda:</span>
-        <strong style="color:#f4f4f5;margin-left:4px">${escHtml(label)}</strong>
-      </div>
-    </div>
-  `;
-  elTimeline.appendChild(div);
-}
-
-function recordMessageToActiveSession(msgObj) {
-  const current = getActiveSession();
-  if (current) {
-    if (!current.messages) current.messages = [];
-    current.messages.push(msgObj);
-    saveStorage({ sessions: state.sessions });
-  }
-}
-
 function openDrawer() {
-  elSessionDrawer.classList.add('open');
-  elDrawerOverlay.classList.add('active');
+  if (elSessionDrawer) elSessionDrawer.classList.add('open');
+  if (elDrawerOverlay) elDrawerOverlay.classList.add('active');
 }
 
 function closeDrawer() {
-  elSessionDrawer.classList.remove('open');
-  elDrawerOverlay.classList.remove('active');
+  if (elSessionDrawer) elSessionDrawer.classList.remove('open');
+  if (elDrawerOverlay) elDrawerOverlay.classList.remove('active');
 }
 
-// ─── Backend Configuration ────────────────────────────────────────────────────
+// ─── Status Synchronization ──────────────────────────────────────────────────
+function syncStatusFromStateMachine(sm) {
+  if (!sm) return;
+  const status = sm.runState;
+  const labelMap = {
+    idle: 'Siap',
+    queued: 'Queued',
+    running: 'Running',
+    waiting_for_approval: 'Menunggu Review',
+    completed: 'Selesai',
+    failed: 'Gagal',
+    cancelled: 'Dibatalkan',
+    interrupted: 'Interrupted',
+    outcome_unknown: 'Outcome Unknown',
+  };
+  updateStatus(status, labelMap[status] || status);
+}
+
+function updateStatus(stateKey, text) {
+  if (!elStatusPill || !elStatusText) return;
+  elStatusPill.setAttribute('data-state', stateKey);
+  elStatusText.textContent = text;
+}
+
+// ─── Backend WebSocket & Event Stream ────────────────────────────────────────
 const BACKEND_URL = 'http://localhost:7788';
 const BACKEND_WS  = 'ws://localhost:7788';
-
-// ─── Backend Event Stream (persistent WS, auto-reconnect) ────────────────────
 let backendEventWs = null;
 let backendReconnectTimer = null;
 
@@ -616,7 +639,7 @@ function connectBackendEventStream() {
 
     ws.onopen = () => {
       console.log('[DeepBrowser] Connected to backend event stream.');
-      updateBackendStatus(true);
+      if (elStatusPill) elStatusPill.dataset.backendConnected = 'true';
     };
 
     ws.onmessage = (e) => {
@@ -629,13 +652,16 @@ function connectBackendEventStream() {
     };
 
     ws.onerror = () => {
-      updateBackendStatus(false);
+      if (elStatusPill) delete elStatusPill.dataset.backendConnected;
     };
 
     ws.onclose = () => {
       backendEventWs = null;
-      updateBackendStatus(false);
-      // Auto-reconnect after 3s unless explicitly closed
+      if (elStatusPill) delete elStatusPill.dataset.backendConnected;
+      // If run was active and connection drops without terminal result, mark interrupted
+      if (state.agentRunning && stateMachine) {
+        stateMachine.transitionRun('interrupted', { reason: 'Backend connection lost' });
+      }
       backendReconnectTimer = setTimeout(connectBackendEventStream, 3000);
     };
   } catch (err) {
@@ -644,29 +670,15 @@ function connectBackendEventStream() {
   }
 }
 
-function updateBackendStatus(connected) {
-  // Visual indicator for backend connectivity (optional enhancement)
-  const pill = document.getElementById('status-pill');
-  if (pill) {
-    if (connected) {
-      pill.dataset.backendConnected = 'true';
-    } else {
-      delete pill.dataset.backendConnected;
-    }
-  }
-}
-
-// ─── Ext-Transport WS (CDP command executor for active task) ─────────────────
+// ─── Ext-Transport WS (CDP Command Executor) ─────────────────────────────────
 let extTransportWs = null;
 let currentTransportTaskId = null;
 
 function connectExtTransport(taskId) {
-  // Close existing transport if any
   if (extTransportWs) {
     try { extTransportWs.close(); } catch (_) {}
     extTransportWs = null;
   }
-
   currentTransportTaskId = taskId;
 
   try {
@@ -692,12 +704,8 @@ function connectExtTransport(taskId) {
       }
     };
 
-    ws.onerror = (err) => {
-      console.error(`[ExtTransport:${taskId}] WS error:`, err);
-    };
-
+    ws.onerror = (err) => console.error(`[ExtTransport:${taskId}] error:`, err);
     ws.onclose = () => {
-      console.log(`[ExtTransport:${taskId}] Disconnected.`);
       if (currentTransportTaskId === taskId) {
         extTransportWs = null;
         currentTransportTaskId = null;
@@ -708,10 +716,6 @@ function connectExtTransport(taskId) {
   }
 }
 
-/**
- * Execute a CDP command sent by the backend's ExtensionBrowserSession.
- * Returns a plain object that will be JSON-serialized back as the response.
- */
 async function executeTransportCommand(command, params) {
   let tabId = state.currentTab?.id;
   if (!tabId) {
@@ -721,13 +725,12 @@ async function executeTransportCommand(command, params) {
         state.currentTab = activeTab;
         tabId = activeTab.id;
       }
-    } catch (e) {}
+    } catch (_) {}
   }
 
   switch (command) {
-    case 'GET_STATE': {
+    case 'GET_STATE':
       return await capturePageState(tabId, params.include_screenshot !== false);
-    }
 
     case 'NAVIGATE': {
       const { url, new_tab } = params;
@@ -751,68 +754,23 @@ async function executeTransportCommand(command, params) {
       const res = await chrome.tabs.sendMessage(tabId, {
         type: 'DEEP_BROWSER_CMD', command: 'CLICK', index, xpath, button: button || 'left'
       });
-      return res || {};
-    }
-
-    case 'CLICK_COORDINATE': {
-      const { x, y, button } = params;
-      const res = await chrome.tabs.sendMessage(tabId, {
-        type: 'DEEP_BROWSER_CMD', command: 'CLICK_COORDINATE', x, y, button: button || 'left'
-      });
-      return res || {};
+      return res || { success: true };
     }
 
     case 'TYPE': {
       const { index, xpath, text, clear } = params;
       const res = await chrome.tabs.sendMessage(tabId, {
-        type: 'DEEP_BROWSER_CMD', command: 'TYPE', index, xpath, text, clear: !!clear
+        type: 'DEEP_BROWSER_CMD', command: 'TYPE', index, xpath, text, clear: clear !== false
       });
-      return res || {};
+      return res || { success: true };
     }
 
     case 'SCROLL': {
       const { direction, amount } = params;
       const res = await chrome.tabs.sendMessage(tabId, {
-        type: 'DEEP_BROWSER_CMD', command: 'SCROLL', direction, amount: amount || 300
+        type: 'DEEP_BROWSER_CMD', command: 'SCROLL', direction: direction || 'down', amount: amount || 500
       });
-      return res || {};
-    }
-
-    case 'SCROLL_TO_TEXT': {
-      const { text: scrollText, direction: scrollDir } = params;
-      const res = await chrome.tabs.sendMessage(tabId, {
-        type: 'DEEP_BROWSER_CMD', command: 'SCROLL_TO_TEXT', text: scrollText, direction: scrollDir
-      });
-      return res || {};
-    }
-
-    case 'SEND_KEYS': {
-      const { keys } = params;
-      const res = await chrome.tabs.sendMessage(tabId, {
-        type: 'DEEP_BROWSER_CMD', command: 'SEND_KEYS', keys
-      });
-      return res || {};
-    }
-
-    case 'GO_BACK': {
-      await chrome.tabs.sendMessage(tabId, { type: 'DEEP_BROWSER_CMD', command: 'GO_BACK' });
-      await new Promise(r => setTimeout(r, 800));
-      const t = await chrome.tabs.get(tabId);
-      return { url: t.url, title: t.title };
-    }
-
-    case 'GO_FORWARD': {
-      await chrome.tabs.sendMessage(tabId, { type: 'DEEP_BROWSER_CMD', command: 'GO_FORWARD' });
-      await new Promise(r => setTimeout(r, 800));
-      const t = await chrome.tabs.get(tabId);
-      return { url: t.url, title: t.title };
-    }
-
-    case 'REFRESH': {
-      await chrome.tabs.reload(tabId);
-      await waitForTabLoad(tabId, 10000);
-      const t = await chrome.tabs.get(tabId);
-      return { url: t.url, title: t.title };
+      return res || { success: true };
     }
 
     case 'SWITCH_TAB': {
@@ -828,115 +786,38 @@ async function executeTransportCommand(command, params) {
       return { tab_id: target_id };
     }
 
-    case 'CLOSE_TAB': {
-      const { target_id } = params;
-      if (target_id) {
-        await chrome.tabs.remove(parseInt(target_id, 10));
-      }
-      return {};
-    }
-
     case 'TAKE_SCREENSHOT': {
-      try {
-        const dataUrl = await chrome.tabs.captureVisibleTab(null, {
-          format: params.format === 'jpeg' ? 'jpeg' : 'png',
-          quality: params.quality || 90,
-        });
-        const cleanB64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-        return { screenshot: cleanB64, format: params.format || 'png' };
-      } catch (err) {
-        console.warn('[ExtTransport] TAKE_SCREENSHOT failed:', err);
-        return { error: err.message || String(err) };
-      }
-    }
-
-    case 'SAVE_AS_PDF': {
-      try {
-        const domResult = await chrome.tabs.sendMessage(tabId, {
-          type: 'DEEP_BROWSER_CMD', command: 'GET_PAGE_HTML'
-        });
-        const html = domResult?.html || '<html><body>PDF Document</body></html>';
-        const title = state.currentTab?.title || 'Dokumen';
-        const url = state.currentTab?.url || '';
-        const fileName = (params.file_name || 'dokumen').replace(/\.pdf$/i, '') + '.pdf';
-        handleAgentEvent({
-          event_type: 'PDF_SAVED',
-          message: `Dokumen PDF disimpan: ${fileName}`,
-          data: { fileName, title, url, html },
-        });
-        return { success: true, fileName, title };
-      } catch (err) {
-        return { error: err.message || String(err) };
-      }
-    }
-
-    case 'GET_PAGE_HTML': {
-      const domResult = await chrome.tabs.sendMessage(tabId, {
-        type: 'DEEP_BROWSER_CMD', command: 'GET_PAGE_HTML'
-      });
-      return domResult || {};
-    }
-
-    case 'GET_CHESS_STATE': {
-      try {
-        const res = await chrome.tabs.sendMessage(tabId, {
-          type: 'DEEP_BROWSER_CMD', command: 'GET_CHESS_STATE'
-        });
-        return res || {};
-      } catch (err) {
-        return { error: err.message || String(err) };
-      }
-    }
-
-    case 'EXECUTE_CHESS_MOVE': {
-      try {
-        const res = await chrome.tabs.sendMessage(tabId, {
-          type: 'DEEP_BROWSER_CMD', command: 'EXECUTE_CHESS_MOVE',
-          move: params.move, from: params.from, to: params.to
-        });
-        return res || {};
-      } catch (err) {
-        return { error: err.message || String(err) };
-      }
+      const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 85 });
+      const cleanB64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+      return { screenshot: cleanB64, format: 'png' };
     }
 
     default:
-      console.warn(`[ExtTransport] Unknown command: ${command}`);
-      return { warning: `Unknown command: ${command}` };
+      return { warning: `Command unsupported: ${command}` };
   }
-
 }
 
-/** Capture full page state: DOM elements + screenshot + tabs */
 async function capturePageState(tabId, includeScreenshot) {
   const tab = tabId ? await chrome.tabs.get(tabId) : state.currentTab;
-  const activeTabId = tab?.id;
-
-  // Get DOM elements via content script
   let elements = [];
   let pageInfo = {};
+
   try {
-    const domResult = await chrome.tabs.sendMessage(activeTabId, {
+    const domRes = await chrome.tabs.sendMessage(tab?.id, {
       type: 'DEEP_BROWSER_CMD', command: 'GET_DOM_STATE'
     });
-    elements = domResult?.elements || [];
-    pageInfo = domResult?.pageInfo || {};
-  } catch (err) {
-    console.warn('[capturePageState] DOM capture failed:', err.message);
-  }
+    elements = domRes?.elements || [];
+    pageInfo = domRes?.pageInfo || {};
+  } catch (_) {}
 
-  // Screenshot
   let screenshot = null;
   if (includeScreenshot) {
     try {
       const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 85 });
       screenshot = dataUrl.replace(/^data:image\/png;base64,/, '');
-    } catch (err) {
-      console.warn('[capturePageState] Screenshot failed:', err.message);
-    }
+    } catch (_) {}
   }
 
-  // All open tabs
   const allTabs = await chrome.tabs.query({ currentWindow: true });
   const tabs = allTabs.map(t => ({ id: t.id, url: t.url, title: t.title, active: t.active }));
 
@@ -950,7 +831,6 @@ async function capturePageState(tabId, includeScreenshot) {
   };
 }
 
-/** Wait for a tab to finish loading, with timeout */
 function waitForTabLoad(tabId, timeout = 10000) {
   return new Promise((resolve) => {
     const deadline = Date.now() + timeout;
@@ -968,7 +848,7 @@ function waitForTabLoad(tabId, timeout = 10000) {
   });
 }
 
-// ─── Task Execution ──────────────────────────────────────────────────────────
+// ─── Task Submission ─────────────────────────────────────────────────────────
 async function submitTask(explicitGoal = null) {
   if (state.agentRunning) {
     stopAgent();
@@ -993,24 +873,32 @@ async function submitTask(explicitGoal = null) {
     renderSessionList();
   }
 
-  // Render & persist user message
   hideEmptyState();
+
+  // Render User Message
   renderUserMessage(goal);
-  recordMessageToActiveSession({ role: 'user', text: goal });
+  recordMessageToActiveSession({ role: 'user', text: goal, timestamp: Date.now() });
 
   elGoalInput.value = '';
   resizeTextarea();
-  setAgentRunning(true);
-  updateStatus('Bekerja...', true);
-  state.stepStartTime = Date.now();
 
-  // ── Backend Path ──────────────────────────────────────────────────────────
-  // Check if backend is available; fall back to standalone JS Agent if not.
+  // Initialize brand new Run State Machine with isolated Run ID
+  const runId = 'run_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  if (stateMachine) {
+    stateMachine.startRun(runId, state.selectedPreset);
+  }
+
+  setAgentRunning(true);
+  updateStatus('running', 'Running');
+
+  // Create Assistant Response Block & Collapsible Execution Timeline in Chat
+  state.activeTimeline = createAssistantRunCard(runId, activeModel, state.selectedPreset);
+
   const backendAvailable = backendEventWs && backendEventWs.readyState === WebSocket.OPEN;
 
   if (backendAvailable) {
-    // BACKEND PATH: Delegate task to Python browser_use.Agent
     try {
+      stateMachine?.transitionRun('running');
       const resp = await fetch(`${BACKEND_URL}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1026,45 +914,40 @@ async function submitTask(explicitGoal = null) {
           model_name: activeModel.modelId || activeModel.id,
           api_key: apiKey,
           base_url: activeModel.baseUrl || '',
-          safe_mode: state.selectedMode === 'hitl',
+          preset: state.selectedPreset,
+          safe_mode: state.selectedMode === 'hitl' || state.selectedPreset === 'read_only',
           safe_timeout_seconds: 60.0,
         }),
       });
 
       if (!resp.ok) {
         const errBody = await resp.text();
-        throw new Error(`Backend /api/tasks returned ${resp.status}: ${errBody}`);
+        throw new Error(`Backend /api/tasks status ${resp.status}: ${errBody}`);
       }
 
       const { task_id } = await resp.json();
       state.currentTaskId = task_id;
-      state.currentAgent = null; // No JS agent — backend owns execution
+      state.currentAgent = null;
 
-      // Connect ext-transport WS so backend can issue CDP commands to this tab
       connectExtTransport(task_id);
-
     } catch (err) {
       console.error('[SidePanel] Backend task submission failed:', err);
-      // Show error immediately — don't silently swallow
       handleAgentEvent({
         event_type: 'ERROR',
-        message: `Gagal terhubung ke backend: ${err.message}. Pastikan server berjalan di port 7788.`,
+        message: `Gagal terhubung ke backend: ${err.message}`,
         data: { error: err.message },
       });
       setAgentRunning(false);
-      updateStatus('Error', false);
+      stateMachine?.transitionRun('failed', { error: err.message });
     }
-    // Task running via backend; UI updates come via /ws/extension event stream.
-    // setAgentRunning(false) is called when TASK_COMPLETED or ERROR arrives.
-
   } else {
-    // FALLBACK PATH: No backend — run standalone JS Agent (legacy mode)
-    console.warn('[SidePanel] Backend not connected. Running standalone JS Agent (legacy mode).');
+    // Standalone JS Agent Mode
+    console.log('[SidePanel] Running standalone JS Agent.');
+    stateMachine?.transitionRun('running');
     await _runStandaloneAgent(goal, activeModel, provider, apiKey);
   }
 }
 
-/** Legacy standalone JS Agent (used only when backend is unavailable) */
 async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
   const browserSession = new window.BrowserSession({
     tabId: state.currentTab?.id,
@@ -1084,11 +967,11 @@ async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
     taskId: state.activeSessionId,
     onStateChange: (newState) => {
       if (newState === 'WAITING_FOR_USER') {
-        updateStatus('Menunggu Anda', false, true);
-        elBtnSend.disabled = false;
-        elBtnSend.title = 'Menunggu respon interaktif';
+        stateMachine?.transitionRun('waiting_for_approval');
+        updateStatus('waiting_for_approval', 'Menunggu Review');
       } else if (newState === 'RUNNING') {
-        updateStatus('Bekerja...', true, false);
+        stateMachine?.transitionRun('running');
+        updateStatus('running', 'Running');
       }
     },
     onInteractionEvent: (ixEvt) => {
@@ -1100,11 +983,12 @@ async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
     },
   });
 
-  widgetManager.setInteractionManager(interactionManager);
+  if (widgetManager) widgetManager.setInteractionManager(interactionManager);
 
   const agent = new window.Agent({
     taskId: state.activeSessionId,
     task: goal,
+    preset: state.selectedPreset,
     browserSession,
     llmClient,
     interactionManager,
@@ -1118,19 +1002,21 @@ async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
   try {
     await agent.run();
   } catch (err) {
-    console.error('[SidePanel] Agent run error:', err);
+    console.error('[SidePanel] Standalone agent error:', err);
+    stateMachine?.transitionRun('failed', { error: err.message });
   } finally {
     setAgentRunning(false);
-    updateStatus('Siap', false);
     state.currentAgent = null;
-    widgetManager.clear();
+    if (widgetManager) widgetManager.clear();
     updateTabStrip();
   }
 }
 
-
 async function stopAgent() {
-  // Stop backend task if running via backend
+  if (stateMachine) {
+    stateMachine.transitionRun('cancelled');
+  }
+
   if (state.currentTaskId) {
     try {
       await fetch(`${BACKEND_URL}/api/agent/stop`, { method: 'POST' });
@@ -1138,13 +1024,11 @@ async function stopAgent() {
     state.currentTaskId = null;
   }
 
-  // Stop standalone JS agent if running
   if (state.currentAgent) {
     state.currentAgent.stop();
     state.currentAgent = null;
   }
 
-  // Close ext-transport WS
   if (extTransportWs) {
     try { extTransportWs.close(); } catch (_) {}
     extTransportWs = null;
@@ -1152,16 +1036,36 @@ async function stopAgent() {
   }
 
   setAgentRunning(false);
-  updateStatus('Dihentikan', false);
-
-  state.currentAgent = null;
-  widgetManager.clear();
+  updateStatus('cancelled', 'Dibatalkan');
+  if (widgetManager) widgetManager.clear();
 }
 
+// ─── Event Dispatch & Execution Timeline ──────────────────────────────────────
 function handleAgentEvent(evt) {
   const t = evt.event_type || '';
   const msg = evt.message || '';
   const data = evt.data || {};
+  const timestamp = evt.timestamp || Date.now();
+
+  // Record to stateMachine event log
+  if (stateMachine) {
+    stateMachine.addEvent({
+      id: evt.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type: t,
+      timestamp,
+      message: msg,
+      args: data.parameters || data.args || null,
+      result: data.result || null,
+      verification: data.verification || null,
+      error: data.error || null,
+      status: t === 'TASK_COMPLETED' ? 'succeeded' : (t === 'ERROR' || t === 'FAILED' ? 'failed' : null),
+    });
+    updateLogsBadge();
+    if (state.currentView === 'logs') renderLogsList();
+  }
+
+  // Record to active session for persistence
+  recordEventToActiveSession(evt);
 
   // Broadcast event to in-page Floating HUD Island
   if (typeof chrome !== 'undefined' && chrome.tabs) {
@@ -1172,82 +1076,89 @@ function handleAgentEvent(evt) {
     });
   }
 
-  if (t === 'TASK_STARTED') {
-    state.stepStartTime = Date.now();
-    currentStepLogs = [];
-    state.activeStepDropdown = null;
-    state.activeStepBody = null;
-    return;
-  }
-
-
-  // Handle completion
+  // 1. Completion
   if (t === 'TASK_COMPLETED') {
-    const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-    if (state.activeStepDropdown) {
-      state.activeStepDropdown.headerText.textContent = `Worked for ${elapsed}s`;
-      // Collapse dropdown on finish so result is visible cleanly
-      state.activeStepDropdown.header.classList.remove('open');
-      state.activeStepDropdown.body.classList.remove('open');
-    }
-    renderAgentResult(data.result || msg || 'Tugas selesai.', false);
-
-    const current = getActiveSession();
-    if (current && current.messages) {
-      const lastMsg = current.messages[current.messages.length - 1];
-      if (lastMsg && lastMsg.role === 'step' && lastMsg._isActive) {
-        lastMsg.duration = `${elapsed}s`;
-        lastMsg.items = [...currentStepLogs];
-        delete lastMsg._isActive;
-      } else if (currentStepLogs.length > 0) {
-        current.messages.push({
-          role: 'step',
-          duration: `${elapsed}s`,
-          items: [...currentStepLogs],
-        });
-      }
-      current.messages.push({ role: 'agent', text: data.result || msg, isError: false });
-      saveStorage({ sessions: state.sessions });
-    }
-
-    state.activeStepDropdown = null;
-    state.activeStepBody = null;
-    currentStepLogs = [];
-    // Backend task finished — reset running state
+    stateMachine?.transitionRun('completed', { result: data.result || msg, timestamp });
     setAgentRunning(false);
-    updateStatus('Siap', false);
-    state.currentTaskId = null;
-    state.currentAgent = null;
-    widgetManager.clear();
-    updateTabStrip();
+    updateStatus('completed', 'Selesai');
+    finalizeAssistantRunCard(data.result || msg || 'Tugas selesai.', false);
     return;
   }
 
-  // Handle error / failure
+  // 2. Error / Terminal Failure
   if (t === 'ERROR' || t === 'FAILED') {
-    renderAgentResult(data.error || msg, true);
-    recordMessageToActiveSession({ role: 'agent', text: data.error || msg, isError: true });
-    state.activeStepDropdown = null;
-    state.activeStepBody = null;
-    currentStepLogs = [];
-    // Backend task failed — reset running state
+    stateMachine?.transitionRun('failed', { error: data.error || msg, timestamp });
     setAgentRunning(false);
-    updateStatus('Error', false);
-    state.currentTaskId = null;
-    state.currentAgent = null;
-    widgetManager.clear();
+    updateStatus('failed', 'Gagal');
+    finalizeAssistantRunCard(data.error || msg, true);
     return;
   }
 
-  // Handle Rich Visual Media in Chat
-  if (t === 'SCREENSHOT_CAPTURED') {
-    renderScreenshotInChat(data.screenshotDataUrl, data.fileName || 'screenshot.png');
-    recordMessageToActiveSession({ role: 'screenshot', dataUrl: data.screenshotDataUrl, fileName: data.fileName });
+  // 3. Human in the Loop / Approval Gate
+  if (t === 'CONFIRMATION_REQUIRED' || t === 'USER_INPUT_REQUIRED' || t === 'USER_APPROVAL_REQUIRED') {
+    stateMachine?.transitionRun('waiting_for_approval');
+    updateStatus('waiting_for_approval', 'Menunggu Review');
+
+    const confId = data.confirmation_id || data.interaction_id || ('conf_' + Date.now());
+    const interactionObj = data.interaction || {
+      type: t === 'CONFIRMATION_REQUIRED' ? 'approval' : (data.type || 'choice'),
+      question: data.reason || data.question || msg || 'Konfirmasi aksi browser',
+      action_name: data.action || 'Aksi Browser',
+      parameters: data.parameters || {},
+      category: data.category,
+      interaction_id: confId,
+      options: data.options || [],
+    };
+
+    if (widgetManager) {
+      widgetManager.renderInteraction(interactionObj).then(async (res) => {
+        const isApproved = res.approved !== false && res.value !== 'reject' && res.value !== false;
+        const decision = isApproved ? 'CONFIRM' : 'REJECT';
+
+        // Atomic transition: acknowledge user submission
+        if (stateMachine) stateMachine.setActionState('submitting');
+
+        if (backendEventWs && backendEventWs.readyState === WebSocket.OPEN) {
+          backendEventWs.send(JSON.stringify({
+            type: 'CONFIRMATION_DECISION',
+            confirmation_id: confId,
+            decision: decision,
+          }));
+        }
+
+        try {
+          fetch(`${BACKEND_URL}/api/confirmations/${confId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ decision }),
+          }).catch(() => {});
+        } catch (_) {}
+
+        if (state.activeTimeline) {
+          addTimelineStepRow(state.activeTimeline, {
+            icon: isApproved ? 'check_circle' : 'cancel',
+            name: `Review: ${isApproved ? 'Approved' : 'Rejected'}`,
+            timestamp,
+            duration: '0ms',
+            status: isApproved ? 'succeeded' : 'failed',
+            args: interactionObj.parameters,
+            result: { decision },
+          });
+        }
+      });
+    }
+    return;
+  }
+
+  // 4. Screenshots & Visual Artifacts
+  if (t === 'SCREENSHOT_CAPTURED' || t === 'SCREENSHOT') {
+    renderScreenshotInChat(data.screenshotDataUrl || data.screenshot, data.fileName || 'screenshot.png');
+    recordMessageToActiveSession({ role: 'screenshot', dataUrl: data.screenshotDataUrl || data.screenshot, fileName: data.fileName });
     return;
   }
 
   if (t === 'HTML_SNIPPET_CAPTURED') {
-    renderHtmlSnippetInChat(data.html, data.title || 'Struktur Informasi Visual', data.text);
+    renderHtmlSnippetInChat(data.html, data.title || 'Informasi Visual', data.text);
     recordMessageToActiveSession({ role: 'snippet', html: data.html, title: data.title });
     return;
   }
@@ -1258,177 +1169,79 @@ function handleAgentEvent(evt) {
     return;
   }
 
-  if (t === 'PARALLEL_WORKER_PROGRESS') {
-    renderParallelWorkersGrid(data.workers || []);
-    return;
-  }
-
-  if (t === 'PARALLEL_RESEARCH_COMPLETED') {
-    renderAgentResult(data.report || msg, false);
-    recordMessageToActiveSession({ role: 'agent', text: data.report || msg, isError: false });
-    return;
-  }
-
-  // Handle Chess Copilot live board & move events
   if (t === 'CHESS_BOARD_UPDATED' || t === 'CHESS_MOVE_PLAYED') {
     renderChessBoardCardInChat(data.html_board, data.label, data.move_uci, data.eval_cp, data.reason);
-    recordMessageToActiveSession({
-      role: 'chess_board',
-      html: data.html_board,
-      label: data.label,
-      move_uci: data.move_uci,
-      eval_cp: data.eval_cp,
-      reason: data.reason,
-    });
+    recordMessageToActiveSession({ role: 'chess_board', html: data.html_board, label: data.label, move_uci: data.move_uci });
     return;
   }
 
-  if (t === 'CHESS_GAME_OVER') {
-    renderAgentResult(data.message || msg || 'Pertandingan catur telah selesai.', false);
-    recordMessageToActiveSession({ role: 'agent', text: data.message || msg || 'Pertandingan catur selesai.', isError: false });
-    return;
-  }
+  // 5. Tool Action Events
+  let iconName = 'terminal';
+  let actionName = '';
+  let duration = data.duration ? `${data.duration}ms` : '120ms';
+  let status = 'succeeded';
+  let verification = data.verification || null;
 
-  if (t === 'CONFIRMATION_REQUIRED' || t === 'USER_INPUT_REQUIRED') {
-    updateStatus('Menunggu Respon Anda', false, true);
-    const confId = data.confirmation_id || data.interaction_id || ('conf_' + Date.now());
-    const interactionObj = data.interaction || {
-      type: t === 'CONFIRMATION_REQUIRED' ? 'approval' : (data.type || 'choice'),
-      question: data.reason || data.question || msg || 'Konfirmasi aksi sensitif',
-      action_name: data.action || 'Aksi Sensitif',
-      parameters: data.parameters || {},
-      category: data.category,
-      interaction_id: confId,
-      options: data.options || [],
-    };
-    widgetManager.renderInteraction(interactionObj).then(async (res) => {
-      const isApproved = res.approved !== false && res.value !== 'reject' && res.value !== false;
-      const decision = isApproved ? 'CONFIRM' : 'REJECT';
-
-      // 1. Dispatch decision over WebSocket to backend SafeModeManager
-      if (backendEventWs && backendEventWs.readyState === WebSocket.OPEN) {
-        backendEventWs.send(JSON.stringify({
-          type: 'CONFIRMATION_DECISION',
-          confirmation_id: confId,
-          decision: decision,
-        }));
-      }
-
-      // 2. Fallback HTTP confirmation resolution
-      try {
-        fetch(`${BACKEND_URL}/api/confirmations/${confId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ decision }),
-        }).catch(() => {});
-      } catch (_) {}
-
-      // 3. Move widget resolution into the step dropdown (anti-clutter)
-      if (!state.activeStepDropdown) {
-        const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-        state.activeStepDropdown = renderStepDropdown(elapsed + 's', true);
-        state.activeStepBody = state.activeStepDropdown.body;
-      }
-      const label = res.label || String(res.value || decision);
-      renderStepSubItem(state.activeStepBody, 'check_circle', 'Input Pengguna: "' + label + '"');
-      currentStepLogs.push({ icon: 'check_circle', text: 'Input Pengguna: "' + label + '"' });
-      saveActiveStepState();
-      updateStatus('Memproses respon...', true);
-
-      // Record to active session for reload persistence
-      recordMessageToActiveSession({ role: 'widget_resolved', label: label });
-    });
-    return;
-  }
-
-  let iconName = null;
-  let text = '';
-  let isReasoning = false;
-
-  if (t === 'REASONING') {
-    isReasoning = true;
-    text = data.thinking || msg;
-  } else if (t === 'CLICK') {
+  if (t === 'CLICK' || t === 'click_element') {
     iconName = 'touch_app';
-    const clickTarget = data.target || evt.target || '';
-    text = ('Click [' + (data.index || '') + '] ' + clickTarget).trim();
-  } else if (t === 'TYPE') {
+    actionName = `click_element [${data.index || evt.target || ''}]`;
+  } else if (t === 'TYPE' || t === 'input_text') {
     iconName = 'edit';
-    const typeText = (data.text || evt.target || '').slice(0, 50);
-    text = 'Type "' + typeText + '" into [' + (data.index || '') + ']';
-  } else if (t === 'NAVIGATION' || t === 'NAVIGATE') {
+    actionName = `input_text [${data.index || ''}]: "${(data.text || '').slice(0, 30)}"`;
+  } else if (t === 'NAVIGATION' || t === 'NAVIGATE' || t === 'navigate') {
     iconName = 'navigation';
-    text = 'Navigate to ' + (data.url || evt.target || msg);
-  } else if (t === 'SCROLL') {
+    actionName = `navigate "${(data.url || msg).slice(0, 45)}"`;
+  } else if (t === 'SCROLL' || t === 'scroll_page') {
     iconName = 'swap_vert';
-    const scrollDir = data.direction || '';
-    text = 'Scroll ' + (scrollDir.toLowerCase().startsWith('up') ? 'up' : 'down');
-  } else if (t === 'PRESS_KEY') {
-    iconName = 'keyboard';
-    text = 'Key: ' + (data.key || evt.target || msg);
-  } else if (t === 'TAB_SWITCH') {
-    iconName = 'tab';
-    text = 'Switch to tab: ' + (data.url || evt.target || msg);
-  } else if (t === 'EXTRACTION') {
+    actionName = `scroll_page ${data.direction || 'down'}`;
+  } else if (t === 'EXTRACTION' || t === 'extract') {
     iconName = 'dataset';
-    text = 'Extract: ' + (data.query || '');
+    actionName = `extract: "${(data.query || '').slice(0, 30)}"`;
   } else if (t === 'ACTION_FAILED') {
     iconName = 'error';
-    text = 'Failed: ' + msg;
+    actionName = `action_failed: ${msg}`;
+    status = 'failed';
+  } else if (t === 'REASONING') {
+    // Keep reasoning truthfully represented in timeline without cluttering final answer
+    iconName = 'psychology';
+    actionName = `thought: ${msg.slice(0, 50)}`;
   } else {
     return;
   }
 
-  if (!state.activeStepDropdown) {
-    const el = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-    state.activeStepDropdown = renderStepDropdown(el + 's', true);
-    state.activeStepBody = state.activeStepDropdown.body;
+  const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  if (stateMachine) {
+    stateMachine.registerToolCall(toolCallId, actionName, data.parameters || data);
+    stateMachine.transitionTool(toolCallId, status, { timestamp, result: data.result, verification });
   }
 
-  if (isReasoning) {
-    renderReasoningBlock(state.activeStepBody, text);
-    currentStepLogs.push({ isReasoning: true, text });
-  } else {
-    renderStepSubItem(state.activeStepBody, iconName, text);
-    currentStepLogs.push({ icon: iconName, text });
-  }
-
-  saveActiveStepState();
-
-  const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-  if (state.activeStepDropdown) {
-    state.activeStepDropdown.headerText.textContent = 'Worked for ' + elapsed + 's';
-  }
-}
-function saveActiveStepState() {
-  const current = getActiveSession();
-  if (!current) return;
-  if (!current.messages) current.messages = [];
-
-  const elapsed = Math.max(1, Math.round((Date.now() - state.stepStartTime) / 1000));
-  const lastMsg = current.messages[current.messages.length - 1];
-  if (lastMsg && lastMsg.role === 'step' && lastMsg._isActive) {
-    lastMsg.duration = `${elapsed}s`;
-    lastMsg.items = [...currentStepLogs];
-  } else if (currentStepLogs.length > 0) {
-    current.messages.push({
-      role: 'step',
-      duration: `${elapsed}s`,
-      items: [...currentStepLogs],
-      _isActive: true,
+  if (state.activeTimeline) {
+    addTimelineStepRow(state.activeTimeline, {
+      icon: iconName,
+      name: actionName,
+      timestamp,
+      duration,
+      status,
+      args: data.parameters || data,
+      result: data.result || null,
+      verification,
+      error: status === 'failed' ? (data.error || msg) : null,
     });
   }
-  saveStorage({ sessions: state.sessions });
 }
 
-// ─── UI Render Helpers (Zero Emojis, Google Material) ─────────────────────────
+// ─── Chat View Components ───────────────────────────────────────────────────
 function renderUserMessage(text) {
   const div = document.createElement('div');
   div.className = 'chat-user-message';
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   div.innerHTML = `
     <div class="chat-user-header">
-      <span class="material-symbols-outlined" style="font-size:14px">person</span>
-      <span>User</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="material-symbols-outlined" style="font-size:13px">person</span>
+        <span>User</span>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:9.5px">${timeStr}</span>
     </div>
     <div>${escHtml(text)}</div>
   `;
@@ -1436,107 +1249,373 @@ function renderUserMessage(text) {
   div.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function renderStepDropdown(durationStr = '1s', isOpen = true) {
-  const container = document.createElement('div');
-  container.className = 'thought-dropdown';
+function createAssistantRunCard(runId, model, preset) {
+  const block = document.createElement('div');
+  block.className = 'chat-assistant-block';
+  block.id = `run_${runId}`;
 
-  const header = document.createElement('div');
-  header.className = 'thought-header' + (isOpen ? ' open' : '');
-  header.innerHTML = `
-    <span class="chevron-icon material-symbols-outlined">chevron_right</span>
-    <span class="header-label">Worked for ${escHtml(durationStr)}</span>
+  const startTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  // Run Metadata Strip
+  const metaStrip = document.createElement('div');
+  metaStrip.className = 'run-metadata-strip';
+  metaStrip.innerHTML = `
+    <span class="meta-chip">
+      <span class="material-symbols-outlined" style="font-size:13px;color:var(--accent)">bolt</span>
+      <strong>${escHtml(model.name)}</strong>
+    </span>
+    <span class="meta-chip">
+      <span class="material-symbols-outlined" style="font-size:12px;color:var(--text-tertiary)">schedule</span>
+      <span>${startTimeStr}</span>
+    </span>
+    <span class="meta-chip-mono" title="Klik untuk salin Run ID" data-runid="${runId}">
+      #${escHtml(runId.slice(0, 10))}...
+    </span>
+    <span class="meta-chip" style="margin-left:auto;background:var(--accent-muted);padding:1px 6px;border-radius:3px;color:var(--accent);font-weight:600">
+      ${escHtml(preset.toUpperCase())}
+    </span>
   `;
 
-  const body = document.createElement('div');
-  body.className = 'thought-body' + (isOpen ? ' open' : '');
-
-  header.addEventListener('click', () => {
-    const openState = header.classList.toggle('open');
-    body.classList.toggle('open', openState);
+  metaStrip.querySelector('.meta-chip-mono').addEventListener('click', (e) => {
+    navigator.clipboard?.writeText?.(runId);
+    e.target.textContent = 'Tersalin!';
+    setTimeout(() => { e.target.textContent = `#${runId.slice(0, 10)}...`; }, 1500);
   });
 
-  container.appendChild(header);
-  container.appendChild(body);
-  elTimeline.appendChild(container);
-  container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  // Collapsible Execution Timeline Card
+  const timelineWrap = document.createElement('div');
+  timelineWrap.className = 'execution-timeline';
+
+  const timelineHeader = document.createElement('div');
+  timelineHeader.className = 'timeline-header open';
+  timelineHeader.innerHTML = `
+    <div class="timeline-header-left">
+      <span class="material-symbols-outlined timeline-chevron">chevron_right</span>
+      <span class="timeline-title">Execution Timeline</span>
+    </div>
+    <span class="timeline-counter" style="font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary)">0 langkah</span>
+  `;
+
+  const timelineBody = document.createElement('div');
+  timelineBody.className = 'timeline-body open';
+
+  timelineHeader.addEventListener('click', () => {
+    const isOpen = timelineHeader.classList.toggle('open');
+    timelineBody.classList.toggle('open', isOpen);
+  });
+
+  timelineWrap.appendChild(timelineHeader);
+  timelineWrap.appendChild(timelineBody);
+
+  // Result Container (will hold markdown answer once completed)
+  const resultContainer = document.createElement('div');
+  resultContainer.className = 'assistant-result-wrap';
+
+  block.appendChild(metaStrip);
+  block.appendChild(timelineWrap);
+  block.appendChild(resultContainer);
+  elTimeline.appendChild(block);
+  block.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
   return {
-    container,
-    header,
-    headerText: header.querySelector('.header-label'),
-    body,
+    block,
+    timelineHeader,
+    timelineBody,
+    counter: timelineHeader.querySelector('.timeline-counter'),
+    resultContainer,
+    stepCount: 0,
+    startTime: Date.now(),
   };
 }
 
-function renderReasoningBlock(bodyEl, text) {
-  if (!bodyEl || !text) return;
-  const div = document.createElement('div');
-  div.className = 'thought-text-block';
-  div.textContent = text;
-  bodyEl.appendChild(div);
-  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
+function addTimelineStepRow(timelineRef, stepData) {
+  if (!timelineRef || !timelineRef.timelineBody) return;
+  timelineRef.stepCount++;
+  timelineRef.counter.textContent = `${timelineRef.stepCount} langkah`;
 
-function renderStepSubItem(bodyEl, iconName, text) {
-  if (!bodyEl) return;
-  const item = document.createElement('div');
-  item.className = 'thought-sub-item';
-  item.innerHTML = `
-    <span class="material-symbols-outlined item-icon">${iconName}</span>
-    <span>${escHtml(text)}</span>
+  const row = document.createElement('div');
+  row.className = 'timeline-step-row';
+
+  const timeStr = new Date(stepData.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  row.innerHTML = `
+    <div class="step-row-main">
+      <div class="step-row-left">
+        <span class="material-symbols-outlined step-icon">${stepData.icon}</span>
+        <span class="step-action-name" title="${escHtml(stepData.name)}">${escHtml(stepData.name)}</span>
+      </div>
+      <div class="step-row-right">
+        <span class="step-duration">${escHtml(stepData.duration)}</span>
+        <span class="step-status-tag status-${stepData.status}">${escHtml(stepData.status)}</span>
+      </div>
+    </div>
+    <div class="step-details-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="detail-section-title">Waktu: ${timeStr}</span>
+        <button class="icon-btn btn-copy-step" title="Salin Payload" style="width:20px;height:20px">
+          <span class="material-symbols-outlined" style="font-size:12px">content_copy</span>
+        </button>
+      </div>
+      ${stepData.args ? `<div class="detail-section-title">Argumen:</div><div class="detail-code-block">${escHtml(JSON.stringify(stepData.args, null, 2))}</div>` : ''}
+      ${stepData.result ? `<div class="detail-section-title">Hasil:</div><div class="detail-code-block">${escHtml(JSON.stringify(stepData.result, null, 2))}</div>` : ''}
+      ${stepData.verification ? `<div class="verification-evidence-box"><span class="material-symbols-outlined" style="font-size:14px">verified</span><span>Bukti Terverifikasi: ${escHtml(JSON.stringify(stepData.verification))}</span></div>` : ''}
+      ${stepData.error ? `<div style="color:var(--status-error);font-size:11px;font-weight:500">Error: ${escHtml(stepData.error)}</div>` : ''}
+    </div>
   `;
-  bodyEl.appendChild(item);
-  item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+  const detailsPanel = row.querySelector('.step-details-panel');
+  row.querySelector('.step-row-main').addEventListener('click', () => {
+    detailsPanel.classList.toggle('open');
+  });
+
+  row.querySelector('.btn-copy-step').addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard?.writeText?.(JSON.stringify(stepData, null, 2));
+  });
+
+  timelineRef.timelineBody.appendChild(row);
+  row.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
+function finalizeAssistantRunCard(resultText, isError = false) {
+  if (!state.activeTimeline) return;
+
+  const { resultContainer, timelineHeader, timelineBody, startTime } = state.activeTimeline;
+  const elapsed = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+
+  // Auto-collapse timeline on terminal completion so clean markdown answer is focal point
+  if (!isError) {
+    timelineHeader.classList.remove('open');
+    timelineBody.classList.remove('open');
+  }
+
+  const resultCard = document.createElement('div');
+  resultCard.className = `assistant-result-card ${isError ? 'is-error' : ''}`;
+  resultCard.innerHTML = `
+    <div class="result-header">
+      <div style="display:flex;align-items:center;gap:5px">
+        <span class="material-symbols-outlined" style="font-size:15px;color:${isError ? 'var(--status-error)' : 'var(--status-success)'}">
+          ${isError ? 'error' : 'check_circle'}
+        </span>
+        <span style="font-weight:600">${isError ? 'Gagal Dieksekusi' : 'Jawaban Akhir Agent'}</span>
+      </div>
+      <button class="icon-btn btn-copy-result" title="Salin Jawaban" style="width:22px;height:22px">
+        <span class="material-symbols-outlined" style="font-size:13px">content_copy</span>
+      </button>
+    </div>
+    <div class="result-markdown-body">${isError ? escHtml(resultText) : renderMarkdownToHtml(resultText)}</div>
+  `;
+
+  resultCard.querySelector('.btn-copy-result').addEventListener('click', () => {
+    navigator.clipboard?.writeText?.(resultText);
+  });
+
+  resultContainer.appendChild(resultCard);
+  resultCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+  // Record assistant result message to active session
+  recordMessageToActiveSession({
+    role: 'agent',
+    text: resultText,
+    isError,
+    duration: `${elapsed}s`,
+    timestamp: Date.now(),
+  });
+}
+
+function recordEventToActiveSession(evt) {
+  const current = getActiveSession();
+  if (current) {
+    if (!current.events) current.events = [];
+    current.events.push(evt);
+    saveStorage({ sessions: state.sessions });
+  }
+}
+
+function recordMessageToActiveSession(msgObj) {
+  const current = getActiveSession();
+  if (current) {
+    if (!current.messages) current.messages = [];
+    current.messages.push(msgObj);
+    saveStorage({ sessions: state.sessions });
+  }
+}
+
+function renderActiveSessionTimeline() {
+  elTimeline.innerHTML = '';
+  const current = getActiveSession();
+  if (!current || !current.messages || current.messages.length === 0) {
+    elEmptyState.style.display = 'flex';
+    return;
+  }
+
+  elEmptyState.style.display = 'none';
+  current.messages.forEach((msg) => {
+    if (msg.role === 'user') {
+      renderUserMessage(msg.text);
+    } else if (msg.role === 'agent') {
+      const card = document.createElement('div');
+      card.className = `assistant-result-card ${msg.isError ? 'is-error' : ''}`;
+      card.innerHTML = `
+        <div class="result-header">
+          <div style="display:flex;align-items:center;gap:5px">
+            <span class="material-symbols-outlined" style="font-size:15px;color:${msg.isError ? 'var(--status-error)' : 'var(--status-success)'}">
+              ${msg.isError ? 'error' : 'check_circle'}
+            </span>
+            <span style="font-weight:600">${msg.isError ? 'Gagal Dieksekusi' : 'Jawaban Akhir Agent'}</span>
+          </div>
+          <button class="icon-btn btn-copy-result" title="Salin Jawaban" style="width:22px;height:22px">
+            <span class="material-symbols-outlined" style="font-size:13px">content_copy</span>
+          </button>
+        </div>
+        <div class="result-markdown-body">${msg.isError ? escHtml(msg.text) : renderMarkdownToHtml(msg.text)}</div>
+      `;
+      card.querySelector('.btn-copy-result').addEventListener('click', () => {
+        navigator.clipboard?.writeText?.(msg.text);
+      });
+      elTimeline.appendChild(card);
+    } else if (msg.role === 'screenshot') {
+      renderScreenshotInChat(msg.dataUrl, msg.fileName);
+    } else if (msg.role === 'snippet') {
+      renderHtmlSnippetInChat(msg.html, msg.title, msg.text);
+    } else if (msg.role === 'pdf') {
+      renderPdfBadgeInChat(msg.fileName, msg.title, msg.url, msg.html);
+    } else if (msg.role === 'chess_board') {
+      renderChessBoardCardInChat(msg.html, msg.label, msg.move_uci);
+    }
+  });
+}
+
+// ─── Event Logs View ─────────────────────────────────────────────────────────
+function updateLogsBadge() {
+  if (!elLogsBadge || !stateMachine) return;
+  const count = stateMachine.events.length;
+  elLogsBadge.textContent = count;
+  elLogsBadge.style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+function renderLogsList() {
+  if (!elLogsContainer || !stateMachine) return;
+  elLogsContainer.innerHTML = '';
+
+  const query = (state.logSearchQuery || '').toLowerCase().trim();
+  const filter = state.logFilter || 'all';
+
+  const filtered = stateMachine.events.filter((evt) => {
+    // Filter type
+    if (filter === 'tools' && !['CLICK', 'TYPE', 'NAVIGATION', 'NAVIGATE', 'SCROLL', 'EXTRACTION', 'ACTION_EXECUTED'].includes(evt.type)) {
+      return false;
+    }
+    if (filter === 'approvals' && !['CONFIRMATION_REQUIRED', 'USER_INPUT_REQUIRED', 'USER_APPROVAL_REQUIRED'].includes(evt.type)) {
+      return false;
+    }
+    if (filter === 'errors' && !['ERROR', 'FAILED', 'ACTION_FAILED'].includes(evt.type)) {
+      return false;
+    }
+    if (filter === 'verifications' && !evt.verification) {
+      return false;
+    }
+
+    // Search query
+    if (query) {
+      const matchType = (evt.type || '').toLowerCase().includes(query);
+      const matchMsg = (evt.message || '').toLowerCase().includes(query);
+      const matchArgs = JSON.stringify(evt.args || {}).toLowerCase().includes(query);
+      return matchType || matchMsg || matchArgs;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    elLogsContainer.innerHTML = '<div class="logs-empty-state">Tidak ada event yang cocok dengan filter.</div>';
+    return;
+  }
+
+  filtered.forEach((evt) => {
+    const row = document.createElement('div');
+    row.className = 'log-entry-row';
+
+    const timeStr = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    row.innerHTML = `
+      <div class="log-row-header">
+        <div class="log-header-left">
+          <span class="log-timestamp">${timeStr}</span>
+          <span class="log-type-tag">${escHtml(evt.type)}</span>
+          <span class="log-message-text" title="${escHtml(evt.message)}">${escHtml(evt.message || '-')}</span>
+        </div>
+        <button class="icon-btn btn-copy-event" title="Salin JSON" style="width:20px;height:20px">
+          <span class="material-symbols-outlined" style="font-size:12px">content_copy</span>
+        </button>
+      </div>
+      <div class="log-expanded-payload">
+        <div class="detail-code-block">${escHtml(JSON.stringify(evt, null, 2))}</div>
+      </div>
+    `;
+
+    const expanded = row.querySelector('.log-expanded-payload');
+    row.querySelector('.log-row-header').addEventListener('click', (e) => {
+      if (e.target.closest('.btn-copy-event')) return;
+      expanded.classList.toggle('open');
+    });
+
+    row.querySelector('.btn-copy-event').addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigator.clipboard?.writeText?.(JSON.stringify(evt, null, 2));
+    });
+
+    elLogsContainer.appendChild(row);
+  });
+}
+
+// ─── Rich Media Artifact Helpers ─────────────────────────────────────────────
 function renderScreenshotInChat(dataUrl, fileName = 'screenshot.png') {
   hideEmptyState();
   const card = document.createElement('div');
-  card.className = 'chat-media-card';
+  card.className = 'assistant-result-card';
   card.innerHTML = `
-    <div class="chat-media-header">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="material-symbols-outlined" style="font-size:16px;color:#8b5cf6">photo_camera</span>
-        <span style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(fileName)}</span>
+    <div class="result-header">
+      <div style="display:flex;align-items:center;gap:5px">
+        <span class="material-symbols-outlined" style="font-size:15px;color:var(--accent)">photo_camera</span>
+        <span style="font-weight:600">${escHtml(fileName)}</span>
       </div>
-      <a href="${dataUrl}" download="${escHtml(fileName)}" class="media-download-btn" title="Download Screenshot">
+      <a href="${dataUrl}" download="${escHtml(fileName)}" class="icon-btn" title="Unduh Tangkapan Layar">
         <span class="material-symbols-outlined" style="font-size:14px">download</span>
       </a>
     </div>
-    <div class="chat-media-preview-wrap">
-      <img src="${dataUrl}" alt="${escHtml(fileName)}" class="chat-screenshot-img" />
+    <div style="border-radius:6px;overflow:hidden;border:1px solid var(--border-subtle);margin-top:4px">
+      <img src="${dataUrl}" alt="${escHtml(fileName)}" style="width:100%;display:block" />
     </div>
   `;
   elTimeline.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function renderChessBoardCardInChat(htmlContent, label = 'BEST', moveUci = '', evalCp = 0, reason = '') {
+function renderChessBoardCardInChat(htmlContent, label = 'BEST', moveUci = '') {
   hideEmptyState();
   const card = document.createElement('div');
-  card.className = 'chat-chess-card-wrapper';
-  card.innerHTML = htmlContent || `<div class="chess-chat-card"><span style="color:#00ecff;font-weight:700">Langkah: ${moveUci} (${label})</span></div>`;
+  card.className = 'assistant-result-card';
+  card.innerHTML = htmlContent || `<div style="font-weight:600;color:var(--accent)">Langkah: ${moveUci} (${label})</div>`;
   elTimeline.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-
-function renderHtmlSnippetInChat(htmlContent, title = 'Struktur Informasi Visual', rawText = '') {
+function renderHtmlSnippetInChat(htmlContent, title = 'Informasi Visual', rawText = '') {
   hideEmptyState();
   const card = document.createElement('div');
-  card.className = 'chat-html-snippet-card';
+  card.className = 'assistant-result-card';
   card.innerHTML = `
-    <div class="chat-snippet-header">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="material-symbols-outlined" style="font-size:16px;color:#22c55e">code_blocks</span>
-        <span style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(title)}</span>
+    <div class="result-header">
+      <div style="display:flex;align-items:center;gap:5px">
+        <span class="material-symbols-outlined" style="font-size:15px;color:var(--status-success)">code_blocks</span>
+        <span style="font-weight:600">${escHtml(title)}</span>
       </div>
-      <button class="btn-copy-snippet" title="Salin HTML" style="background:transparent;border:none;color:var(--muted-foreground);cursor:pointer">
+      <button class="icon-btn btn-copy-snippet" title="Salin HTML">
         <span class="material-symbols-outlined" style="font-size:14px">content_copy</span>
       </button>
     </div>
-    <div class="chat-snippet-body">
-      <div class="chat-snippet-rendered">${htmlContent}</div>
+    <div style="margin-top:4px;padding:8px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px">
+      ${htmlContent}
     </div>
   `;
   card.querySelector('.btn-copy-snippet').addEventListener('click', () => {
@@ -1549,20 +1628,19 @@ function renderHtmlSnippetInChat(htmlContent, title = 'Struktur Informasi Visual
 function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '', htmlContent = '') {
   hideEmptyState();
   const card = document.createElement('div');
-  card.className = 'chat-pdf-card';
-
-  const docBlob = new Blob([htmlContent || `<!DOCTYPE html><html><head><title>${title}</title><style>body{font-family:sans-serif;padding:24px;color:#111}</style></head><body><h1>${title}</h1><p>Sumber: <a href="${url}">${url}</a></p></body></html>`], { type: 'text/html;charset=utf-8' });
+  card.className = 'assistant-result-card';
+  const docBlob = new Blob([htmlContent || `<!DOCTYPE html><html><body><h1>${title}</h1></body></html>`], { type: 'text/html;charset=utf-8' });
   const blobUrl = URL.createObjectURL(docBlob);
 
   card.innerHTML = `
-    <div class="chat-pdf-inner">
-      <span class="material-symbols-outlined" style="font-size:20px;color:#ef4444">picture_as_pdf</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="material-symbols-outlined" style="font-size:22px;color:var(--status-error)">picture_as_pdf</span>
       <div style="flex:1">
-        <div style="font-weight:600;font-size:11.5px;color:var(--foreground)">${escHtml(fileName)}</div>
-        <div style="font-size:10px;color:var(--muted-foreground)">${escHtml(title || url)}</div>
+        <div style="font-weight:600;font-size:12px">${escHtml(fileName)}</div>
+        <div style="font-size:10.5px;color:var(--text-secondary)">${escHtml(title || url)}</div>
       </div>
-      <a href="${blobUrl}" download="${escHtml(fileName)}" class="media-download-btn" title="Unduh Dokumen PDF">
-        <span class="material-symbols-outlined" style="font-size:16px;color:#8b5cf6">download</span>
+      <a href="${blobUrl}" download="${escHtml(fileName)}" class="icon-btn" title="Unduh Dokumen PDF">
+        <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent)">download</span>
       </a>
     </div>
   `;
@@ -1570,22 +1648,7 @@ function renderPdfBadgeInChat(fileName = 'document.pdf', title = '', url = '', h
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function renderAgentResult(text, isError = false) {
-  hideEmptyState();
-  const div = document.createElement('div');
-  div.className = `chat-agent-result ${isError ? 'error' : 'completed'}`;
-  const renderedContent = isError ? escHtml(text) : renderMarkdownToHtml(text);
-  div.innerHTML = `
-    <div style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:12px;color:${isError ? 'var(--destructive)' : 'var(--success)'};margin-bottom:6px">
-      <span class="material-symbols-outlined" style="font-size:16px">${isError ? 'error' : 'check_circle'}</span>
-      <span>${isError ? 'Gagal Dieksekusi' : 'Hasil Agent'}</span>
-    </div>
-    <div class="chat-agent-markdown">${renderedContent}</div>
-  `;
-  elTimeline.appendChild(div);
-  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
-
+// ─── Markdown Renderer ───────────────────────────────────────────────────────
 function renderMarkdownToHtml(md) {
   if (!md) return '';
   let html = String(md)
@@ -1593,129 +1656,53 @@ function renderMarkdownToHtml(md) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Fenced Code blocks ```lang\n...```
+  // Code blocks
   html = html.replace(/```([\w-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-    return `<div class="md-codeblock"><div class="md-code-header">${lang || 'code'}</div><pre><code>${code.trim()}</code></pre></div>`;
+    return `<div style="background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:6px;padding:8px;margin:6px 0;overflow-x:auto"><div style="font-size:9.5px;font-family:var(--font-mono);color:var(--text-tertiary);margin-bottom:4px">${lang || 'code'}</div><pre style="margin:0;font-family:var(--font-mono);font-size:11px;color:var(--text-primary)"><code>${code.trim()}</code></pre></div>`;
   });
 
-  // Headers (###, ##, #)
-  html = html.replace(/^### (.*$)/gim, '<h4 class="md-h3">$1</h4>');
-  html = html.replace(/^## (.*$)/gim, '<h3 class="md-h2">$1</h3>');
-  html = html.replace(/^# (.*$)/gim, '<h2 class="md-h1">$1</h2>');
-
-  // Blockquotes
-  html = html.replace(/^\> (.*$)/gim, '<blockquote class="md-quote">$1</blockquote>');
+  // Headers
+  html = html.replace(/^### (.*$)/gim, '<h4 style="font-size:13px;font-weight:600;margin:8px 0 4px;color:var(--text-primary)">$1</h4>');
+  html = html.replace(/^## (.*$)/gim, '<h3 style="font-size:14px;font-weight:600;margin:10px 0 4px;color:var(--text-primary)">$1</h3>');
+  html = html.replace(/^# (.*$)/gim, '<h2 style="font-size:15px;font-weight:700;margin:12px 0 6px;color:var(--text-primary)">$1</h2>');
 
   // Bold & Italic
   html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
 
-  // Inline Code `...`
-  html = html.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+  // Inline Code
+  html = html.replace(/`([^`]+)`/g, '<code style="background:var(--bg-surface-elevated);border:1px solid var(--border-subtle);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);font-size:11px;color:var(--text-primary)">$1</code>');
 
-  // Math tokens like $n$, $l$, $m$, $s$
-  html = html.replace(/\$([a-zA-Z0-9_\^\+\-\s]+)\$/g, '<span class="md-math-token">$1</span>');
-
-  // Horizontal Rule
-  html = html.replace(/^---$/gim, '<hr class="md-hr" />');
-
-  // Ordered lists (1. Item)
-  html = html.replace(/^\s*(\d+)\.\s+(.*$)/gim, '<div class="md-list-item ordered"><span class="md-num">$1.</span><span>$2</span></div>');
-
-  // Unordered lists (- Item or * Item)
-  html = html.replace(/^\s*[\-\*]\s+(.*$)/gim, '<div class="md-list-item unordered"><span class="md-bullet">•</span><span>$1</span></div>');
-
-  // Paragraph breaks
-  html = html.replace(/\n\n+/g, '<div class="md-para-gap"></div>');
+  // Paragraph breaks & newlines
+  html = html.replace(/\n\n+/g, '<div style="height:8px"></div>');
   html = html.replace(/\n/g, '<br />');
 
   return html;
 }
 
-function renderParallelWorkersGrid(workers) {
-  hideEmptyState();
-  let gridWrap = document.getElementById('parallel-workers-grid-wrap');
-  if (!gridWrap) {
-    gridWrap = document.createElement('div');
-    gridWrap.id = 'parallel-workers-grid-wrap';
-    gridWrap.className = 'parallel-workers-container';
-    elTimeline.appendChild(gridWrap);
-  }
-
-  gridWrap.innerHTML = `
-    <div class="parallel-header">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="material-symbols-outlined" style="font-size:16px;color:#8b5cf6">hub</span>
-        <span style="font-weight:600;font-size:12px;color:#f4f4f5">Riset Paralel Multi-Tab (${workers.length} Worker)</span>
-      </div>
-      <span class="parallel-pulse-badge">Aktif</span>
-    </div>
-    <div class="parallel-cards-grid">
-      ${workers.map(w => `
-        <div class="worker-tab-card ${w.done ? 'done' : 'running'}" data-tabid="${w.tabId || ''}">
-          <div class="worker-card-top">
-            <span class="worker-index">[Tab ${w.index}]</span>
-            <span class="worker-topic" title="${escHtml(w.topic)}">${escHtml(w.topic)}</span>
-            <span class="worker-status-chip ${w.done ? 'done' : ''}">${escHtml(w.status)}</span>
-          </div>
-          <div class="worker-card-preview">
-            ${w.thumbnail 
-              ? `<img src="${w.thumbnail}" alt="" class="worker-thumb-img" />`
-              : `<div class="worker-thumb-placeholder"><span class="material-symbols-outlined" style="font-size:22px;color:#71717a">tab</span><span>${escHtml(w.status)}</span></div>`
-            }
-          </div>
-          <div class="worker-progress-bar">
-            <div class="worker-progress-fill" style="width:${w.progress || 0}%"></div>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-
-  // Bind click to focus tab
-  gridWrap.querySelectorAll('.worker-tab-card').forEach(card => {
-    card.addEventListener('click', async () => {
-      const tabId = parseInt(card.dataset.tabid, 10);
-      if (tabId && chrome.tabs) {
-        await chrome.tabs.update(tabId, { active: true });
-      }
-    });
-  });
-
-  gridWrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
-
+// ─── UI Utility Helpers ──────────────────────────────────────────────────────
 function hideEmptyState() {
-  elEmptyState.style.display = 'none';
+  if (elEmptyState) elEmptyState.style.display = 'none';
 }
-
-function updateStatus(text, isRunning, isWaiting = false) {
-  elStatusText.textContent = text;
-  elStatusPill.classList.remove('running', 'waiting');
-  if (isRunning) {
-    elStatusPill.classList.add('running');
-  } else if (isWaiting) {
-    elStatusPill.classList.add('waiting');
-  }
-}
-
 
 function setAgentRunning(running) {
   state.agentRunning = running;
+  if (!elBtnSend) return;
   elBtnSend.disabled = false;
   if (running) {
-    elBtnSend.classList.add('running');
+    elBtnSend.classList.add('stop-btn');
     elBtnSend.title = 'Hentikan Agent';
-    elSendIcon.textContent = 'stop';
+    if (elSendIcon) elSendIcon.textContent = 'stop';
   } else {
-    elBtnSend.classList.remove('running');
+    elBtnSend.classList.remove('stop-btn');
     elBtnSend.title = 'Kirim Perintah';
-    elSendIcon.textContent = 'send';
+    if (elSendIcon) elSendIcon.textContent = 'send';
   }
 }
 
 function resizeTextarea() {
+  if (!elGoalInput) return;
   elGoalInput.style.height = 'auto';
   elGoalInput.style.height = Math.min(elGoalInput.scrollHeight, 120) + 'px';
 }
@@ -1730,36 +1717,105 @@ function escHtml(str) {
 
 function openModal(id) {
   const modal = $(id);
-  if (modal) modal.classList.add('active');
+  if (modal) modal.classList.add('open');
 }
 
 function closeModal(id) {
   const modal = $(id);
-  if (modal) modal.classList.remove('active');
+  if (modal) modal.classList.remove('open');
 }
 
 // ─── Event Bindings ──────────────────────────────────────────────────────────
 function bindEvents() {
-  elBtnSend.addEventListener('click', submitTask);
-  elGoalInput.addEventListener('input', () => {
-    resizeTextarea();
-    elBtnSend.disabled = !elGoalInput.value.trim() && !state.agentRunning;
-  });
-  elGoalInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (!elBtnSend.disabled) submitTask();
-    }
+  if (elBtnSend) elBtnSend.addEventListener('click', () => submitTask());
+
+  if (elGoalInput) {
+    elGoalInput.addEventListener('input', () => {
+      resizeTextarea();
+      elBtnSend.disabled = !elGoalInput.value.trim() && !state.agentRunning;
+    });
+    elGoalInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!elBtnSend.disabled) submitTask();
+      }
+    });
+  }
+
+  // View Switcher: Chat vs Event Logs
+  if (elBtnViewChat) elBtnViewChat.addEventListener('click', () => switchView('chat'));
+  if (elBtnViewLogs) elBtnViewLogs.addEventListener('click', () => switchView('logs'));
+
+  // Logs Toolbar
+  if (elLogsSearchInput) {
+    elLogsSearchInput.addEventListener('input', () => {
+      state.logSearchQuery = elLogsSearchInput.value;
+      if (elLogsSearchClear) elLogsSearchClear.style.display = elLogsSearchInput.value ? 'inline-flex' : 'none';
+      renderLogsList();
+    });
+  }
+  if (elLogsSearchClear) {
+    elLogsSearchClear.addEventListener('click', () => {
+      elLogsSearchInput.value = '';
+      state.logSearchQuery = '';
+      elLogsSearchClear.style.display = 'none';
+      renderLogsList();
+    });
+  }
+
+  // Filter Chips in Logs View
+  const filterChips = document.querySelectorAll('.filter-chip');
+  filterChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      filterChips.forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.logFilter = chip.dataset.filter;
+      renderLogsList();
+    });
   });
 
-  // Topbar
-  $('btn-menu').addEventListener('click', openDrawer);
-  $('btn-new').addEventListener('click', () => createNewSession());
-  $('drawer-close').addEventListener('click', closeDrawer);
-  elDrawerOverlay.addEventListener('click', closeDrawer);
-  $('btn-new-session').addEventListener('click', createNewSession);
+  const btnCopyAllLogs = $('btn-copy-all-logs');
+  if (btnCopyAllLogs) {
+    btnCopyAllLogs.addEventListener('click', () => {
+      if (stateMachine) {
+        navigator.clipboard?.writeText?.(JSON.stringify(stateMachine.events, null, 2));
+        btnCopyAllLogs.querySelector('span:last-child').textContent = 'Tersalin!';
+        setTimeout(() => { btnCopyAllLogs.querySelector('span:last-child').textContent = 'Salin'; }, 1500);
+      }
+    });
+  }
 
-  // Settings & Parallel Tab options
+  // Retry Confirmation Modal
+  const btnCancelRetry = $('btn-cancel-retry');
+  if (btnCancelRetry) {
+    btnCancelRetry.addEventListener('click', () => {
+      closeModal('modal-retry-confirm');
+      state.retryPendingAction = null;
+    });
+  }
+  const btnConfirmRetry = $('btn-confirm-retry');
+  if (btnConfirmRetry) {
+    btnConfirmRetry.addEventListener('click', () => {
+      closeModal('modal-retry-confirm');
+      if (state.retryPendingAction) {
+        submitTask(state.retryPendingAction);
+        state.retryPendingAction = null;
+      }
+    });
+  }
+  const btnCloseRetryConfirm = $('close-modal-retry-confirm');
+  if (btnCloseRetryConfirm) {
+    btnCloseRetryConfirm.addEventListener('click', () => closeModal('modal-retry-confirm'));
+  }
+
+  // Drawer
+  $('btn-menu')?.addEventListener('click', openDrawer);
+  $('btn-new')?.addEventListener('click', createNewSession);
+  $('drawer-close')?.addEventListener('click', closeDrawer);
+  if (elDrawerOverlay) elDrawerOverlay.addEventListener('click', closeDrawer);
+  $('btn-new-session')?.addEventListener('click', createNewSession);
+
+  // Settings
   const chkShowTabs = $('chk-show-parallel-tabs');
   if (chkShowTabs) {
     chkShowTabs.checked = state.showParallelTabs !== false;
@@ -1768,7 +1824,6 @@ function bindEvents() {
       saveStorage({ showParallelTabs: chkShowTabs.checked });
     });
   }
-
   const selWorkers = $('sel-max-parallel-workers');
   if (selWorkers) {
     selWorkers.value = String(state.maxParallelWorkers || 3);
@@ -1778,6 +1833,7 @@ function bindEvents() {
     });
   }
 
+  // Popout Mode
   const btnPopout = $('btn-popout');
   if (btnPopout) {
     btnPopout.addEventListener('click', async () => {
@@ -1785,36 +1841,21 @@ function bindEvents() {
         chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
           const tab = tabs?.[0];
           if (!tab?.id) return;
-
-          // If internal browser page (edge://, chrome://, about:), open standalone compact window
           if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
             if (chrome.windows) {
-              chrome.windows.create({
-                url: chrome.runtime.getURL('compact/compact.html'),
-                type: 'popup',
-                width: 360,
-                height: 480,
-              });
+              chrome.windows.create({ url: chrome.runtime.getURL('compact/compact.html'), type: 'popup', width: 360, height: 480 });
             }
             return;
           }
-
-          // In-page Floating Dynamic Island injection
           try {
             if (chrome.scripting) {
               await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['content/floating_hud.css'] }).catch(() => {});
               await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/floating_hud.js'] }).catch(() => {});
             }
             chrome.tabs.sendMessage(tab.id, { type: 'SHOW_FLOATING_HUD' }).catch(() => {});
-          } catch (e) {
-            console.warn('[PopOut] Injection fallback:', e);
+          } catch (_) {
             if (chrome.windows) {
-              chrome.windows.create({
-                url: chrome.runtime.getURL('compact/compact.html'),
-                type: 'popup',
-                width: 360,
-                height: 480,
-              });
+              chrome.windows.create({ url: chrome.runtime.getURL('compact/compact.html'), type: 'popup', width: 360, height: 480 });
             }
           }
         });
@@ -1822,68 +1863,38 @@ function bindEvents() {
     });
   }
 
-  // Listen to triggers from In-Page Floating Island HUD
-  chrome.runtime?.onMessage?.addListener((msg, sender, sendResponse) => {
-
-    if (!msg) return;
-    if (msg.action === 'START_TASK_FROM_HUD' && msg.task) {
-      submitTask(msg.task);
-      sendResponse?.({ success: true });
-      return true;
-    }
-    if (msg.action === 'STOP_TASK_FROM_HUD') {
-      stopAgent();
-      sendResponse?.({ success: true });
-      return true;
-    }
-    if (msg.action === 'RESOLVE_INTERACTION_FROM_HUD') {
-      if (widgetManager?.interactionManager) {
-        const activeIx = widgetManager.interactionManager.activeInteraction;
-        if (activeIx?.interaction_id) {
-          widgetManager.interactionManager.submitResponse(activeIx.interaction_id, msg.value);
-        }
-      }
-      sendResponse?.({ success: true });
-      return true;
-    }
-  });
-
-
-
-
-
   // Model Modal
-  $('btn-select-model').addEventListener('click', () => {
+  $('btn-select-model')?.addEventListener('click', () => {
     closeModelForm();
     renderModelsList();
     openModal('modal-models');
   });
-  $('close-modal-models').addEventListener('click', () => closeModal('modal-models'));
-  $('btn-close-models').addEventListener('click', () => closeModal('modal-models'));
-  $('btn-add-model').addEventListener('click', () => openModelForm(null));
-  $('btn-cancel-model').addEventListener('click', closeModelForm);
-  $('btn-save-model').addEventListener('click', saveModelForm);
-  $('btn-reset-default-models').addEventListener('click', resetDefaultModels);
+  $('close-modal-models')?.addEventListener('click', () => closeModal('modal-models'));
+  $('btn-close-models')?.addEventListener('click', () => closeModal('modal-models'));
+  $('btn-add-model')?.addEventListener('click', () => openModelForm(null));
+  $('btn-cancel-model')?.addEventListener('click', closeModelForm);
+  $('btn-save-model')?.addEventListener('click', saveModelForm);
+  $('btn-reset-default-models')?.addEventListener('click', resetDefaultModels);
 
   // API Keys Modal
-  $('btn-open-apikeys').addEventListener('click', () => {
+  $('btn-open-apikeys')?.addEventListener('click', () => {
     renderApikeys();
     openModal('modal-apikeys');
   });
-  $('close-modal-apikeys').addEventListener('click', () => closeModal('modal-apikeys'));
-  $('btn-save-apikeys').addEventListener('click', saveApikeys);
+  $('close-modal-apikeys')?.addEventListener('click', () => closeModal('modal-apikeys'));
+  $('btn-save-apikeys')?.addEventListener('click', saveApikeys);
 
   // Mode Modal
-  $('btn-open-settings').addEventListener('click', () => {
+  $('btn-open-settings')?.addEventListener('click', () => {
     renderModeOptions();
     openModal('modal-settings');
   });
-  $('btn-select-mode').addEventListener('click', () => {
+  $('btn-select-mode')?.addEventListener('click', () => {
     renderModeOptions();
     openModal('modal-settings');
   });
-  $('close-modal-settings').addEventListener('click', () => closeModal('modal-settings'));
-  $('btn-close-settings').addEventListener('click', () => closeModal('modal-settings'));
+  $('close-modal-settings')?.addEventListener('click', () => closeModal('modal-settings'));
+  $('btn-close-settings')?.addEventListener('click', () => closeModal('modal-settings'));
 
   // Quick Chips
   document.querySelectorAll('.quick-chip').forEach((btn) => {
@@ -1895,11 +1906,22 @@ function bindEvents() {
     });
   });
 
-  // Close modals on backdrop click
-  ['modal-models', 'modal-apikeys', 'modal-settings'].forEach((mId) => {
-    $(mId).addEventListener('click', (e) => {
-      if (e.target === $(mId)) closeModal(mId);
-    });
+  // Modal Backdrop Click
+  ['modal-models', 'modal-apikeys', 'modal-settings', 'modal-retry-confirm'].forEach((mId) => {
+    const el = $(mId);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        if (e.target === el) closeModal(mId);
+      });
+    }
+  });
+
+  // Keyboard Shortcuts: Escape closes any active modal or drawer
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      ['modal-models', 'modal-apikeys', 'modal-settings', 'modal-retry-confirm'].forEach(closeModal);
+      closeDrawer();
+    }
   });
 }
 
