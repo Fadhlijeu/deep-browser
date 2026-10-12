@@ -1,4 +1,4 @@
-import { Session, ChatMessage, ModelDef, TabItem, RunState, PresetId, ExecutionMode, LogEvent, ToolStep, HitlInteraction } from '../types';
+import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, PresetId, ExecutionMode, LogEvent, ToolStep, HitlInteraction } from '../types';
 
 export const DEFAULT_MODELS: ModelDef[] = [
   { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-2.0-flash' },
@@ -35,6 +35,7 @@ export interface SidepanelState {
   apiKeys: Record<string, string>;
   tabs: TabItem[];
   runState: RunState;
+  connectionStatus: ConnectionStatus;
   stepCount: number;
   currentView: 'chat' | 'logs';
   logFilter: 'all' | 'tools' | 'approvals' | 'errors' | 'verifications';
@@ -65,6 +66,7 @@ export class SidepanelStateManager {
       apiKeys: {},
       tabs: [],
       runState: 'idle',
+      connectionStatus: 'reconnecting',
       stepCount: 0,
       currentView: 'chat',
       logFilter: 'all',
@@ -154,11 +156,16 @@ export class SidepanelStateManager {
 
   private initWebSocket() {
     try {
+      this.state.connectionStatus = 'reconnecting';
+      this.notify();
+
       const ws = new WebSocket('ws://127.0.0.1:7788/ws');
       this.ws = ws;
 
       ws.onopen = () => {
         console.log('[DeepBrowser] Connected to local agent daemon ws.');
+        this.state.connectionStatus = 'connected';
+        this.notify();
       };
 
       ws.onmessage = (e) => {
@@ -172,15 +179,33 @@ export class SidepanelStateManager {
 
       ws.onclose = () => {
         this.ws = null;
-        setTimeout(() => this.initWebSocket(), 3500);
+        this.state.connectionStatus = 'disconnected';
+        this.notify();
+        setTimeout(() => {
+          if (this.state.connectionStatus === 'disconnected') {
+            this.initWebSocket();
+          }
+        }, 4000);
       };
 
       ws.onerror = () => {
+        this.state.connectionStatus = 'disconnected';
+        this.notify();
         try { ws.close(); } catch (_) {}
       };
     } catch (_) {
-      setTimeout(() => this.initWebSocket(), 3500);
+      this.state.connectionStatus = 'disconnected';
+      this.notify();
+      setTimeout(() => this.initWebSocket(), 4000);
     }
+  }
+
+  public reconnect() {
+    if (this.ws) {
+      try { this.ws.close(); } catch (_) {}
+      this.ws = null;
+    }
+    this.initWebSocket();
   }
 
   public getActiveSession(): Session {

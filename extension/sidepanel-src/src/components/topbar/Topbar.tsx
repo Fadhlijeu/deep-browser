@@ -1,8 +1,9 @@
 import React from 'react';
-import { RunState } from '../../types';
+import { RunState, ConnectionStatus } from '../../types';
 
 interface TopbarProps {
   runState: RunState;
+  connectionStatus: ConnectionStatus;
   stepCount: number;
   currentView: 'chat' | 'logs';
   logsCount: number;
@@ -11,10 +12,12 @@ interface TopbarProps {
   onNewSession: () => void;
   onOpenApikeys: () => void;
   onOpenSettings: () => void;
+  onReconnect: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
   runState,
+  connectionStatus,
   stepCount,
   currentView,
   logsCount,
@@ -23,13 +26,41 @@ export const Topbar: React.FC<TopbarProps> = ({
   onNewSession,
   onOpenApikeys,
   onOpenSettings,
+  onReconnect,
 }) => {
-  const getStatusLabel = () => {
-    switch (runState) {
-      case 'running': return 'Berjalan';
-      case 'paused': return 'Menunggu';
-      case 'error': return 'Error';
-      default: return 'Siap';
+  const getBrowserIcon = () => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+    if (ua.includes('edg/')) {
+      // Microsoft Edge SVG Logo
+      return (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" title="Microsoft Edge">
+          <path d="M22 13.5C22 8.25 17.75 4 12.5 4C7.25 4 3 8.25 3 13.5C3 18.75 7.25 23 12.5 23C13.5 23 17 22.5 19 20C17 20 15 19 14.5 17.5C14 16 14.5 14.5 16 14C17.5 13.5 19.5 14 20.5 15.5C21.5 17 21 18.5 21 18.5C21.5 17 22 15.3 22 13.5Z" fill="#0078D7" />
+          <path d="M12.5 4C14 4 19 5.5 20.5 10C19 9 17 8.5 15 9C12.5 9.6 11 11.5 11 14C11 16.5 12.5 18 14.5 18C13 19.5 10.5 20 8.5 19C5.5 17.5 4.5 14 5 11C5.5 7.5 8.5 4 12.5 4Z" fill="#00BCF2" />
+          <path d="M12.5 23C8.5 23 5 20 4.5 16C5.5 18.5 8 20 11 20C14 20 16 18.5 17 17C15.5 17 14 16 13.5 14.5C13 13 14 11.5 15.5 11C13.5 11 11.5 12.5 11 14.5C10.5 16.5 11.5 18.5 13 19.5C10.5 21 7.5 20.5 6 19C7.5 21.5 10 23 12.5 23Z" fill="#00B294" />
+        </svg>
+      );
+    }
+    // Google Chrome SVG Logo
+    return (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" title="Google Chrome">
+        <circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="2" />
+        <circle cx="12" cy="12" r="4.5" fill="#4285F4" />
+        <path d="M12 7.5H21.5" stroke="#EA4335" strokeWidth="2" />
+        <path d="M8.1 14.25L3.35 6" stroke="#34A853" strokeWidth="2" />
+        <path d="M15.9 14.25L11.15 22.5" stroke="#FBBC05" strokeWidth="2" />
+      </svg>
+    );
+  };
+
+  const getConnectionTitle = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Terhubung ke Backend Daemon (ws://127.0.0.1:7788)';
+      case 'reconnecting':
+        return 'Sedang mencoba menghubungkan ke daemon (Klik untuk coba lagi)...';
+      case 'disconnected':
+      default:
+        return 'Daemon Offline / Disconnected (Klik untuk Reconnect)';
     }
   };
 
@@ -41,14 +72,22 @@ export const Topbar: React.FC<TopbarProps> = ({
         </button>
 
         <div className="brand-wrap">
-          <span className="brand-title">Deep Browser</span>
-          <span className="brand-badge">ED</span>
-
-          {/* Runtime Status Pill */}
-          <div className="status-pill" data-state={runState} title={`Status: ${getStatusLabel()}`}>
-            <div className="status-dot"></div>
-            <span>{getStatusLabel()}</span>
+          {/* Browser Icon (No text abbreviation) */}
+          <div className="browser-icon-badge" title="Browser Terintegrasi">
+            {getBrowserIcon()}
           </div>
+
+          {/* Functional Connection Status Pill */}
+          <button
+            className={`status-pill status-${connectionStatus}`}
+            onClick={onReconnect}
+            title={getConnectionTitle()}
+          >
+            <div className={`status-dot dot-${connectionStatus}`}></div>
+            <span className="status-label" style={{ textTransform: 'capitalize' }}>
+              {connectionStatus}
+            </span>
+          </button>
 
           {/* Step Counter — visible only while running */}
           {runState === 'running' && stepCount > 0 && (

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PRESET_OPTIONS, MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
 import { PresetId, ExecutionMode, ModelDef } from '../../types';
 
@@ -27,6 +27,36 @@ export const Composer: React.FC<ComposerProps> = ({
 }) => {
   const [text, setText] = useState(initialPrompt);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const presetScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollPresetLeft, setCanScrollPresetLeft] = useState(false);
+  const [canScrollPresetRight, setCanScrollPresetRight] = useState(false);
+
+  const checkPresetScroll = useCallback(() => {
+    if (presetScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = presetScrollRef.current;
+      setCanScrollPresetLeft(scrollLeft > 2);
+      setCanScrollPresetRight(scrollLeft + clientWidth < scrollWidth - 2);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkPresetScroll();
+    const el = presetScrollRef.current;
+    if (el) el.addEventListener('scroll', checkPresetScroll, { passive: true });
+    window.addEventListener('resize', checkPresetScroll);
+    return () => {
+      if (el) el.removeEventListener('scroll', checkPresetScroll);
+      window.removeEventListener('resize', checkPresetScroll);
+    };
+  }, [checkPresetScroll]);
+
+  const slidePreset = (direction: 'left' | 'right') => {
+    if (presetScrollRef.current) {
+      const offset = direction === 'left' ? -120 : 120;
+      presetScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+      setTimeout(checkPresetScroll, 200);
+    }
+  };
 
   useEffect(() => {
     if (initialPrompt) {
@@ -67,19 +97,43 @@ export const Composer: React.FC<ComposerProps> = ({
 
   return (
     <div className="composer-dock">
-      {/* Presets Bar */}
-      <div className="presets-bar">
-        {PRESET_OPTIONS.map((p) => (
+      {/* Presets Slider Bar */}
+      <div className="slider-container preset-slider-container">
+        {canScrollPresetLeft && (
           <button
-            key={p.id}
-            className={`preset-chip ${selectedPreset === p.id ? 'active' : ''}`}
-            onClick={() => sidepanelStore.setSelectedPreset(p.id)}
-            title={`Mode Preset: ${p.name}`}
+            className="slider-nav-btn slider-nav-left"
+            onClick={() => slidePreset('left')}
+            title="Scroll preset kiri"
+            aria-label="Scroll preset kiri"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{p.icon}</span>
-            <span>{p.name}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>chevron_left</span>
           </button>
-        ))}
+        )}
+
+        <div className="slider-track presets-bar" ref={presetScrollRef}>
+          {PRESET_OPTIONS.map((p) => (
+            <button
+              key={p.id}
+              className={`preset-chip ${selectedPreset === p.id ? 'active' : ''}`}
+              onClick={() => sidepanelStore.setSelectedPreset(p.id)}
+              title={`Mode Preset: ${p.name}`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{p.icon}</span>
+              <span>{p.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {canScrollPresetRight && (
+          <button
+            className="slider-nav-btn slider-nav-right"
+            onClick={() => slidePreset('right')}
+            title="Scroll preset kanan"
+            aria-label="Scroll preset kanan"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>chevron_right</span>
+          </button>
+        )}
       </div>
 
       {/* Input Field */}
