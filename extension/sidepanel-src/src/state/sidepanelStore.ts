@@ -1,5 +1,7 @@
 import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, PresetId, ExecutionMode, LogEvent, ToolStep, HitlInteraction } from '../types';
 
+declare const chrome: any;
+
 export const DEFAULT_MODELS: ModelDef[] = [
   { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-2.0-flash' },
   { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', icon: 'speed',      provider: 'gemini',        modelId: 'gemini-2.0-flash-lite' },
@@ -36,6 +38,8 @@ export interface SidepanelState {
   tabs: TabItem[];
   runState: RunState;
   connectionStatus: ConnectionStatus;
+  sidepanelEnabled: boolean;
+  isDetached: boolean;
   stepCount: number;
   currentView: 'chat' | 'logs';
   logFilter: 'all' | 'tools' | 'approvals' | 'errors' | 'verifications';
@@ -56,6 +60,8 @@ export class SidepanelStateManager {
 
   constructor() {
     const initId = 'session_' + Date.now();
+    const isDetached = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('detached') === 'true';
+
     this.state = {
       sessions: [{ id: initId, name: 'Sesi Baru', createdAt: Date.now(), messages: [], events: [] }],
       activeSessionId: initId,
@@ -67,6 +73,8 @@ export class SidepanelStateManager {
       tabs: [],
       runState: 'idle',
       connectionStatus: 'reconnecting',
+      sidepanelEnabled: true,
+      isDetached,
       stepCount: 0,
       currentView: 'chat',
       logFilter: 'all',
@@ -95,7 +103,7 @@ export class SidepanelStateManager {
   private async loadFromStorage() {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
-        const stored = await chrome.storage.local.get(['sessions', 'activeSessionId', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'models']);
+        const stored = await chrome.storage.local.get(['sessions', 'activeSessionId', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled']);
         if (stored.sessions && stored.sessions.length > 0) {
           this.state.sessions = stored.sessions;
         }
@@ -107,6 +115,7 @@ export class SidepanelStateManager {
         if (stored.selectedPreset) this.state.selectedPreset = stored.selectedPreset;
         if (stored.apiKeys) this.state.apiKeys = stored.apiKeys;
         if (stored.models && stored.models.length > 0) this.state.models = stored.models;
+        if (typeof stored.sidepanelEnabled === 'boolean') this.state.sidepanelEnabled = stored.sidepanelEnabled;
         this.notify();
       } catch (err) {
         console.warn('[DeepBrowser] Error loading storage:', err);
@@ -125,6 +134,7 @@ export class SidepanelStateManager {
           selectedPreset: this.state.selectedPreset,
           apiKeys: this.state.apiKeys,
           models: this.state.models,
+          sidepanelEnabled: this.state.sidepanelEnabled,
         });
       } catch (err) {
         console.warn('[DeepBrowser] Error saving storage:', err);
@@ -137,7 +147,7 @@ export class SidepanelStateManager {
       const updateTabs = async () => {
         try {
           const chromeTabs = await chrome.tabs.query({ currentWindow: true });
-          this.state.tabs = chromeTabs.map((t) => ({
+          this.state.tabs = chromeTabs.map((t: any) => ({
             id: t.id || 0,
             title: t.title || 'Tab Tanpa Judul',
             url: t.url || '',
@@ -252,6 +262,45 @@ export class SidepanelStateManager {
 
   public setApiKey(provider: string, key: string) {
     this.state.apiKeys = { ...this.state.apiKeys, [provider]: key };
+    this.saveStorage();
+    this.notify();
+  }
+
+  public async toggleDetach() {
+    if (this.state.isDetached) {
+      if (typeof chrome !== 'undefined' && chrome.sidePanel) {
+        try {
+          const windows = await chrome.windows.getAll();
+          const normalWin = windows.find((w: any) => w.type === 'normal');
+          if (normalWin?.id) {
+            await chrome.sidePanel.open({ windowId: normalWin.id });
+          }
+        } catch (_) {}
+      }
+      window.close();
+    } else {
+      if (typeof chrome !== 'undefined' && chrome.windows) {
+        chrome.windows.create({
+          url: chrome.runtime.getURL('sidepanel/dist/index.html?detached=true'),
+          type: 'popup',
+          width: 440,
+          height: 720,
+          focused: true,
+        });
+      }
+    }
+  }
+
+  public async toggleSidepanelEnabled() {
+    const nextState = !this.state.sidepanelEnabled;
+    this.state.sidepanelEnabled = nextState;
+    if (typeof chrome !== 'undefined' && chrome.sidePanel) {
+      try {
+        await chrome.sidePanel.setOptions({ enabled: nextState });
+      } catch (err) {
+        console.warn('sidePanel.setOptions error:', err);
+      }
+    }
     this.saveStorage();
     this.notify();
   }

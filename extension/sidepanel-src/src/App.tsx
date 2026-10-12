@@ -28,6 +28,7 @@ export const App: React.FC = () => {
       <Topbar
         runState={state.runState}
         connectionStatus={state.connectionStatus}
+        isDetached={state.isDetached}
         stepCount={state.stepCount}
         currentView={state.currentView}
         logsCount={activeSession.events.length}
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
         onOpenApikeys={() => sidepanelStore.setModal('apikeys', true)}
         onOpenSettings={() => sidepanelStore.setModal('settings', true)}
         onReconnect={() => sidepanelStore.reconnect()}
+        onToggleDetach={() => sidepanelStore.toggleDetach()}
       />
 
       {/* Tabs Strip */}

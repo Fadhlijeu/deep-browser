@@ -1092,3 +1092,177 @@ html, body, #root {
   .view-btn span:not(.material-symbols-outlined) { display: none; }
   .pill-selector-btn { max-width: 75px; }
 }
+
+/* ─── Rich Micro-Animations & Fluid Transitions ───────────────────────── */
+@keyframes messageFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.user-message-row, .assistant-message-row {
+  animation: messageFadeSlide 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideRight {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.drawer-backdrop {
+  animation: fadeIn 0.18s ease both;
+}
+
+.drawer-panel {
+  animation: slideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes modalZoom {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-overlay {
+  animation: fadeIn 0.18s ease both;
+}
+
+.modal-card {
+  animation: modalZoom 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes arrowPop {
+  from {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.slider-nav-btn {
+  animation: arrowPop 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.slider-nav-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.35);
+}
+
+.tool-step-card {
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.tool-step-header {
+  transition: background 0.14s ease;
+}
+
+.tool-step-header:hover {
+  background: var(--bg-surface-elevated);
+}
+
+@keyframes accordionExpand {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tool-step-details {
+  animation: accordionExpand 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Button & Chip Micro-Interactions */
+.icon-btn:active,
+.btn-primary:active,
+.btn-secondary:active,
+.preset-chip:active,
+.tab-chip:active,
+.suggestion-btn:active {
+  transform: scale(0.94);
+}
+
+.tab-chip {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-chip:hover {
+  background: var(--bg-surface-elevated);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.preset-chip {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.preset-chip:hover {
+  background: var(--bg-surface-elevated);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.preset-chip.active {
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+.send-btn {
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: scale(1.06);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.send-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.suggestion-btn {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.suggestion-btn:hover {
+  transform: translateY(-1.5px);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.view-btn {
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.view-btn.active {
+  animation: arrowPop 0.14s ease both;
+}
+

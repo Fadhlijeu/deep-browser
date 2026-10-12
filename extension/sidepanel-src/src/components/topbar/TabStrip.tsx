@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { TabItem } from '../../types';
 
+declare const chrome: any;
+
 interface TabStripProps {
   tabs: TabItem[];
 }

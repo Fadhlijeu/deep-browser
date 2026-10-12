@@ -4,6 +4,7 @@ import { RunState, ConnectionStatus } from '../../types';
 interface TopbarProps {
   runState: RunState;
   connectionStatus: ConnectionStatus;
+  isDetached: boolean;
   stepCount: number;
   currentView: 'chat' | 'logs';
   logsCount: number;
@@ -13,11 +14,13 @@ interface TopbarProps {
   onOpenApikeys: () => void;
   onOpenSettings: () => void;
   onReconnect: () => void;
+  onToggleDetach: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
   runState,
   connectionStatus,
+  isDetached,
   stepCount,
   currentView,
   logsCount,
@@ -27,6 +30,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenApikeys,
   onOpenSettings,
   onReconnect,
+  onToggleDetach,
 }) => {
   const getBrowserIcon = () => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
@@ -127,6 +131,15 @@ export const Topbar: React.FC<TopbarProps> = ({
 
       {/* Actions */}
       <div className="topbar-actions">
+        <button
+          className={`icon-btn ${isDetached ? 'active' : ''}`}
+          onClick={onToggleDetach}
+          title={isDetached ? 'Pasang Kembali ke Sidepanel' : 'Lepas dari Sidepanel (Buka Jendela Melayang)'}
+        >
+          <span className="material-symbols-outlined">
+            {isDetached ? 'dock_to_right' : 'open_in_new'}
+          </span>
+        </button>
         <button className="icon-btn" onClick={onNewSession} title="Sesi Baru">
           <span className="material-symbols-outlined">add</span>
         </button>
