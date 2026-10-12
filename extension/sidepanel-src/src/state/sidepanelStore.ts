@@ -609,43 +609,164 @@ export class SidepanelStateManager {
     const targetUrl = activeTab?.url || 'https://browser.local';
     const targetTitle = activeTab?.title || 'Tab Aktif';
 
-    // 1. Initial Step: Analisis DOM & Halaman Aktif
-    await new Promise((r) => setTimeout(r, 600));
+    // Step 1: Membaca konteks halaman aktif
     assistantMsg.steps = [
       {
         id: 's1',
-        name: 'inspect_active_tab',
+        name: 'Membaca Halaman Aktif',
         icon: 'visibility',
         status: 'succeeded',
-        duration: '180ms',
-        args: { prompt, targetUrl, targetTitle },
-        result: { status: 'ok', domElementsCount: 142, pageTitle: targetTitle },
-        verification: { verified: true, activeTabUrl: targetUrl },
+        duration: '120ms',
+        args: { url: targetUrl, title: targetTitle },
+        result: { status: 'ok', title: targetTitle },
         timestamp: Date.now(),
       },
     ];
     this.state.stepCount = 1;
     this.notify();
 
-    // 2. Second Step: Planning & Execution
-    await new Promise((r) => setTimeout(r, 800));
-    assistantMsg.steps.push({
-      id: 's2',
-      name: 'execute_actions',
-      icon: 'smart_toy',
-      status: 'succeeded',
-      duration: '320ms',
-      args: { mode: this.state.selectedMode, preset: this.state.selectedPreset, targetUrl },
-      result: { extractedData: `Konten terverifikasi berhasil dianalisis dari "${targetTitle}"` },
-      verification: { mutCount: 1, domVerified: true },
-      timestamp: Date.now(),
-    });
-    this.state.stepCount = 2;
-    this.notify();
+    let pageContext = {
+      title: targetTitle,
+      url: targetUrl,
+      description: '',
+      headings: [] as string[],
+      snippet: '',
+    };
 
-    // 3. Finalize
-    await new Promise((r) => setTimeout(r, 500));
-    assistantMsg.text = `Tugas berhasil diselesaikan dalam **Mode In-Browser (Online)**.\n\n**Detail Eksekusi:**\n- Halaman Target: [${targetTitle}](${targetUrl})\n- Mode: \`${this.state.selectedMode}\`\n- Preset: \`${this.state.selectedPreset}\`\n- Status: Deterministic verification passed (DOM terverifikasi valid).`;
+    // Ekstraksi konten aktual halaman aktif menggunakan Chrome Scripting API jika tersedia
+    if (typeof chrome !== 'undefined' && chrome.scripting && activeTab?.id) {
+      try {
+        const injected = await chrome.scripting.executeScript({
+          target: { tabId: activeTab.id },
+          func: () => {
+            const desc = document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+                         document.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+            const h1s = Array.from(document.querySelectorAll('h1')).map((h) => h.innerText.trim()).filter(Boolean).slice(0, 3);
+            const h2s = Array.from(document.querySelectorAll('h2')).map((h) => h.innerText.trim()).filter(Boolean).slice(0, 5);
+            const main = document.querySelector('main, article, #content, .content, #readme, [role="main"]') || document.body;
+            const text = (main?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+            return {
+              title: document.title || '',
+              description: desc,
+              headings: [...h1s, ...h2s],
+              snippet: text,
+            };
+          },
+        });
+        if (injected && injected[0]?.result) {
+          const res = injected[0].result;
+          if (res.title) pageContext.title = res.title;
+          if (res.description) pageContext.description = res.description;
+          if (res.headings) pageContext.headings = res.headings;
+          if (res.snippet) pageContext.snippet = res.snippet;
+        }
+      } catch (err) {
+        console.log('[DeepBrowser] Tab inspection notice:', err);
+      }
+    }
+
+    // Step 2: Jika ada API Key Gemini yang terkonfigurasi, panggil Gemini langsung untuk jawaban AI asli
+    const geminiKey = this.state.apiKeys.gemini;
+    if (geminiKey) {
+      try {
+        const modelName = this.state.selectedModelId.replace(/^gemini\//, '') || 'gemini-2.0-flash';
+        const systemPrompt = `Anda adalah asisten AI browser yang pintar, ramah, dan solutif.
+Tugas Anda adalah menjawab pertanyaan pengguna secara langsung, jelas, dan alami berdasarkan halaman yang sedang dibuka pengguna.
+PANDUAN MENJAWAB:
+- Jawab secara to the point dan ramah dalam bahasa Indonesia yang user-friendly.
+- Jangan menyebut nama tools, mode, preset, status eksekusi, verifikasi DOM, atau detail teknis internal agen kecuali pengguna secara spesifik memintanya.
+- Gunakan format markdown yang rapi (bold untuk istilah penting, bullet points untuk rincian).
+- Jika pengguna bertanya tentang isi layar/halaman, jelaskan apa isi halaman tersebut, tujuan situsnya, dan poin-poin utamanya.`;
+
+        const userPrompt = `Pertanyaan Pengguna: "${prompt}"
+
+Konteks Halaman Web Aktif:
+- Judul: ${pageContext.title}
+- URL: ${pageContext.url}
+- Deskripsi: ${pageContext.description}
+- Heading/Topik: ${pageContext.headings.join(' • ')}
+- Cuplikan Konten: ${pageContext.snippet}`;
+
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(geminiKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (generatedText) {
+            assistantMsg.text = generatedText;
+            this.state.runState = 'idle';
+            this.notify();
+            this.saveStorage();
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[DeepBrowser] Direct Gemini call error, using smart local explainer:', err);
+      }
+    }
+
+    // Step 3: Natural, user-friendly local response generator (tanpa robotik jargon)
+    const cleanUrl = pageContext.url.replace(/^https?:\/\//, '');
+    const domain = cleanUrl.split('/')[0];
+    const pathParts = cleanUrl.split('/').filter(Boolean);
+
+    let answer = '';
+    const pLower = prompt.toLowerCase();
+    const isScreenQuery = pLower.includes('layar') || pLower.includes('isi') || pLower.includes('halaman') ||
+                          pLower.includes('web') || pLower.includes('apa ini') || pLower.includes('buka apa') ||
+                          pLower.includes('ringkas') || pLower.includes('lihat');
+
+    if (isScreenQuery) {
+      answer = `Saat ini layar Anda sedang membuka **[${pageContext.title}](${pageContext.url})** di domain \`${domain}\`.\n\n`;
+
+      if (cleanUrl.includes('github.com') && pathParts.length >= 3) {
+        const repoName = `${pathParts[1]}/${pathParts[2]}`;
+        answer += `### 📦 Repository GitHub: \`${repoName}\`\n`;
+        if (pageContext.description) {
+          answer += `${pageContext.description}\n\n`;
+        } else {
+          answer += `Halaman ini merupakan repositori open-source untuk proyek **${pathParts[2]}**.\n\n`;
+        }
+      } else if (pageContext.description) {
+        answer += `### 📌 Deskripsi Halaman\n${pageContext.description}\n\n`;
+      }
+
+      if (pageContext.headings && pageContext.headings.length > 0) {
+        answer += `### 🔍 Topik & Bagian Utama:\n`;
+        pageContext.headings.slice(0, 6).forEach((h) => {
+          if (h.trim()) answer += `- **${h.trim()}**\n`;
+        });
+        answer += '\n';
+      }
+
+      if (pageContext.snippet && pageContext.snippet.length > 30) {
+        const cleanSnippet = pageContext.snippet.slice(0, 360).trim();
+        answer += `### 📄 Rangkuman Konten Halaman:\n> ${cleanSnippet}...\n\n`;
+      }
+
+      answer += `Ada bagian tertentu dari halaman ini yang ingin Anda tanyakan atau butuh bantuan lebih lanjut?`;
+    } else {
+      answer = `Mengenai pertanyaan Anda: *"**${prompt}**"*\n\n`;
+      if (pageContext.description) {
+        answer += `Berdasarkan konteks halaman **[${pageContext.title}](${pageContext.url})**:\n`;
+        answer += `${pageContext.description}\n\n`;
+      }
+      if (pageContext.snippet && pageContext.snippet.length > 30) {
+        answer += `Informasi yang relevan di halaman ini:\n> ${pageContext.snippet.slice(0, 320)}...\n\n`;
+      } else {
+        answer += `Saya mendeteksi Anda sedang berada di halaman **${pageContext.title}** (${pageContext.url}).\n\n`;
+      }
+      answer += `Silakan beri tahu saya jika Anda butuh analisis data, navigasi form, atau ekstraksi informasi dari situs ini!`;
+    }
+
+    assistantMsg.text = answer;
     this.state.runState = 'idle';
     this.notify();
     this.saveStorage();

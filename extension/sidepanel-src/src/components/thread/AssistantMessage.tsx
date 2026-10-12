@@ -9,7 +9,7 @@ interface AssistantMessageProps {
 }
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) => {
-  const [timelineOpen, setTimelineOpen] = useState(true);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const copyText = () => {
@@ -38,9 +38,19 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
               {message.preset.toUpperCase()}
             </span>
           )}
+          <button
+            className="icon-btn"
+            onClick={copyText}
+            title="Salin Jawaban"
+            style={{ width: '18px', height: '18px', marginLeft: 'auto' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+              {copied ? 'check' : 'content_copy'}
+            </span>
+          </button>
         </div>
 
-        {/* Execution Timeline Accordion */}
+        {/* Execution Timeline Accordion (Collapsed by default so user sees the answer first) */}
         {steps.length > 0 && (
           <div className="timeline-accordion">
             <div className="timeline-accordion-header" onClick={() => setTimelineOpen(!timelineOpen)}>
@@ -48,7 +58,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
                 <span className="material-symbols-outlined" style={{ fontSize: '14px', transform: timelineOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
                   chevron_right
                 </span>
-                <span>Execution Timeline</span>
+                <span>Langkah Tindakan Browser</span>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)' }}>
                 {steps.length} langkah
@@ -70,27 +80,15 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
           <HitlApprovalCard hitl={message.hitl} />
         )}
 
-        {/* Markdown Response Body */}
+        {/* User-Friendly Response Body */}
         {message.text && (
           <div style={{ marginTop: '2px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: message.isError ? 'var(--status-error)' : 'var(--status-success)', fontWeight: 600 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                  {message.isError ? 'error' : 'check_circle'}
-                </span>
-                <span>{message.isError ? 'Gagal Dieksekusi' : 'Jawaban Akhir Agent'}</span>
+            {message.isError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--status-error)', fontWeight: 600, marginBottom: '4px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>error</span>
+                <span>Gagal Memproses Permintaan</span>
               </div>
-              <button
-                className="icon-btn"
-                onClick={copyText}
-                title="Salin Jawaban"
-                style={{ width: '20px', height: '20px' }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
-                  {copied ? 'check' : 'content_copy'}
-                </span>
-              </button>
-            </div>
+            )}
             <div className="markdown-body">
               <MarkdownRenderer content={message.text} />
             </div>
