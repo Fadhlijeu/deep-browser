@@ -68,6 +68,18 @@ export const Topbar: React.FC<TopbarProps> = ({
     }
   };
 
+  const getConnectionSymbol = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'check';
+      case 'reconnecting':
+        return 'sync';
+      case 'disconnected':
+      default:
+        return 'link_off';
+    }
+  };
+
   return (
     <div className="topbar">
       <div className="topbar-left">
@@ -88,6 +100,9 @@ export const Topbar: React.FC<TopbarProps> = ({
             title={getConnectionTitle()}
           >
             <div className={`status-dot dot-${connectionStatus}`}></div>
+            <span className={`material-symbols-outlined status-symbol symbol-${connectionStatus}`}>
+              {getConnectionSymbol()}
+            </span>
             <span className="status-label" style={{ textTransform: 'capitalize' }}>
               {connectionStatus}
             </span>

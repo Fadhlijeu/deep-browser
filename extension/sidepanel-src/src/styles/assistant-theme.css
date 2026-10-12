@@ -181,6 +181,31 @@ html, body, #root {
   animation: pulse-dot 1.1s infinite ease-in-out;
 }
 
+.status-symbol {
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.status-symbol.symbol-connected {
+  color: var(--status-success);
+}
+.status-symbol.symbol-disconnected {
+  color: var(--status-error);
+}
+.status-symbol.symbol-reconnecting {
+  color: var(--status-warning);
+  animation: spinSymbol 1.2s infinite linear;
+}
+
+@keyframes spinSymbol {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
@@ -1081,13 +1106,13 @@ html, body, #root {
 }
 
 /* Responsive Media Rules */
-@media (max-width: 375px) {
-  .status-pill .status-label { font-size: 9.5px; }
+@media (max-width: 440px) {
+  .status-pill .status-label { display: none; }
+  .status-pill { padding: 3px 6px; gap: 4px; }
   .pill-selector-btn { max-width: 95px; }
 }
 
-@media (max-width: 310px) {
-  .status-pill .status-label { display: none; }
+@media (max-width: 320px) {
   .status-pill { padding: 3px 5px; }
   .view-btn span:not(.material-symbols-outlined) { display: none; }
   .pill-selector-btn { max-width: 75px; }
