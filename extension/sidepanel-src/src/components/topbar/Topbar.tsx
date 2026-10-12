@@ -146,8 +146,8 @@ export const Topbar: React.FC<TopbarProps> = ({
 
           {/* Step Counter — visible only while running */}
           {runState === 'running' && stepCount > 0 && (
-            <span className="step-counter" title="Jumlah langkah eksekusi">
-              {stepCount} / 25
+            <span className="step-counter" title="Jumlah langkah eksekusi (tanpa batas / bebas)">
+              Langkah {stepCount}
             </span>
           )}
         </div>

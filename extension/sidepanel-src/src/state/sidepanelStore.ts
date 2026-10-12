@@ -1115,7 +1115,7 @@ export class SidepanelStateManager {
         browserSession,
         llmClient,
         interactionManager,
-        maxSteps: 25,
+        maxSteps: Infinity,
         mode: this.state.selectedMode,
         onEvent: (evt: any) => this.handleIncomingAgentEvent(evt),
       });

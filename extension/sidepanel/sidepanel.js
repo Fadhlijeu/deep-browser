@@ -1043,7 +1043,7 @@ async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
     browserSession,
     llmClient,
     interactionManager,
-    maxSteps: 25,
+    maxSteps: Infinity,
     mode: state.selectedMode,
     onEvent: handleAgentEvent,
   });

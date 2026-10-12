@@ -54,7 +54,7 @@
         };
       }
 
-      this.maxSteps = options.maxSteps || 25;
+      this.maxSteps = options.maxSteps !== undefined && options.maxSteps !== null ? options.maxSteps : Infinity;
       this.mode = options.mode || 'agent_decide';
       this.onEvent = options.onEvent || (() => {});
       this.onApprovalRequired = options.onApprovalRequired || null;
