@@ -25,7 +25,7 @@
     "service_worker": "background/service_worker.js"
   },
   "side_panel": {
-    "default_path": "sidepanel/index.html"
+    "default_path": "sidepanel/dist/index.html"
   },
   "action": {
     "default_title": "Open Deep-Browser AI Copilot"

@@ -64,6 +64,7 @@ app/.vite/
 out/
 app/out/
 dist/
+!extension/sidepanel/dist/
 app/dist/
 .webpack/
 *.log

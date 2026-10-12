@@ -9,6 +9,8 @@
     "typecheck": "npm --prefix app run typecheck",
     "test": "npm --prefix app test",
     "package": "npm --prefix app run package",
-    "make": "npm --prefix app run make"
+    "make": "npm --prefix app run make",
+    "build:extension": "npm --prefix extension run build",
+    "dev:extension": "npm --prefix extension run dev"
   }
 }
