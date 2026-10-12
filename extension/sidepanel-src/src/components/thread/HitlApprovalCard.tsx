@@ -19,6 +19,8 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editFeedback, setEditFeedback] = useState<string>('');
 
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -28,22 +30,32 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
   }, [type]);
 
   const handleApprove = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, true);
   };
 
   const handleReject = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, 'reject');
   };
 
   const handleEditSubmit = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, { action: 'edit', feedback: editFeedback || 'User requested change.' });
   };
 
   const handleChoice = (optionId: string) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, optionId);
   };
 
   const handleMultiChoiceSubmit = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, selectedChoices);
   };
 
@@ -54,15 +66,20 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
   };
 
   const handleTextSubmit = () => {
-    if (!textVal.trim()) return;
+    if (!textVal.trim() || isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, textVal.trim());
   };
 
   const handleNumberSubmit = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, numVal);
   };
 
   const handleWaitingResume = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     sidepanelStore.respondHitl(hitl.id, true);
   };
 

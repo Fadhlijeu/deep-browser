@@ -42,6 +42,17 @@
       }
 
       this.interactionManager = options.interactionManager || (global.InteractionManager ? new global.InteractionManager({ taskId: this.taskId }) : null);
+      if (this.interactionManager) {
+        this.interactionManager.onInteractionEvent = (evt) => {
+          if (evt.interaction) {
+            this._emit(evt.event || 'USER_INPUT_REQUIRED', evt.interaction.question || '', {
+              interaction: evt.interaction,
+              interaction_id: evt.interaction.interaction_id,
+              ...evt.interaction,
+            });
+          }
+        };
+      }
 
       this.maxSteps = options.maxSteps || 25;
       this.mode = options.mode || 'agent_decide';
@@ -79,6 +90,9 @@
     stop() {
       this.isStopped = true;
       this.isRunning = false;
+      if (this.browserSession) {
+        try { this.browserSession.clearInPageHighlights(); } catch (_) {}
+      }
       if (this.interactionManager) {
         try {
           this.interactionManager.cancelInteraction(null, 'Agent dihentikan oleh pengguna');
@@ -196,12 +210,6 @@
 
           // ─── 4. INTERACTIVE WIDGETS & HITL APPROVAL ─────────────────────────────
           if (actionName === 'ask_user') {
-            this._emit('USER_INPUT_REQUIRED', `User input required: ${params.question || ''}`, {
-              type: params.type,
-              question: params.question,
-              options: params.options,
-            });
-
             const ixRes = await this.interactionManager.requestInteraction({
               type: params.type || 'choice',
               question: params.question,
@@ -363,8 +371,8 @@
             };
           }
 
-          // DOM stabilization pause
-          await this.browserSession.wait(0.6);
+          // Pacing pause between actions to prevent LLM TPM exhaustion and allow user to observe actions
+          await this.browserSession.wait(1.5);
         }
 
         if (this.isStopped) {
@@ -382,6 +390,11 @@
         throw err;
       } finally {
         this.isRunning = false;
+        if (this.browserSession) {
+          try {
+            await this.browserSession.clearInPageHighlights();
+          } catch (_) {}
+        }
       }
     }
 
@@ -449,6 +462,10 @@
           break;
         case 'extract':
           this._emit('EXTRACTION', `Mengekstrak data untuk: "${params.query}"`, params);
+          break;
+        case 'highlight_text':
+        case 'highlight':
+          this._emit('HIGHLIGHT_TEXT', `Menyorot teks: "${params.text || ''}"`, params);
           break;
         case 'switch_tab':
           this._emit('TAB_SWITCHED', `Beralih ke tab ${params.tab_id}`, params);

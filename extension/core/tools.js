@@ -270,6 +270,19 @@
           },
         },
         {
+          name: 'highlight_text',
+          description: 'Highlight specific text or paragraph on the active webpage, smoothly center the viewport on it, and apply a high-contrast Color Theory background that stays anchored while scrolling.',
+          parameters: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'The text snippet, phrase, or paragraph to locate and highlight on the webpage.' },
+              color: { type: 'string', enum: ['amber', 'emerald', 'cyan', 'violet', 'rose'], description: 'Color theme from Color Theory (default: "amber").' },
+              scroll_to: { type: 'boolean', description: 'Whether to scroll the webpage so the highlighted text is centered in view (default: true).' },
+            },
+            required: ['text'],
+          },
+        },
+        {
           name: 'ask_user',
           description: 'Ask the user a structured question or request confirmation using an interactive widget (choice, confirm, text_input).',
           parameters: {
@@ -327,15 +340,12 @@
             const index = this._requireIndex(params);
             const text = String(params.text ?? '');
             const clear = params.clear !== false;
-            const res = await this.browserSession.typeText(index, text, clear);
+            const pressEnter = !!(params.press_enter || params.submit || params.enter);
+            const res = await this.browserSession.typeText(index, text, clear, pressEnter);
             if (res.error) return { success: false, error: res.error };
-            if (params.press_enter || params.submit || params.enter) {
-              await this.browserSession.wait(0.15);
-              await this.browserSession.sendKeys('Enter');
-            }
             return {
               success: true,
-              message: `Typed "${text}" into element [${index}]${params.press_enter || params.submit ? ' and pressed Enter' : ''}`,
+              message: `Typed "${text}" into element [${index}]${pressEnter ? ' and pressed Enter' : ''}`,
               data: res,
             };
           }
@@ -490,6 +500,19 @@
             return {
               success: true,
               message: `Parallel research completed across ${res.totalTopics} topics.`,
+              data: res,
+            };
+          }
+
+          case 'highlight_text':
+          case 'highlight': {
+            const text = String(params.text || params.query || '');
+            if (!text) return { success: false, error: 'highlight_text requires a "text" parameter.' };
+            const res = await this.browserSession.highlightText(text, params.color || 'amber', params.scroll_to !== false);
+            if (res.error) return { success: false, error: res.error };
+            return {
+              success: true,
+              message: `Highlighted text "${text.slice(0, 40)}" on page`,
               data: res,
             };
           }

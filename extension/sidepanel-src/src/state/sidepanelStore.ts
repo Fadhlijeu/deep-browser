@@ -812,6 +812,21 @@ export class SidepanelStateManager {
       this.extTransportWs = null;
       this.currentTransportTaskId = null;
     }
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]: any[]) => {
+        if (tab?.id) {
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              const overlay = document.getElementById('__deep_browser_highlight_overlay__');
+              if (overlay) overlay.remove();
+              const cursor = document.getElementById('__deep_browser_agent_cursor__');
+              if (cursor) cursor.remove();
+            },
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
     this.state.runState = 'idle';
     this.notify();
   }
@@ -819,11 +834,13 @@ export class SidepanelStateManager {
   public respondHitl(interactionId: string, value: unknown) {
     if (this.activeAgent && (this.activeAgent as any).interactionManager) {
       const im = (this.activeAgent as any).interactionManager;
+      const activeIx = im.activeInteraction;
+      const targetId = (activeIx && activeIx.status === 'pending') ? activeIx.interaction_id : interactionId;
       try {
         if (typeof im.submitResponse === 'function') {
-          im.submitResponse(interactionId, value);
+          im.submitResponse(targetId, value);
         } else if (typeof im.resolveInteraction === 'function') {
-          im.resolveInteraction(interactionId, value);
+          im.resolveInteraction(targetId, value);
         }
       } catch (err) {
         console.warn('[DeepBrowser] Error submitting interaction response:', err);
@@ -839,7 +856,7 @@ export class SidepanelStateManager {
     // Clear HITL prompt on message
     const active = this.getActiveSession();
     const lastMsg = active.messages[active.messages.length - 1];
-    if (lastMsg && lastMsg.hitl && lastMsg.hitl.id === interactionId) {
+    if (lastMsg && lastMsg.hitl) {
       lastMsg.hitl = undefined;
     }
     this.state.runState = 'running';

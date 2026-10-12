@@ -194,19 +194,7 @@ export const Topbar: React.FC<TopbarProps> = ({
         <button className="icon-btn" onClick={onNewSession} title="Sesi Baru">
           <span className="material-symbols-outlined">add</span>
         </button>
-        <button className="icon-btn" onClick={onOpenApikeys} title="Kelola Kunci API">
-          <span className="material-symbols-outlined">key</span>
-        </button>
-        <button
-          className={`icon-btn ${indexLabelingEnabled ? 'active' : ''}`}
-          onClick={onToggleIndexLabeling}
-          title={indexLabelingEnabled ? 'Matikan Label Indeks Elemen ([1], [2])' : 'Aktifkan Label Indeks Elemen ([1], [2])'}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px', color: indexLabelingEnabled ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-            {indexLabelingEnabled ? 'label' : 'label_off'}
-          </span>
-        </button>
-        <button className="icon-btn" onClick={onOpenSettings} title="Pengaturan & Mode">
+        <button className="icon-btn" onClick={onOpenSettings} title="Pengaturan & Mode Engine">
           <span className="material-symbols-outlined">tune</span>
         </button>
       </div>

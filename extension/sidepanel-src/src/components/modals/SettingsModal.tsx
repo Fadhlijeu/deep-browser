@@ -203,6 +203,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, selectedMo
               })}
             </div>
           </div>
+
+          {/* API Keys Configuration Shortcut */}
+          <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              Kunci API & Provider Model
+            </div>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                onClose();
+                sidepanelStore.setModal('apikeys', true);
+              }}
+              style={{ width: '100%', justifyContent: 'center', fontSize: '11px', gap: '6px' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--accent)' }}>key</span>
+              <span>Kelola Kunci API (Gemini, OpenAI, Claude, DeepSeek, Ollama)</span>
+            </button>
+          </div>
         </div>
 
         <div className="modal-footer">

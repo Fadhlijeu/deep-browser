@@ -244,7 +244,7 @@
     }
 
     /**
-     * Clears all in-page visual badges on the active tab.
+     * Clears all in-page visual badges and agent cursors on the active tab.
      */
     async clearInPageHighlights() {
       if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) return;
@@ -254,6 +254,8 @@
           func: () => {
             const overlay = document.getElementById('__deep_browser_highlight_overlay__');
             if (overlay) overlay.remove();
+            const cursor = document.getElementById('__deep_browser_agent_cursor__');
+            if (cursor) cursor.remove();
           },
         });
       } catch {}
@@ -311,7 +313,7 @@
     }
 
     /**
-     * Renders animated agent cursor moving to element coordinates with ripple click effect.
+     * Renders animated agent cursor moving smoothly to element coordinates with realistic human press and ripple.
      */
     async animateCursorToElement(index) {
       if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) return;
@@ -320,13 +322,19 @@
       try {
         await chrome.scripting.executeScript({
           target: { tabId: this.tabId },
-          func: (targetXpath) => {
+          func: (targetXpath, targetIndex) => {
             let el = null;
             if (targetXpath) {
               const res = document.evaluate(targetXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
               el = res.singleNodeValue;
             }
+            if (!el) {
+              el = document.querySelector(`[data-deep-browser-idx="${targetIndex}"]`);
+            }
             if (!el) return;
+
+            // 1. Scroll element into view first so coordinates are accurate
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             const rect = el.getBoundingClientRect();
             const targetX = rect.left + rect.width / 2;
@@ -339,17 +347,18 @@
               cursor.id = '__deep_browser_agent_cursor__';
               cursor.style.cssText = `
                 position: fixed;
-                width: 20px;
-                height: 20px;
+                width: 24px;
+                height: 24px;
                 pointer-events: none;
                 z-index: 2147483647;
-                transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
+                transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.25s ease;
                 top: 0;
                 left: 0;
                 opacity: 0;
+                transform-origin: top left;
               `;
               cursor.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#8b5cf6" stroke="#ffffff" stroke-width="1.5">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#8b5cf6" stroke="#ffffff" stroke-width="1.8">
                   <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
                 </svg>
               `;
@@ -357,29 +366,35 @@
             }
 
             cursor.style.opacity = '1';
-            cursor.style.transform = `translate(${targetX}px, ${targetY}px)`;
+            cursor.style.transform = `translate(${targetX}px, ${targetY}px) scale(1)`;
 
-            // Click ripple
+            // Click ripple and press animation
             setTimeout(() => {
+              cursor.style.transform = `translate(${targetX}px, ${targetY}px) scale(0.85)`;
+              setTimeout(() => {
+                cursor.style.transform = `translate(${targetX}px, ${targetY}px) scale(1)`;
+              }, 120);
+
               const ripple = document.createElement('div');
               ripple.style.cssText = `
                 position: fixed;
-                left: ${targetX - 15}px;
-                top: ${targetY - 15}px;
-                width: 30px;
-                height: 30px;
+                left: ${targetX - 16}px;
+                top: ${targetY - 16}px;
+                width: 32px;
+                height: 32px;
                 border-radius: 50%;
                 border: 2px solid #8b5cf6;
                 pointer-events: none;
                 z-index: 2147483646;
-                animation: dbRipple 0.4s ease-out forwards;
+                animation: dbRipple 0.38s ease-out forwards;
               `;
               document.body.appendChild(ripple);
               setTimeout(() => ripple.remove(), 400);
-            }, 250);
+            }, 300);
           },
-          args: [xpath],
+          args: [xpath, index],
         });
+        await this.wait(0.38);
       } catch {}
     }
 
@@ -472,44 +487,220 @@
     }
 
     /**
-     * Inputs text into an element, with support for clearing existing text.
+     * Inputs text into an element with humanized typing animation & keystroke simulation.
      */
-    async typeText(index, text, clear = true) {
+    async typeText(index, text, clear = true, pressEnter = false) {
       await this.animateCursorToElement(index);
+      await this.wait(0.15);
+
       const xpath = this.cachedSelectorMap[index]?.xpath;
 
-      const result = await this._executeInTab((targetIndex, targetXpath, val, shouldClear) => {
-        let el = null;
-        if (targetXpath) {
-          const res = document.evaluate(targetXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          el = res.singleNodeValue;
-        }
-        if (!el) {
-          el = document.querySelector(`[data-deep-browser-idx="${targetIndex}"]`);
-        }
-        if (!el) {
-          return { success: false, error: `Input elemen [${targetIndex}] tidak ditemukan.` };
-        }
+      const result = await this._executeInTab((targetIndex, targetXpath, val, shouldClear, shouldEnter) => {
+        return new Promise((resolve) => {
+          let el = null;
+          if (targetXpath) {
+            const res = document.evaluate(targetXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            el = res.singleNodeValue;
+          }
+          if (!el) {
+            el = document.querySelector(`[data-deep-browser-idx="${targetIndex}"]`);
+          }
+          if (!el) {
+            return resolve({ success: false, error: `Input elemen [${targetIndex}] tidak ditemukan.` });
+          }
 
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.focus();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
 
-        if (shouldClear) {
-          el.value = '';
-        }
-        el.value = (el.value || '') + val;
+          if (shouldClear) {
+            el.value = '';
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
 
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+          const chars = String(val).split('');
+          let charIdx = 0;
 
-        return {
-          success: true,
-          currentValue: el.value,
-          verified: el.value.includes(val),
-        };
-      }, [index, xpath, text, clear]);
+          // Realistic human typing cadence (15ms - 35ms per character)
+          function typeNext() {
+            if (charIdx < chars.length) {
+              const char = chars[charIdx++];
+              el.value = (el.value || '') + char;
+              el.dispatchEvent(new InputEvent('input', { bubbles: true, data: char }));
+              el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+              el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
 
+              const delay = Math.floor(Math.random() * 20) + 15;
+              setTimeout(typeNext, delay);
+            } else {
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+
+              if (shouldEnter) {
+                el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+
+                if (el.form) {
+                  try {
+                    if (typeof el.form.requestSubmit === 'function') {
+                      el.form.requestSubmit();
+                    } else {
+                      el.form.submit();
+                    }
+                  } catch (_) {}
+                }
+              }
+
+              resolve({
+                success: true,
+                currentValue: el.value,
+                verified: el.value.includes(val),
+              });
+            }
+          }
+
+          typeNext();
+        });
+      }, [index, xpath, text, clear, pressEnter]);
+
+      await this.waitForDOMStability(500);
       return result;
+    }
+
+    /**
+     * Highlights text on the page using semantic Color Theory and smooth scroll anchoring.
+     * @param {string} text - Text to locate and highlight
+     * @param {string} [colorTheme='amber'] - 'amber' | 'emerald' | 'cyan' | 'violet' | 'rose'
+     * @param {boolean} [scrollTo=true] - Whether to center the highlighted text in viewport
+     */
+    async highlightText(text, colorTheme = 'amber', scrollTo = true) {
+      if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) {
+        return { success: false, error: 'Extension tab context not available' };
+      }
+
+      try {
+        const result = await chrome.scripting.executeScript({
+          target: { tabId: this.tabId },
+          func: (searchText, colorChoice, shouldScroll) => {
+            if (!searchText || !searchText.trim()) return { success: false, error: 'Teks kosong.' };
+
+            // Color Theory Palette: high contrast against text, semi-translucent background, subtle glow
+            const colorMap = {
+              amber: { bg: 'rgba(245, 158, 11, 0.35)', border: '#f59e0b', shadow: '0 0 10px rgba(245, 158, 11, 0.45)' },
+              emerald: { bg: 'rgba(16, 185, 129, 0.35)', border: '#10b981', shadow: '0 0 10px rgba(16, 185, 129, 0.45)' },
+              cyan: { bg: 'rgba(6, 182, 212, 0.35)', border: '#06b6d4', shadow: '0 0 10px rgba(6, 182, 212, 0.45)' },
+              violet: { bg: 'rgba(168, 85, 247, 0.35)', border: '#a855f7', shadow: '0 0 10px rgba(168, 85, 247, 0.45)' },
+              rose: { bg: 'rgba(244, 63, 94, 0.35)', border: '#f43f5e', shadow: '0 0 10px rgba(244, 63, 94, 0.45)' },
+            };
+            const theme = colorMap[colorChoice] || colorMap.amber;
+
+            // Remove previous text highlights
+            document.querySelectorAll('.__deep_browser_text_highlight__').forEach((el) => {
+              const parent = el.parentNode;
+              if (parent) {
+                parent.replaceChild(document.createTextNode(el.textContent), el);
+                parent.normalize();
+              }
+            });
+
+            // Find text using TreeWalker
+            const walker = document.createTreeWalker(
+              document.body,
+              NodeFilter.SHOW_TEXT,
+              {
+                acceptNode: (node) => {
+                  const tag = node.parentElement ? node.parentElement.tagName.toLowerCase() : '';
+                  if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'textarea') {
+                    return NodeFilter.FILTER_REJECT;
+                  }
+                  return NodeFilter.FILTER_ACCEPT;
+                }
+              }
+            );
+
+            const searchLower = searchText.trim().toLowerCase();
+            let matchedNode = null;
+            let matchStart = -1;
+
+            while (walker.nextNode()) {
+              const node = walker.currentNode;
+              const idx = node.nodeValue.toLowerCase().indexOf(searchLower);
+              if (idx !== -1) {
+                matchedNode = node;
+                matchStart = idx;
+                break;
+              }
+            }
+
+            // Fallback: match first 4 words if exact string is slightly modified by whitespace
+            if (!matchedNode) {
+              const words = searchLower.split(/\s+/).slice(0, 4).join(' ');
+              const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+              while (walker2.nextNode()) {
+                const node = walker2.currentNode;
+                const idx = node.nodeValue.toLowerCase().indexOf(words);
+                if (idx !== -1) {
+                  matchedNode = node;
+                  matchStart = idx;
+                  break;
+                }
+              }
+            }
+
+            if (!matchedNode) {
+              return { success: false, error: `Teks "${searchText.slice(0, 40)}..." tidak ditemukan di halaman aktif.` };
+            }
+
+            // Wrap matched text in <mark>
+            const parent = matchedNode.parentNode;
+            const fullText = matchedNode.nodeValue;
+            const matchEnd = matchStart + Math.min(searchText.length, fullText.length - matchStart);
+
+            const beforeText = fullText.substring(0, matchStart);
+            const targetText = fullText.substring(matchStart, matchEnd);
+            const afterText = fullText.substring(matchEnd);
+
+            const mark = document.createElement('mark');
+            mark.className = '__deep_browser_text_highlight__';
+            mark.textContent = targetText;
+            mark.style.cssText = `
+              background: ${theme.bg};
+              color: inherit;
+              border: 1px solid ${theme.border};
+              border-radius: 4px;
+              padding: 2px 4px;
+              margin: 0 1px;
+              box-shadow: ${theme.shadow};
+              transition: all 0.3s ease;
+              display: inline;
+              line-height: inherit;
+            `;
+
+            const fragment = document.createDocumentFragment();
+            if (beforeText) fragment.appendChild(document.createTextNode(beforeText));
+            fragment.appendChild(mark);
+            if (afterText) fragment.appendChild(document.createTextNode(afterText));
+
+            parent.replaceChild(fragment, matchedNode);
+
+            if (shouldScroll) {
+              mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            return {
+              success: true,
+              matchedText: targetText,
+              tagName: parent.tagName,
+              color: colorChoice,
+            };
+          },
+          args: [text, colorTheme, scrollTo],
+        });
+
+        const res = result[0]?.result;
+        return res || { success: true, message: `Text highlighted: ${text.slice(0, 30)}...` };
+      } catch (err) {
+        return { success: false, error: err.message || String(err) };
+      }
     }
 
     /**
