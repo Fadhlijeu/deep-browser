@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { sidepanelStore, SidepanelState } from './state/sidepanelStore';
-import { Topbar } from './components/topbar/Topbar';
+import { SlimHeader } from './components/sidebar/SlimHeader';
+import { Sidebar } from './components/sidebar/Sidebar';
 import { AssistantThread } from './components/thread/AssistantThread';
 import { LogsView } from './components/logs/LogsView';
-import { SessionDrawer } from './components/modals/SessionDrawer';
 import { ApiKeysModal } from './components/modals/ApiKeysModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { ModelsModal } from './components/modals/ModelsModal';
 
 export const App: React.FC = () => {
   const [state, setState] = useState<SidepanelState>(sidepanelStore.getState());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = sidepanelStore.subscribe(() => {
@@ -23,27 +24,16 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      {/* Topbar */}
-      <Topbar
-        runState={state.runState}
-        connectionStatus={state.connectionStatus}
-        isDetached={state.isDetached}
-        stepCount={state.stepCount}
-        currentView={state.currentView}
-        logsCount={activeSession.events.length}
-        onSetView={(v) => sidepanelStore.setView(v)}
-        onOpenDrawer={() => sidepanelStore.setModal('drawer', true)}
+      {/* Sleek B&W Slim Header with Hamburger Menu */}
+      <SlimHeader
+        onOpenSidebar={() => setSidebarOpen(true)}
         onNewSession={() => sidepanelStore.createNewSession()}
-        onOpenApikeys={() => sidepanelStore.setModal('apikeys', true)}
-        onOpenSettings={() => sidepanelStore.setModal('settings', true)}
-        onReconnect={() => sidepanelStore.reconnect()}
-        onToggleOnline={() => sidepanelStore.toggleOnline()}
-        onToggleDetach={() => sidepanelStore.toggleDetach()}
-        indexLabelingEnabled={state.indexLabelingEnabled}
-        onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
+        connectionStatus={state.connectionStatus}
+        runState={state.runState}
+        modelName={currentModel.name}
       />
 
-      {/* Main View Area */}
+      {/* Main View Area: Chat or Logs */}
       <main className="main-content">
         {state.currentView === 'chat' ? (
           <AssistantThread
@@ -68,18 +58,33 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Drawers & Modals */}
-      <SessionDrawer
-        isOpen={state.modals.drawer}
+      {/* Top Layer Overlay Sidebar (Slides in on top of chat when opened) */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        runState={state.runState}
+        connectionStatus={state.connectionStatus}
+        isDetached={state.isDetached}
+        stepCount={state.stepCount}
+        currentView={state.currentView}
+        logsCount={activeSession.events.length}
         sessions={state.sessions}
         activeSessionId={state.activeSessionId}
-        onClose={() => sidepanelStore.setModal('drawer', false)}
+        onSetView={(v) => sidepanelStore.setView(v)}
+        onNewSession={() => sidepanelStore.createNewSession()}
         onSwitchSession={(id) => sidepanelStore.switchSession(id)}
         onDeleteSession={(id) => sidepanelStore.deleteSession(id)}
-        onCreateNewSession={() => sidepanelStore.createNewSession()}
         onClearActiveSession={() => sidepanelStore.clearActiveSession()}
+        onOpenApikeys={() => sidepanelStore.setModal('apikeys', true)}
+        onOpenSettings={() => sidepanelStore.setModal('settings', true)}
+        onReconnect={() => sidepanelStore.reconnect()}
+        onToggleOnline={() => sidepanelStore.toggleOnline()}
+        onToggleDetach={() => sidepanelStore.toggleDetach()}
+        indexLabelingEnabled={state.indexLabelingEnabled}
+        onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
       />
 
+      {/* Modals for Settings, API Keys, and Models */}
       <ApiKeysModal
         isOpen={state.modals.apikeys}
         apiKeys={state.apiKeys}
