@@ -89,6 +89,12 @@ export const App: React.FC = () => {
       <SettingsModal
         isOpen={state.modals.settings}
         selectedMode={state.selectedMode}
+        models={state.models}
+        selectedModelId={state.selectedModelId}
+        apiKeys={state.apiKeys}
+        sidepanelEnabled={state.sidepanelEnabled}
+        indexLabelingEnabled={state.indexLabelingEnabled}
+        isDetached={state.isDetached}
         onClose={() => sidepanelStore.setModal('settings', false)}
       />
 

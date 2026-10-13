@@ -600,6 +600,40 @@ export class SidepanelStateManager {
     this.notify();
   }
 
+  public addModel(model: ModelDef) {
+    this.state.models.push(model);
+    this.saveStorage();
+    this.notify();
+  }
+
+  public updateModel(id: string, updates: Partial<ModelDef>) {
+    const idx = this.state.models.findIndex((m) => m.id === id);
+    if (idx !== -1) {
+      this.state.models[idx] = { ...this.state.models[idx], ...updates };
+      this.saveStorage();
+      this.notify();
+    }
+  }
+
+  public deleteModel(id: string) {
+    if (this.state.models.length <= 1) return;
+    this.state.models = this.state.models.filter((m) => m.id !== id);
+    if (this.state.selectedModelId === id) {
+      this.state.selectedModelId = this.state.models[0].id;
+    }
+    this.saveStorage();
+    this.notify();
+  }
+
+  public resetModelsToDefault() {
+    this.state.models = [...DEFAULT_MODELS];
+    if (!this.state.models.some((m) => m.id === this.state.selectedModelId)) {
+      this.state.selectedModelId = this.state.models[0].id;
+    }
+    this.saveStorage();
+    this.notify();
+  }
+
   public setSelectedMode(mode: ExecutionMode) {
     this.state.selectedMode = mode;
     this.saveStorage();

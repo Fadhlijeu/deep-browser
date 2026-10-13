@@ -1,230 +1,581 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { 
+  Bot, 
+  Shield, 
+  Key, 
+  Laptop, 
+  Plus, 
+  Pencil, 
+  Trash2, 
+  Check, 
+  ChevronLeft, 
+  ChevronRight, 
+  X, 
+  RotateCcw, 
+  ExternalLink,
+  Save,
+  Eye
+} from 'lucide-react';
 import { MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
-import { ExecutionMode } from '../../types';
+import { ExecutionMode, ModelDef } from '../../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   selectedMode: ExecutionMode;
+  models: ModelDef[];
+  selectedModelId: string;
+  apiKeys: Record<string, string>;
+  sidepanelEnabled: boolean;
+  indexLabelingEnabled: boolean;
+  isDetached: boolean;
   onClose: () => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, selectedMode, onClose }) => {
+type SettingsTab = 'models' | 'policy' | 'apikeys' | 'browser';
+
+const TABS: { id: SettingsTab; label: string; icon: any }[] = [
+  { id: 'models', label: 'Model AI', icon: Bot },
+  { id: 'policy', label: 'Otonomi', icon: Shield },
+  { id: 'apikeys', label: 'Kunci API', icon: Key },
+  { id: 'browser', label: 'Browser & CDP', icon: Laptop },
+];
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  selectedMode,
+  models,
+  selectedModelId,
+  apiKeys,
+  sidepanelEnabled,
+  indexLabelingEnabled,
+  isDetached,
+  onClose,
+}) => {
+  const [currentTab, setCurrentTab] = useState<SettingsTab>('models');
+
+  // Model CRUD pagination & form state
+  const MODELS_PER_PAGE = 3;
+  const [modelPage, setModelPage] = useState(1);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formProvider, setFormProvider] = useState<ModelDef['provider']>('gemini');
+  const [formModelId, setFormModelId] = useState('');
+  const [formBaseUrl, setFormBaseUrl] = useState('');
+
+  // API Keys state
+  const [keysInput, setKeysInput] = useState<Record<string, string>>({ ...apiKeys });
+  const [keysSaved, setKeysSaved] = useState(false);
+
   if (!isOpen) return null;
+
+  // Pagination calculation for models
+  const totalModelPages = Math.max(1, Math.ceil(models.length / MODELS_PER_PAGE));
+  const activeModelPage = Math.min(modelPage, totalModelPages);
+  const displayedModels = models.slice((activeModelPage - 1) * MODELS_PER_PAGE, activeModelPage * MODELS_PER_PAGE);
+
+  // Tab navigation helpers
+  const currentTabIndex = TABS.findIndex((t) => t.id === currentTab);
+  const handlePrevTab = () => {
+    if (currentTabIndex > 0) setCurrentTab(TABS[currentTabIndex - 1].id);
+  };
+  const handleNextTab = () => {
+    if (currentTabIndex < TABS.length - 1) setCurrentTab(TABS[currentTabIndex + 1].id);
+  };
+
+  // Model CRUD handlers
+  const handleOpenAdd = () => {
+    setEditingModelId(null);
+    setFormName('');
+    setFormProvider('custom_openai');
+    setFormModelId('');
+    setFormBaseUrl('https://api.deepseek.com/v1');
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEdit = (m: ModelDef) => {
+    setEditingModelId(m.id);
+    setFormName(m.name);
+    setFormProvider(m.provider);
+    setFormModelId(m.modelId);
+    setFormBaseUrl(m.baseUrl || '');
+    setIsFormOpen(true);
+  };
+
+  const handleSaveModel = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim() || !formModelId.trim()) return;
+
+    if (editingModelId) {
+      // Update
+      sidepanelStore.updateModel(editingModelId, {
+        name: formName.trim(),
+        provider: formProvider,
+        modelId: formModelId.trim(),
+        baseUrl: formBaseUrl.trim() || undefined,
+      });
+    } else {
+      // Create
+      const newId = `${formProvider}/${formModelId.trim()}`;
+      const newModel: ModelDef = {
+        id: newId,
+        name: formName.trim(),
+        icon: formProvider === 'ollama' ? 'terminal' : 'bolt',
+        provider: formProvider,
+        modelId: formModelId.trim(),
+        baseUrl: formBaseUrl.trim() || undefined,
+      };
+      sidepanelStore.addModel(newModel);
+      // Navigate to last page to see new model
+      setModelPage(Math.ceil((models.length + 1) / MODELS_PER_PAGE));
+    }
+    setIsFormOpen(false);
+    setEditingModelId(null);
+  };
+
+  const handleDeleteModel = (id: string) => {
+    if (models.length <= 1) return;
+    sidepanelStore.deleteModel(id);
+    if (displayedModels.length === 1 && activeModelPage > 1) {
+      setModelPage(activeModelPage - 1);
+    }
+  };
+
+  const handleSaveKeys = () => {
+    Object.entries(keysInput).forEach(([p, val]) => {
+      sidepanelStore.setApiKey(p, val);
+    });
+    setKeysSaved(true);
+    setTimeout(() => setKeysSaved(false), 1500);
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-card settings-modal-card" onClick={(e) => e.stopPropagation()}>
+        {/* Modal Top Header */}
         <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--status-warning)' }}>tune</span>
-            <span className="modal-title">Mode & Kebijakan Eksekusi</span>
+          <div className="modal-header-brand">
+            <span className="settings-header-title">Pengaturan Deep Browser</span>
+            <span className="settings-page-badge">
+              Hal {currentTabIndex + 1} / {TABS.length}
+            </span>
           </div>
-          <button className="icon-btn" onClick={onClose}>
-            <span className="material-symbols-outlined">close</span>
+          <button className="icon-btn" onClick={onClose} title="Tutup">
+            <X size={15} />
           </button>
         </div>
 
-        <div className="modal-body">
-          <p style={{ fontSize: '11.5px', color: 'var(--text-tertiary)' }}>
-            Tentukan tingkat otonomi agen ketika mengeksekusi navigasi dan interaksi formulir di browser.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {MODE_OPTIONS.map((m) => {
-              const isSelected = selectedMode === m.id;
-              return (
-                <div
-                  key={m.id}
-                  onClick={() => sidepanelStore.setSelectedMode(m.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '8px',
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: isSelected ? 'var(--bg-surface-elevated)' : 'var(--bg-base)',
-                    border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                    cursor: 'pointer',
-                    transition: 'all 0.12s ease',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px', color: isSelected ? 'var(--accent)' : 'var(--text-tertiary)', marginTop: '2px' }}>
-                    {m.icon}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '12px', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                      {m.name}
-                    </div>
-                    <div style={{ fontSize: '10.5px', color: 'var(--text-tertiary)', marginTop: '2px', lineHeight: 1.35 }}>
-                      {m.desc}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Sidepanel Integration Settings */}
-          <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-              Sidepanel & Jendela Melayang
-            </div>
-
-            <div
-              onClick={() => sidepanelStore.toggleSidepanelEnabled()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 10px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-base)',
-                border: '1px solid var(--border-subtle)',
-                cursor: 'pointer',
-                marginBottom: '6px',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 500, fontSize: '11.5px', color: 'var(--text-primary)' }}>
-                  Integrasi Sidepanel Otomatis
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                  {sidepanelStore.getState().sidepanelEnabled ? 'Aktif (Membuka di side panel browser)' : 'Nonaktif (Hanya gunakan jendela melayang/popup)'}
-                </div>
-              </div>
-              <span className="material-symbols-outlined" style={{ fontSize: '22px', color: sidepanelStore.getState().sidepanelEnabled ? 'var(--status-success)' : 'var(--text-tertiary)' }}>
-                {sidepanelStore.getState().sidepanelEnabled ? 'toggle_on' : 'toggle_off'}
-              </span>
-            </div>
-
-            <div
-              onClick={() => sidepanelStore.toggleIndexLabeling()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 10px',
-                borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg-base)',
-                border: '1px solid var(--border-subtle)',
-                cursor: 'pointer',
-                marginBottom: '6px',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 500, fontSize: '11.5px', color: 'var(--text-primary)' }}>
-                  Visual Index Labeling ([1], [2], ...)
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                  {sidepanelStore.getState().indexLabelingEnabled ? 'Aktif (Tampilkan badge angka interaktif di atas halaman web)' : 'Nonaktif (Sembunyikan seluruh badge visual di web)'}
-                </div>
-              </div>
-              <span className="material-symbols-outlined" style={{ fontSize: '22px', color: sidepanelStore.getState().indexLabelingEnabled ? 'var(--status-success)' : 'var(--text-tertiary)' }}>
-                {sidepanelStore.getState().indexLabelingEnabled ? 'toggle_on' : 'toggle_off'}
-              </span>
-            </div>
-
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                sidepanelStore.toggleDetach();
-                onClose();
-              }}
-              style={{ width: '100%', justifyContent: 'center', fontSize: '11px' }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                {sidepanelStore.getState().isDetached ? 'dock_to_right' : 'open_in_new'}
-              </span>
-              <span>{sidepanelStore.getState().isDetached ? 'Pasang Kembali ke Sidepanel' : 'Lepas ke Jendela Melayang (Pop Out)'}</span>
-            </button>
-          </div>
-
-          {/* Connection Mode Settings */}
-          <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-              Mode Koneksi Engine
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {[
-                {
-                  id: 'auto',
-                  name: 'Auto-On (Rekomendasi)',
-                  desc: 'Otomatis Online di browser. Hubungkan ke backend Python jika aktif.',
-                  icon: 'auto_awesome',
-                },
-                {
-                  id: 'standalone',
-                  name: 'In-Browser Mandiri (Tanpa Backend)',
-                  desc: 'Selalu Online langsung di browser tanpa perlu menjalankan terminal python.',
-                  icon: 'bolt',
-                },
-                {
-                  id: 'daemon',
-                  name: 'Backend Daemon Saja (ws://127.0.0.1:7788)',
-                  desc: 'Hanya terhubung ke server backend lokal deep-browser serve.',
-                  icon: 'lan',
-                },
-              ].map((opt) => {
-                const isSelected = sidepanelStore.getState().connectionMode === opt.id;
-                return (
-                  <div
-                    key={opt.id}
-                    onClick={() => sidepanelStore.setConnectionMode(opt.id as any)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '8px',
-                      padding: '8px 10px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: isSelected ? 'var(--bg-surface-elevated)' : 'var(--bg-base)',
-                      border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.12s ease',
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: '16px', color: isSelected ? 'var(--accent)' : 'var(--text-tertiary)', marginTop: '2px' }}
-                    >
-                      {opt.icon}
-                    </span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '11.5px', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                        {opt.name}
-                      </div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '1px', lineHeight: 1.3 }}>
-                        {opt.desc}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* API Keys Configuration Shortcut */}
-          <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-              Kunci API & Provider Model
-            </div>
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                onClose();
-                sidepanelStore.setModal('apikeys', true);
-              }}
-              style={{ width: '100%', justifyContent: 'center', fontSize: '11px', gap: '6px' }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--accent)' }}>key</span>
-              <span>Kelola Kunci API (Gemini, OpenAI, Claude, DeepSeek, Ollama)</span>
-            </button>
-          </div>
+        {/* Tab Navigation Strip (Pagination Bar At Top) */}
+        <div className="settings-tab-bar" role="tablist">
+          {TABS.map((tab, idx) => {
+            const Icon = tab.icon;
+            const isActive = currentTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={isActive}
+                className={`settings-tab-btn ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentTab(tab.id);
+                  setIsFormOpen(false);
+                }}
+              >
+                <Icon size={12} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="modal-footer">
-          <button className="btn-primary" onClick={onClose}>Tutup</button>
+        {/* Modal Paginated Body */}
+        <div className="modal-body settings-modal-body">
+          {/* ══════════════════════════════════════════════════════════
+              PAGE 1: MODEL AI (CRUD & PAGINASI MODEL)
+             ══════════════════════════════════════════════════════════ */}
+          {currentTab === 'models' && (
+            <div className="settings-page-content">
+              {/* Header with Title & Action Controls */}
+              <div className="settings-section-head">
+                <div>
+                  <h3 className="settings-section-title">Kelola Model AI</h3>
+                  <p className="settings-section-desc">
+                    Tambah, edit konfigurasi endpoint, atau hapus model. Total {models.length} model terdaftar.
+                  </p>
+                </div>
+                {!isFormOpen && (
+                  <div className="settings-head-actions">
+                    <button 
+                      className="settings-action-pill-btn" 
+                      onClick={() => sidepanelStore.resetModelsToDefault()}
+                      title="Kembalikan daftar model ke default"
+                    >
+                      <RotateCcw size={11} />
+                      <span>Reset</span>
+                    </button>
+                    <button 
+                      className="settings-primary-add-btn" 
+                      onClick={handleOpenAdd}
+                      title="Tambah Model AI Baru"
+                    >
+                      <Plus size={12} />
+                      <span>Tambah Model</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Inline Add / Edit Form Drawer */}
+              {isFormOpen ? (
+                <form className="model-crud-form" onSubmit={handleSaveModel}>
+                  <div className="model-form-header">
+                    <span>{editingModelId ? 'Edit Konfigurasi Model' : 'Tambah Model Baru'}</span>
+                    <button 
+                      type="button" 
+                      className="icon-btn" 
+                      onClick={() => setIsFormOpen(false)}
+                      title="Batal"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  <div className="model-form-grid">
+                    <div className="form-field">
+                      <label className="form-label">Nama Tampilan</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Contoh: DeepSeek R1 (Custom)"
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-field">
+                      <label className="form-label">Provider AI</label>
+                      <select
+                        className="form-select"
+                        value={formProvider}
+                        onChange={(e) => setFormProvider(e.target.value as any)}
+                      >
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic Claude</option>
+                        <option value="custom_openai">Custom OpenAI-Compatible (DeepSeek, vLLM)</option>
+                        <option value="ollama">Ollama (Local Endpoint)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-field">
+                      <label className="form-label">Model ID / Slug</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Contoh: deepseek-chat, llama3:8b"
+                        value={formModelId}
+                        onChange={(e) => setFormModelId(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-field">
+                      <label className="form-label">Base URL (Opsional / Custom)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Contoh: https://api.deepseek.com/v1 atau http://localhost:11434"
+                        value={formBaseUrl}
+                        onChange={(e) => setFormBaseUrl(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="model-form-actions">
+                    <button 
+                      type="button" 
+                      className="btn-cancel" 
+                      onClick={() => setIsFormOpen(false)}
+                    >
+                      Batal
+                    </button>
+                    <button type="submit" className="btn-save">
+                      <Save size={12} />
+                      <span>{editingModelId ? 'Simpan Perubahan' : 'Buat Model'}</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* Paginated Models List */
+                <div className="model-crud-list-wrapper">
+                  <div className="model-crud-list">
+                    {displayedModels.map((m) => {
+                      const isSelected = selectedModelId === m.id;
+                      return (
+                        <div 
+                          key={m.id} 
+                          className={`model-card-item ${isSelected ? 'active' : ''}`}
+                        >
+                          <div className="model-card-info">
+                            <div className="model-card-top-row">
+                              <span className="model-card-name truncate">{m.name}</span>
+                              <span className="model-provider-badge">{m.provider}</span>
+                              {isSelected && (
+                                <span className="model-active-tag">
+                                  <Check size={10} />
+                                  <span>Aktif</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="model-card-sub-row truncate">
+                              <span className="model-slug-code">{m.modelId}</span>
+                              {m.baseUrl && (
+                                <span className="model-url-preview truncate" title={m.baseUrl}>
+                                  • {m.baseUrl}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="model-card-actions">
+                            {!isSelected && (
+                              <button
+                                className="model-btn-select"
+                                onClick={() => sidepanelStore.setSelectedModel(m.id)}
+                                title="Pilih sebagai model aktif"
+                              >
+                                Pilih
+                              </button>
+                            )}
+                            <button
+                              className="model-btn-icon"
+                              onClick={() => handleOpenEdit(m)}
+                              title="Edit Model"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            <button
+                              className="model-btn-icon delete"
+                              onClick={() => handleDeleteModel(m.id)}
+                              disabled={models.length <= 1}
+                              title={models.length <= 1 ? 'Minimal harus ada 1 model' : 'Hapus Model'}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Model List Pagination Controls */}
+                  <div className="model-pagination-strip">
+                    <button
+                      className="pagination-btn"
+                      disabled={activeModelPage <= 1}
+                      onClick={() => setModelPage(activeModelPage - 1)}
+                    >
+                      <ChevronLeft size={12} />
+                      <span>Sebelumnya</span>
+                    </button>
+                    <span className="pagination-info">
+                      Halaman {activeModelPage} dari {totalModelPages}
+                    </span>
+                    <button
+                      className="pagination-btn"
+                      disabled={activeModelPage >= totalModelPages}
+                      onClick={() => setModelPage(activeModelPage + 1)}
+                    >
+                      <span>Selanjutnya</span>
+                      <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
+              PAGE 2: OTONOMI & KEBIJAKAN EKSEKUSI
+             ══════════════════════════════════════════════════════════ */}
+          {currentTab === 'policy' && (
+            <div className="settings-page-content">
+              <div className="settings-section-head">
+                <div>
+                  <h3 className="settings-section-title">Mode & Otonomi Eksekusi</h3>
+                  <p className="settings-section-desc">
+                    Tentukan bagaimana agen meminta konfirmasi saat berinteraksi di browser.
+                  </p>
+                </div>
+              </div>
+
+              <div className="settings-mode-list">
+                {MODE_OPTIONS.map((m) => {
+                  const isSelected = selectedMode === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => sidepanelStore.setSelectedMode(m.id)}
+                      className={`settings-mode-card ${isSelected ? 'active' : ''}`}
+                    >
+                      <div className="mode-card-radio">
+                        <span className={`radio-dot ${isSelected ? 'checked' : ''}`} />
+                      </div>
+                      <div className="mode-card-text">
+                        <div className="mode-card-name">{m.name}</div>
+                        <div className="mode-card-desc">{m.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="settings-info-box">
+                <span className="info-box-label">Batas Waktu Safe Mode:</span>
+                <span className="info-box-val">60 Detik (Auto-Pause jika tanpa interaksi)</span>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
+              PAGE 3: KUNCI API
+             ══════════════════════════════════════════════════════════ */}
+          {currentTab === 'apikeys' && (
+            <div className="settings-page-content">
+              <div className="settings-section-head">
+                <div>
+                  <h3 className="settings-section-title">Kunci API Provider</h3>
+                  <p className="settings-section-desc">
+                    Tersimpan lokal di Chrome Storage. Tidak pernah dikirim ke pihak luar.
+                  </p>
+                </div>
+                {keysSaved && (
+                  <span className="keys-saved-notice">
+                    <Check size={11} />
+                    <span>Tersimpan!</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="settings-keys-list">
+                {[
+                  { id: 'gemini', label: 'Google Gemini API Key', placeholder: 'AIzaSy...' },
+                  { id: 'openai', label: 'OpenAI API Key', placeholder: 'sk-proj-...' },
+                  { id: 'anthropic', label: 'Anthropic Claude API Key', placeholder: 'sk-ant-api03-...' },
+                  { id: 'custom_openai', label: 'Custom / DeepSeek Key', placeholder: 'sk-...' },
+                  { id: 'ollama', label: 'Ollama Host Endpoint', placeholder: 'http://localhost:11434' },
+                ].map((item) => (
+                  <div key={item.id} className="form-field">
+                    <label className="form-label">{item.label}</label>
+                    <input
+                      type={item.id === 'ollama' ? 'text' : 'password'}
+                      className="form-input"
+                      placeholder={item.placeholder}
+                      value={keysInput[item.id] || ''}
+                      onChange={(e) => setKeysInput({ ...keysInput, [item.id]: e.target.value })}
+                    />
+                  </div>
+                ))}
+
+                <button 
+                  type="button" 
+                  className="settings-save-keys-btn" 
+                  onClick={handleSaveKeys}
+                >
+                  <Save size={12} />
+                  <span>Simpan Kunci API</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
+              PAGE 4: BROWSER & CDP ENGINE
+             ══════════════════════════════════════════════════════════ */}
+          {currentTab === 'browser' && (
+            <div className="settings-page-content">
+              <div className="settings-section-head">
+                <div>
+                  <h3 className="settings-section-title">Integrasi Browser & CDP</h3>
+                  <p className="settings-section-desc">
+                    Pengaturan koneksi Chrome DevTools Protocol dan interface panel.
+                  </p>
+                </div>
+              </div>
+
+              <div className="settings-toggle-group">
+                {/* Sidepanel auto-integration */}
+                <div 
+                  className="settings-toggle-card"
+                  onClick={() => sidepanelStore.toggleSidepanelEnabled()}
+                >
+                  <div className="toggle-card-text">
+                    <div className="toggle-card-title">Sidepanel Otomatis</div>
+                    <div className="toggle-card-desc">Buka ekstensi di sidebar browser kanan secara langsung.</div>
+                  </div>
+                  <div className={`custom-switch ${sidepanelEnabled ? 'on' : 'off'}`}>
+                    <span className="switch-handle" />
+                  </div>
+                </div>
+
+                {/* Index element labeling */}
+                <div 
+                  className="settings-toggle-card"
+                  onClick={() => sidepanelStore.toggleIndexLabeling()}
+                >
+                  <div className="toggle-card-text">
+                    <div className="toggle-card-title">Label Indeks Elemen Visual</div>
+                    <div className="toggle-card-desc">Tampilkan overlay nomor elemen di tab aktif saat agen membaca DOM.</div>
+                  </div>
+                  <div className={`custom-switch ${indexLabelingEnabled ? 'on' : 'off'}`}>
+                    <span className="switch-handle" />
+                  </div>
+                </div>
+
+                {/* Pop-out detached window */}
+                <div 
+                  className="settings-toggle-card"
+                  onClick={() => sidepanelStore.toggleDetach()}
+                >
+                  <div className="toggle-card-text">
+                    <div className="toggle-card-title">Jendela Melayang (Pop-Out)</div>
+                    <div className="toggle-card-desc">{isDetached ? 'Kaitkan kembali ke sidepanel' : 'Buka Deep Browser dalam jendela popup terpisah.'}</div>
+                  </div>
+                  <ExternalLink size={14} className="text-zinc-400" />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Pagination Footer (Prev, Page X/Y, Next, Close) */}
+        <div className="modal-footer settings-pagination-footer">
+          <div className="settings-page-stepper">
+            <button
+              className="pagination-btn"
+              disabled={currentTabIndex <= 0}
+              onClick={handlePrevTab}
+            >
+              <ChevronLeft size={12} />
+              <span>Sebelumnya</span>
+            </button>
+            <span className="settings-stepper-label">
+              {TABS[currentTabIndex].label} ({currentTabIndex + 1} dari {TABS.length})
+            </span>
+            <button
+              className="pagination-btn"
+              disabled={currentTabIndex >= TABS.length - 1}
+              onClick={handleNextTab}
+            >
+              <span>Selanjutnya</span>
+              <ChevronRight size={12} />
+            </button>
+          </div>
+
+          <button className="btn-secondary" onClick={onClose}>
+            Selesai
+          </button>
         </div>
       </div>
     </div>
