@@ -271,6 +271,31 @@
           },
         },
         {
+          name: 'highlight_sections',
+          description: 'Highlight MULTIPLE sections, topics, or concepts (e.g. ["definisi", "fungsi", "manfaat"]) across the entire webpage in a SINGLE ACTION. Automatically finds and highlights the substantive explanatory narrative paragraphs for each topic simultaneously using distinct Color Theory palettes and topic badges. ALWAYS use this when asked to highlight multiple concepts or topics.',
+          parameters: {
+            type: 'object',
+            properties: {
+              sections: {
+                type: 'array',
+                description: 'List of topics or sections to highlight. Can be an array of topic strings (e.g. ["definisi", "fungsi", "manfaat"]) or objects with { topic, text, color }.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    topic: { type: 'string', description: 'Name of the concept/topic (e.g. "definisi", "fungsi", "manfaat", "kesimpulan").' },
+                    text: { type: 'string', description: 'Optional specific substantive sentence or paragraph text to locate.' },
+                    color: { type: 'string', enum: ['amber', 'emerald', 'cyan', 'violet', 'rose'], description: 'Semantic color theme.' },
+                  },
+                  required: ['topic'],
+                },
+              },
+              scroll_to_first: { type: 'boolean', description: 'Whether to scroll to the first highlighted section (default: true).' },
+              clear_previous: { type: 'boolean', description: 'Whether to clear previous highlights first (default: false).' },
+            },
+            required: ['sections'],
+          },
+        },
+        {
           name: 'highlight_text',
           description: 'Highlight substantive text, sentences, or explanatory paragraphs on the active webpage. NEVER highlight just a bare 2-word heading or title label (e.g. never just "Manfaat AI"); always highlight the actual narrative explanatory sentence or paragraph explaining the concept.',
           parameters: {
@@ -510,8 +535,29 @@
             };
           }
 
+          case 'highlight_sections': {
+            let sections = params.sections || params.topics || params.items || [];
+            if (typeof sections === 'string') {
+              sections = [sections];
+            }
+            if (!Array.isArray(sections) || sections.length === 0) {
+              return { success: false, error: 'highlight_sections requires a "sections" or "topics" array.' };
+            }
+            const res = await this.browserSession.highlightSections(sections, params.scroll_to_first !== false, Boolean(params.clear_previous));
+            if (res.error) return { success: false, error: res.error };
+            const topicNames = (res.sections || []).filter(s => s.status === 'highlighted').map(s => s.topic).join(', ') || 'topik';
+            return {
+              success: true,
+              message: `Highlighted ${res.highlightedCount || 0} sections (${topicNames}) with substantive content on page`,
+              data: res,
+            };
+          }
+
           case 'highlight_text':
           case 'highlight': {
+            if (params.sections || params.topics || Array.isArray(params.text)) {
+              return this.execute('highlight_sections', params);
+            }
             const text = String(params.text || params.query || '');
             if (!text) return { success: false, error: 'highlight_text requires a "text" parameter.' };
             const res = await this.browserSession.highlightText(text, params.color || 'amber', params.scroll_to !== false, Boolean(params.clear_previous));

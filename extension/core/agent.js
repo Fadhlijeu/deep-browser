@@ -465,6 +465,11 @@
         case 'scroll_page': {
           return { verified: true, message: 'Posisi scroll telah diperbarui.' };
         }
+        case 'highlight_sections':
+        case 'highlight_text':
+        case 'highlight': {
+          return { verified: true, message: 'Bagian konten dan narasi penjelasan berhasil disorot dengan Color Theory.' };
+        }
         case 'done': {
           return { verified: true, message: 'Tugas ditandai selesai.' };
         }
@@ -506,6 +511,13 @@
         case 'extract':
           this._emit('EXTRACTION', `Mengekstrak data untuk: "${params.query}"`, params);
           break;
+        case 'highlight_sections': {
+          const list = params.sections || params.topics || params.items || [];
+          const count = list.length;
+          const names = list.map(s => typeof s === 'string' ? s : (s.topic || s.name || s.title)).filter(Boolean).join(', ');
+          this._emit('HIGHLIGHT_SECTIONS', `Menyorot ${count} bagian konten (${names || 'multi-topik'}) dengan penjelasan substantif`, params);
+          break;
+        }
         case 'highlight_text':
         case 'highlight':
           this._emit('HIGHLIGHT_TEXT', `Menyorot teks: "${params.text || ''}"`, params);

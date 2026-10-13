@@ -239,6 +239,8 @@
         elements: domResult.elements || [],
         selectorMap: domResult.selectorMap || {},
         simplifiedTreeText: domResult.simplifiedTreeText || '',
+        visibleTextBlocks: domResult.visibleTextBlocks || [],
+        pageOutline: domResult.pageOutline || [],
         pageInfo: domResult.pageInfo || { viewport_width: 1280, viewport_height: 800, pixels_above: 0, pixels_below: 0 },
         screenshot,
         tabId: tab.id,
@@ -602,6 +604,9 @@
      * @param {boolean} [scrollTo=true] - Whether to center the highlighted text in viewport
      */
     async highlightText(text, colorTheme = 'amber', scrollTo = true, clearPrevious = false) {
+      if (Array.isArray(text) || (text && typeof text === 'object')) {
+        return this.highlightSections(text, scrollTo, clearPrevious);
+      }
       if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) {
         return { success: false, error: 'Extension tab context not available' };
       }
@@ -685,9 +690,9 @@
                 .__deep_browser_narrative_context__ {
                   display: block !important;
                   margin-top: 6px !important;
-                  padding: 4px 8px !important;
-                  border-radius: 4px !important;
-                  line-height: 1.5 !important;
+                  padding: 6px 10px !important;
+                  border-radius: 6px !important;
+                  line-height: 1.6 !important;
                 }
                 .__deep_browser_highlight_label__ {
                   display: inline-block;
@@ -695,9 +700,9 @@
                   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
                   font-weight: 700;
                   text-transform: uppercase;
-                  letter-spacing: 0.5px;
-                  padding: 1px 5px;
-                  margin-right: 5px;
+                  letter-spacing: 0.6px;
+                  padding: 2px 6px;
+                  margin-right: 6px;
                   border-radius: 3px;
                   background: var(--db-hl-border);
                   color: #ffffff;
@@ -877,22 +882,48 @@
 
             parent.replaceChild(fragment, matchedNode);
 
-            // Smart Narrative Expansion:
-            // If the matched node is inside a heading (h1-h6), bold label, or is a very short title (< 40 chars),
-            // automatically also highlight the following explanatory narrative paragraph!
+            // Enclosing List Item (li) Expansion:
+            // If the matched text is part of a bullet point or numbered list item,
+            // illuminate the enclosing <li> so the full explanation is highlighted!
+            const enclosingLi = parent.closest ? parent.closest('li') : null;
+            if (enclosingLi && !enclosingLi.classList.contains('__deep_browser_narrative_context__')) {
+              enclosingLi.classList.add('__deep_browser_text_highlight__', '__deep_browser_narrative_context__');
+              enclosingLi.style.setProperty('--db-hl-bg-start', theme.bgStart);
+              enclosingLi.style.setProperty('--db-hl-bg-mid', theme.bgMid);
+              enclosingLi.style.setProperty('--db-hl-bg-end', theme.bgEnd);
+              enclosingLi.style.setProperty('--db-hl-border', theme.border);
+              enclosingLi.style.setProperty('--db-hl-shadow', theme.shadow);
+            }
+
+            // Smart Narrative Expansion for Headings & Short Labels:
+            // If the matched node is inside a heading (h1-h6) or bold label,
+            // climb any CMS wrapper divs and automatically highlight the following narrative paragraph!
             const parentTag = (parent.tagName || '').toLowerCase();
             const isHeading = /^h[1-6]$/i.test(parentTag) || (parent.closest && parent.closest('h1, h2, h3, h4, h5, h6') != null) || parentTag === 'strong' || parentTag === 'b';
             const isShortTitle = targetText.trim().length < 40;
 
             if (isHeading || isShortTitle) {
               const headingContainer = (parent.closest && parent.closest('h1, h2, h3, h4, h5, h6')) || parent;
-              let sibling = headingContainer.nextElementSibling;
+              let currentContainer = headingContainer;
+              while (currentContainer && currentContainer !== document.body && !currentContainer.nextElementSibling) {
+                currentContainer = currentContainer.parentElement;
+              }
+              let sibling = currentContainer ? currentContainer.nextElementSibling : null;
               let hops = 0;
-              while (sibling && hops < 4) {
+              while (sibling && hops < 6) {
                 const sTag = (sibling.tagName || '').toLowerCase();
+                if (/^h[1-4]$/i.test(sTag)) break; // stop at next major heading
+
+                let narrativeTarget = null;
                 if (['p', 'div', 'ul', 'ol', 'blockquote'].includes(sTag)) {
-                  const sText = (sibling.innerText || sibling.textContent || '').trim();
-                  if (sText.length > 25 && !sibling.querySelector('.__deep_browser_text_highlight__')) {
+                  narrativeTarget = sibling;
+                } else if (sibling.querySelector) {
+                  narrativeTarget = sibling.querySelector('p, ul, ol, blockquote');
+                }
+
+                if (narrativeTarget) {
+                  const sText = (narrativeTarget.innerText || narrativeTarget.textContent || '').trim();
+                  if (sText.length > 25 && !narrativeTarget.querySelector('.__deep_browser_text_highlight__')) {
                     const narrativeMark = document.createElement('mark');
                     narrativeMark.className = '__deep_browser_text_highlight__ __deep_browser_narrative_context__';
                     narrativeMark.style.setProperty('--db-hl-bg-start', theme.bgStart);
@@ -901,10 +932,10 @@
                     narrativeMark.style.setProperty('--db-hl-border', theme.border);
                     narrativeMark.style.setProperty('--db-hl-shadow', theme.shadow);
 
-                    while (sibling.firstChild) {
-                      narrativeMark.appendChild(sibling.firstChild);
+                    while (narrativeTarget.firstChild) {
+                      narrativeMark.appendChild(narrativeTarget.firstChild);
                     }
-                    sibling.appendChild(narrativeMark);
+                    narrativeTarget.appendChild(narrativeMark);
                     break;
                   }
                 }
@@ -929,6 +960,370 @@
 
         const res = result[0]?.result;
         return res || { success: true, message: `Text highlighted: ${text.slice(0, 30)}...` };
+      } catch (err) {
+        return { success: false, error: err.message || String(err) };
+      }
+    }
+
+    /**
+     * Highlights multiple concepts, topics, or sections simultaneously in a single action
+     * with Color Theory differentiation, topic pill badges, and full substantive narrative context.
+     * @param {Array<Object|string>} sections - List of topics/sections
+     * @param {boolean} [scrollToFirst=true] - Whether to smooth scroll to the first highlighted section
+     * @param {boolean} [clearPrevious=false] - Whether to clear existing highlights first
+     */
+    async highlightSections(sections, scrollToFirst = true, clearPrevious = false) {
+      if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) {
+        return { success: false, error: 'Extension tab context not available' };
+      }
+
+      try {
+        const result = await chrome.scripting.executeScript({
+          target: { tabId: this.tabId },
+          func: (rawSections, shouldScroll, clearOld) => {
+            if (!rawSections || (Array.isArray(rawSections) && rawSections.length === 0)) {
+              return { success: false, error: 'Daftar section/topik kosong.' };
+            }
+
+            // Check for native PDF viewer
+            const isNativePdf = document.querySelector('embed[type="application/pdf"]') ||
+                                (window.location.protocol === 'file:' && window.location.pathname.toLowerCase().endsWith('.pdf')) ||
+                                document.contentType === 'application/pdf';
+            if (isNativePdf) {
+              return {
+                success: false,
+                isPdf: true,
+                error: 'Dokumen dibuka di Penampil PDF bawaan browser (PDFium plugin).'
+              };
+            }
+
+            // Ensure animated CSS keyframes & styles are injected
+            let styleEl = document.getElementById('__deep_browser_highlight_style__');
+            if (!styleEl) {
+              styleEl = document.createElement('style');
+              styleEl.id = '__deep_browser_highlight_style__';
+              styleEl.textContent = `
+                @keyframes __db_hl_sweep__ {
+                  0% { background-size: 0% 100%; border-color: transparent; }
+                  100% { background-size: 100% 100%; border-color: var(--db-hl-border); }
+                }
+                @keyframes __db_hl_glow__ {
+                  0% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+                  60% { box-shadow: var(--db-hl-shadow); }
+                  100% { box-shadow: var(--db-hl-shadow); }
+                }
+                @keyframes __db_hl_label_fade__ {
+                  0% { opacity: 0; transform: translateY(-2px) scale(0.92); }
+                  100% { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                .__deep_browser_text_highlight__ {
+                  position: relative;
+                  display: inline;
+                  color: inherit;
+                  font-weight: inherit;
+                  padding: 2px 6px;
+                  margin: 0 1px;
+                  border-radius: 4px;
+                  border: 1px solid var(--db-hl-border);
+                  border-left: 3px solid var(--db-hl-border);
+                  background-image: linear-gradient(90deg, var(--db-hl-bg-start) 0%, var(--db-hl-bg-mid) 70%, var(--db-hl-bg-end) 100%);
+                  background-repeat: no-repeat;
+                  background-position: left center;
+                  background-size: 0% 100%;
+                  box-decoration-break: clone;
+                  -webkit-box-decoration-break: clone;
+                  animation: __db_hl_sweep__ 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+                             __db_hl_glow__ 1.2s ease forwards;
+                  transition: all 0.3s ease;
+                  line-height: inherit;
+                }
+                .__deep_browser_narrative_context__ {
+                  display: block !important;
+                  margin-top: 6px !important;
+                  padding: 6px 10px !important;
+                  border-radius: 6px !important;
+                  line-height: 1.6 !important;
+                }
+                .__deep_browser_highlight_label__ {
+                  display: inline-block;
+                  font-size: 10px;
+                  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  letter-spacing: 0.6px;
+                  padding: 2px 6px;
+                  margin-right: 6px;
+                  border-radius: 3px;
+                  background: var(--db-hl-border);
+                  color: #ffffff;
+                  vertical-align: middle;
+                  animation: __db_hl_label_fade__ 0.4s ease forwards;
+                  pointer-events: none;
+                }
+              `;
+              document.head.appendChild(styleEl);
+            }
+
+            const colorMap = {
+              cyan: {
+                bgStart: 'rgba(34, 211, 238, 0.48)',
+                bgMid: 'rgba(6, 182, 212, 0.38)',
+                bgEnd: 'rgba(8, 145, 178, 0.28)',
+                border: '#06b6d4',
+                shadow: '0 0 12px rgba(6, 182, 212, 0.5)',
+              },
+              amber: {
+                bgStart: 'rgba(251, 191, 36, 0.48)',
+                bgMid: 'rgba(245, 158, 11, 0.38)',
+                bgEnd: 'rgba(217, 119, 6, 0.28)',
+                border: '#f59e0b',
+                shadow: '0 0 12px rgba(245, 158, 11, 0.5)',
+              },
+              emerald: {
+                bgStart: 'rgba(52, 211, 153, 0.48)',
+                bgMid: 'rgba(16, 185, 129, 0.38)',
+                bgEnd: 'rgba(5, 150, 105, 0.28)',
+                border: '#10b981',
+                shadow: '0 0 12px rgba(16, 185, 129, 0.5)',
+              },
+              violet: {
+                bgStart: 'rgba(192, 132, 252, 0.48)',
+                bgMid: 'rgba(168, 85, 247, 0.38)',
+                bgEnd: 'rgba(147, 51, 234, 0.28)',
+                border: '#a855f7',
+                shadow: '0 0 12px rgba(168, 85, 247, 0.5)',
+              },
+              rose: {
+                bgStart: 'rgba(251, 113, 133, 0.48)',
+                bgMid: 'rgba(244, 63, 94, 0.38)',
+                bgEnd: 'rgba(225, 29, 72, 0.28)',
+                border: '#f43f5e',
+                shadow: '0 0 12px rgba(244, 63, 94, 0.5)',
+              },
+            };
+
+            const defaultThemeList = ['cyan', 'amber', 'emerald', 'violet', 'rose'];
+
+            if (clearOld) {
+              document.querySelectorAll('.__deep_browser_text_highlight__').forEach((el) => {
+                const parent = el.parentNode;
+                if (parent) {
+                  parent.replaceChild(document.createTextNode(el.textContent), el);
+                  parent.normalize();
+                }
+              });
+            }
+
+            const sectionsList = (Array.isArray(rawSections) ? rawSections : [rawSections])
+              .map((item, idx) => {
+                if (typeof item === 'string') {
+                  return {
+                    topic: item,
+                    query: item,
+                    text: '',
+                    color: defaultThemeList[idx % defaultThemeList.length],
+                  };
+                }
+                return {
+                  topic: item.topic || item.name || item.title || `Topik ${idx + 1}`,
+                  query: item.query || item.topic || '',
+                  text: item.text || '',
+                  color: item.color || defaultThemeList[idx % defaultThemeList.length],
+                };
+              });
+
+            const normalize = (str) => {
+              return (str || '')
+                .toLowerCase()
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/[\u201c\u201d]/g, '"')
+                .replace(/[\u2013\u2014]/g, '-')
+                .replace(/\u00a0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            };
+
+            const topicAliases = {
+              definisi: ['definisi', 'pengertian', 'apa itu', 'merupakan', 'adalah', 'arti', 'definition', 'what is'],
+              pengertian: ['pengertian', 'definisi', 'apa itu', 'merupakan', 'adalah', 'arti'],
+              fungsi: ['fungsi', 'cara kerja', 'bagaimana cara kerja', 'sistem kerja', 'tujuan', 'peran', 'kegunaan', 'function', 'how it works'],
+              'cara kerja': ['cara kerja', 'bagaimana cara kerja', 'fungsi', 'mekanisme', 'sistem'],
+              manfaat: ['manfaat', 'keuntungan', 'kelebihan', 'faedah', 'kegunaan', 'benefit', 'advantages'],
+              kesimpulan: ['kesimpulan', 'ringkasan', 'penutup', 'rangkuman', 'conclusion', 'summary'],
+              contoh: ['contoh', 'penerapan', 'implementasi', 'aplikasi', 'kasus', 'example'],
+            };
+
+            function getKeywordsForTopic(topicStr, queryStr) {
+              const normTopic = normalize(topicStr);
+              const keywords = [normTopic];
+              if (queryStr) {
+                const normQ = normalize(queryStr);
+                if (!keywords.includes(normQ)) keywords.push(normQ);
+              }
+              for (const [key, aliases] of Object.entries(topicAliases)) {
+                if (normTopic.includes(key) || (queryStr && normalize(queryStr).includes(key))) {
+                  aliases.forEach(a => { if (!keywords.includes(a)) keywords.push(a); });
+                }
+              }
+              return keywords;
+            }
+
+            function applyHighlightToElement(el, theme, topicLabel, isNarrative = false) {
+              if (!el || el.querySelector('.__deep_browser_text_highlight__')) return null;
+
+              const mark = document.createElement('mark');
+              mark.className = '__deep_browser_text_highlight__' + (isNarrative ? ' __deep_browser_narrative_context__' : '');
+              mark.style.setProperty('--db-hl-bg-start', theme.bgStart);
+              mark.style.setProperty('--db-hl-bg-mid', theme.bgMid);
+              mark.style.setProperty('--db-hl-bg-end', theme.bgEnd);
+              mark.style.setProperty('--db-hl-border', theme.border);
+              mark.style.setProperty('--db-hl-shadow', theme.shadow);
+
+              if (topicLabel && !isNarrative) {
+                const badge = document.createElement('span');
+                badge.className = '__deep_browser_highlight_label__';
+                badge.textContent = topicLabel.toUpperCase();
+                mark.appendChild(badge);
+              }
+
+              while (el.firstChild) {
+                mark.appendChild(el.firstChild);
+              }
+              el.appendChild(mark);
+              return mark;
+            }
+
+            const results = [];
+            let firstMark = null;
+
+            for (const sec of sectionsList) {
+              const theme = colorMap[sec.color] || colorMap.amber;
+              const keywords = getKeywordsForTopic(sec.topic, sec.query);
+              let matchedMark = null;
+              let matchedTextSnippet = '';
+
+              // ── Strategy A: Explicit Text Match (if text is given and not empty) ──────
+              if (sec.text && sec.text.trim().length > 10) {
+                const searchNorm = normalize(sec.text);
+                const candidateBlocks = document.querySelectorAll('p, li, blockquote, h1, h2, h3, h4, [role="article"]');
+                for (const block of candidateBlocks) {
+                  const blockNorm = normalize(block.textContent);
+                  if (blockNorm.includes(searchNorm) || blockNorm.includes(searchNorm.slice(0, 30))) {
+                    const targetBlock = block.closest('li') || block;
+                    matchedMark = applyHighlightToElement(targetBlock, theme, sec.topic, false);
+                    matchedTextSnippet = (targetBlock.innerText || targetBlock.textContent || '').slice(0, 100);
+                    break;
+                  }
+                }
+              }
+
+              // ── Strategy B: Heading + Substantive Narrative Match ─────────────────────
+              if (!matchedMark) {
+                const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
+                for (const h of headings) {
+                  if (h.querySelector('.__deep_browser_text_highlight__')) continue;
+                  const hNorm = normalize(h.textContent);
+                  const matchesTopic = keywords.some(kw => hNorm.includes(kw));
+
+                  if (matchesTopic) {
+                    matchedMark = applyHighlightToElement(h, theme, sec.topic, false);
+                    matchedTextSnippet = (h.innerText || h.textContent || '').slice(0, 60);
+
+                    // Climb wrapper containers to find following substantive narrative blocks
+                    let currentContainer = h;
+                    while (currentContainer && currentContainer !== document.body && !currentContainer.nextElementSibling) {
+                      currentContainer = currentContainer.parentElement;
+                    }
+                    let sibling = currentContainer ? currentContainer.nextElementSibling : null;
+                    let narrativeHops = 0;
+                    let highlightedNarratives = 0;
+
+                    while (sibling && narrativeHops < 8 && highlightedNarratives < 2) {
+                      const sTag = (sibling.tagName || '').toLowerCase();
+                      if (/^h[1-4]$/i.test(sTag)) break; // stop at next major heading
+
+                      let narrativeTargets = [];
+                      if (['p', 'ul', 'ol', 'blockquote'].includes(sTag)) {
+                        narrativeTargets.push(sibling);
+                      } else if (sibling.querySelectorAll) {
+                        const innerP = sibling.querySelectorAll('p, ul, ol, blockquote');
+                        if (innerP.length > 0) {
+                          narrativeTargets.push(...Array.from(innerP));
+                        } else if (sibling.textContent.trim().length > 30) {
+                          narrativeTargets.push(sibling);
+                        }
+                      }
+
+                      for (const nTarget of narrativeTargets) {
+                        const nText = (nTarget.innerText || nTarget.textContent || '').trim();
+                        if (nText.length > 20 && !nTarget.querySelector('.__deep_browser_text_highlight__')) {
+                          applyHighlightToElement(nTarget, theme, null, true);
+                          highlightedNarratives++;
+                          if (!matchedTextSnippet || matchedTextSnippet.length < 30) {
+                            matchedTextSnippet += ': ' + nText.slice(0, 80);
+                          }
+                          if (highlightedNarratives >= 2) break;
+                        }
+                      }
+                      sibling = sibling.nextElementSibling;
+                      narrativeHops++;
+                    }
+                    break;
+                  }
+                }
+              }
+
+              // ── Strategy C: Paragraph / List Item Keyword Match ───────────────────────
+              if (!matchedMark) {
+                const textBlocks = document.querySelectorAll('p, li, blockquote');
+                for (const tb of textBlocks) {
+                  if (tb.querySelector('.__deep_browser_text_highlight__')) continue;
+                  const tbNorm = normalize(tb.textContent);
+                  const matchesTopic = keywords.some(kw => tbNorm.startsWith(kw) || tbNorm.includes(' ' + kw + ' ') || tbNorm.includes(kw + ':') || tbNorm.includes(kw + ' -'));
+                  if (matchesTopic && tbNorm.length > 25) {
+                    const targetBlock = tb.closest('li') || tb;
+                    matchedMark = applyHighlightToElement(targetBlock, theme, sec.topic, false);
+                    matchedTextSnippet = (targetBlock.innerText || targetBlock.textContent || '').slice(0, 100);
+                    break;
+                  }
+                }
+              }
+
+              if (matchedMark) {
+                if (!firstMark) firstMark = matchedMark;
+                results.push({
+                  topic: sec.topic,
+                  status: 'highlighted',
+                  color: sec.color,
+                  snippet: matchedTextSnippet,
+                });
+              } else {
+                results.push({
+                  topic: sec.topic,
+                  status: 'not_found',
+                  color: sec.color,
+                });
+              }
+            }
+
+            // Smooth scroll to the first matched section
+            if (shouldScroll && firstMark) {
+              firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            const highlightedCount = results.filter(r => r.status === 'highlighted').length;
+            return {
+              success: highlightedCount > 0,
+              totalSections: sectionsList.length,
+              highlightedCount,
+              sections: results,
+            };
+          },
+          args: [sections, scrollToFirst, clearPrevious],
+        });
+
+        const res = result[0]?.result;
+        return res || { success: true, message: `Sections highlighted successfully` };
       } catch (err) {
         return { success: false, error: err.message || String(err) };
       }

@@ -120,20 +120,29 @@ At each step, you receive:
    - A search result snippet or table preview is NOT the final answer.
    - Click into the target entity's detail page before extracting complete information or taking the final screenshot.
 
-6. **TEXT HIGHLIGHTING (\`highlight_text\`) — SUBSTANTIVE CONTENT & EXPLANATION ONLY**:
-   - When asked to highlight concepts, definitions ("definisi"), functions ("fungsi"), benefits ("manfaat"), conclusions ("kesimpulan"), or summaries:
+6. **TEXT & MULTI-TOPIC HIGHLIGHTING (`highlight_sections` / `highlight_text`) — ONE SINGLE ACTION**:
+   - When asked to highlight concepts, definitions ("definisi"), functions ("fungsi"), benefits ("manfaat"), conclusions ("kesimpulan"), or multiple topics:
+   - **CRITICAL DIRECTIVE: NEVER EXECUTE 1 LABEL PER STEP! NEVER SCROLL AND HIGHLIGHT ONE-BY-ONE ACROSS 8 SLOW STEPS!**
+   - **YOU MUST CALL `highlight_sections` IN A SINGLE ACTION TO HIGHLIGHT ALL REQUESTED CONCEPTS SIMULTANEOUSLY!**
+     Example: When user asks to highlight 'definisi, fungsi, dan manfaat':
+     ```json
+     {
+       "action_name": "highlight_sections",
+       "parameters": {
+         "sections": [
+           { "topic": "definisi", "color": "cyan" },
+           { "topic": "fungsi", "color": "amber" },
+           { "topic": "manfaat", "color": "emerald" }
+         ]
+       }
+     }
+     ```
+     The in-browser DOM engine scans the entire webpage, locates the matching substantive sections along with their full narrative paragraphs, attaches semantic topic pill badges (`[DEFINISI]`, `[FUNGSI]`, `[MANFAAT]`), and illuminates them all in 1 single step!
    - **CRITICAL ANTI-SLOP RULE: NEVER HIGHLIGHT JUST A BARE HEADING OR TITLE LABEL!**
-     - ❌ STRICTLY FORBIDDEN: NEVER pass \`text: "Manfaat AI"\` or \`text: "Definisi"\` or \`text: "Fungsi"\`. A 2-word heading title is NOT content and explains nothing!
-     - ✅ MANDATORY: You MUST locate and highlight the actual SUBSTANTIVE EXPLANATION, NARRATIVE PARAGRAPH, or INFORMATIVE SENTENCES explaining the concept directly under or near that heading.
-       Example: For "Manfaat AI", highlight: \`text: "AI memang teknologi yang sengaja dikembangkan untuk bisa melakukan berbagai jenis pekerjaan yang biasanya dikerjakan oleh manusia dan memiliki kemampuan untuk belajar hingga berpikir..."\`.
-   - Highlight the informative context and narrative sentences that explain what it is, how it works, what benefits it brings, and related context.
-   - You can highlight multiple distinct sentences/paragraphs across the page by calling \`highlight_text\` for each relevant topic.
-   - Use distinct Color Theory palettes to distinguish concepts:
-     - Definisi: \`"cyan"\` or \`"emerald"\`
-     - Fungsi / Cara Kerja: \`"amber"\`
-     - Manfaat / Keuntungan: \`"emerald"\` or \`"violet"\`
-     - Kesimpulan / Catatan: \`"rose"\`
-   - Once the substantive paragraphs are highlighted, call \`done\` with a comprehensive Markdown summary of the highlighted substantive text.
+     - ❌ STRICTLY FORBIDDEN: Never just highlight a 2-word title like "Manfaat AI".
+     - ✅ MANDATORY: The highlight MUST include the actual SUBSTANTIVE EXPLANATION, NARRATIVE PARAGRAPH, or INFORMATIVE SENTENCES explaining the concept.
+   - For a single specific sentence, use `highlight_text` with the substantive explanatory sentence.
+   - Once `highlight_sections` executes, call `done` summarizing each highlighted section in clean Markdown!
 
 7. **INTERACTIVE CLARIFICATION VIA WIDGETS (\`ask_user\`)**:
    - If a search query yields multiple ambiguous matches or requires user preference/confirmation:
@@ -223,6 +232,11 @@ YOU MUST IMMEDIATELY ACT ON THIS NEW USER INPUT. Do not repeat previous searches
         }
       }
 
+      const pageOutlineStr = (state.pageOutline && state.pageOutline.length > 0)
+        ? `### FULL PAGE ARTICLE OUTLINE & HEADINGS (Document Structure):
+${state.pageOutline.join(' | ')}\n\n`
+        : '';
+
       const visibleContentStr = (state.visibleTextBlocks && state.visibleTextBlocks.length > 0)
         ? `### VISIBLE ARTICLE & TEXT CONTENT (In Viewport):
 Use these real sentences/paragraphs when finding definitions, benefits ("manfaat"), functions, or quoting context:
@@ -236,7 +250,7 @@ ${state.visibleTextBlocks.map((b) => `* <${b.tag}>: "${b.text}"`).join('\n')}\n`
 * Pixels Above: ${state.pageInfo?.pixels_above || 0}px | Pixels Below: ${state.pageInfo?.pixels_below || 0}px (${state.pageInfo?.scroll_percentage ?? 0}% scrolled)
 * More Content Below Viewport: ${state.pageInfo?.has_more_content_below ? 'YES (More content exists below - scroll down if seeking exhaustive results)' : 'NO (At bottom of page)'}
 
-${visibleContentStr}### SIMPLIFIED INTERACTIVE DOM TREE
+${pageOutlineStr}${visibleContentStr}### SIMPLIFIED INTERACTIVE DOM TREE
 ${state.simplifiedTreeText ? state.simplifiedTreeText : '(No interactive elements detected on this view)'}
 `;
 

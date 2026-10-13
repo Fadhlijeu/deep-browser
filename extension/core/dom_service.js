@@ -205,6 +205,14 @@
               text: txt.length > 350 ? txt.slice(0, 350) + '...' : txt,
             });
           }
+        // Extract document-wide headings outline across the full page
+        const pageOutline = [];
+        const outlineHeadings = document.querySelectorAll('h1, h2, h3, h4');
+        outlineHeadings.forEach((h) => {
+          const hText = (h.innerText || h.textContent || '').replace(/\s+/g, ' ').trim();
+          if (hText.length >= 3 && hText.length <= 120 && pageOutline.length < 25) {
+            pageOutline.push(`[${h.tagName.toUpperCase()}] ${hText}`);
+          }
         });
 
         return {
@@ -212,6 +220,7 @@
           selectorMap,
           simplifiedTreeText: simplifiedTreeLines.join('\n'),
           visibleTextBlocks,
+          pageOutline,
           pageInfo: {
             viewport_width: viewportWidth,
             viewport_height: viewportHeight,

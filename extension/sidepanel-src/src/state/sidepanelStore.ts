@@ -1193,7 +1193,7 @@ export class SidepanelStateManager {
     }
 
     // 5. Handle tool steps with icons and verification
-    if ((type.includes('TOOL') || type.includes('NAV') || type.includes('CLICK') || type.includes('TYPE') || type.includes('SCROLL') || type.includes('EXTRACT') || type.includes('SEARCH') || type.includes('TAB') || type === 'ACTION_EXECUTED') && !type.includes('WAIT')) {
+    if ((type.includes('TOOL') || type.includes('NAV') || type.includes('CLICK') || type.includes('TYPE') || type.includes('SCROLL') || type.includes('EXTRACT') || type.includes('SEARCH') || type.includes('TAB') || type.includes('HIGHLIGHT') || type === 'ACTION_EXECUTED') && !type.includes('WAIT')) {
       this.state.stepCount++;
       const icon = type.includes('NAV') ? 'navigation'
         : type.includes('CLICK') ? 'touch_app'
@@ -1201,6 +1201,7 @@ export class SidepanelStateManager {
         : type.includes('SCROLL') ? 'swap_vert'
         : type.includes('EXTRACT') ? 'dataset'
         : type.includes('SEARCH') ? 'search'
+        : type.includes('HIGHLIGHT') ? 'border_color'
         : 'terminal';
 
       const step: ToolStep = {
