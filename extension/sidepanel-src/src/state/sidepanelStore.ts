@@ -226,17 +226,51 @@ export class SidepanelStateManager {
     this.saveStorage();
   }
 
+  public async getTargetTabs(): Promise<any[]> {
+    if (typeof chrome === 'undefined' || !chrome.tabs) return [];
+    try {
+      if (chrome.windows) {
+        const windows = await chrome.windows.getAll({ populate: true, windowTypes: ['normal'] });
+        const targetWin = windows.find((w: any) => w.focused) || windows[0];
+        if (targetWin && targetWin.tabs && targetWin.tabs.length > 0) {
+          const normalTabs = targetWin.tabs.filter((t: any) => !t.url?.startsWith('chrome-extension://'));
+          if (normalTabs.length > 0) return normalTabs;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const allTabs = await chrome.tabs.query({});
+      const normalTabs = allTabs.filter((t: any) => !t.url?.startsWith('chrome-extension://'));
+      if (normalTabs.length > 0) return normalTabs;
+    } catch (_) {}
+
+    try {
+      const curTabs = await chrome.tabs.query({ currentWindow: true });
+      return curTabs.filter((t: any) => !t.url?.startsWith('chrome-extension://'));
+    } catch (_) {}
+
+    return [];
+  }
+
+  public async getTargetActiveTab(): Promise<any> {
+    const tabs = await this.getTargetTabs();
+    const active = tabs.find((t: any) => t.active) || tabs[0];
+    return active || null;
+  }
+
   private async initTabsListener() {
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       const updateTabs = async () => {
         try {
-          const chromeTabs = await chrome.tabs.query({ currentWindow: true });
+          const chromeTabs = await this.getTargetTabs();
           this.state.tabs = chromeTabs.map((t: any) => ({
             id: t.id || 0,
             title: t.title || 'Tab Tanpa Judul',
             url: t.url || '',
             active: Boolean(t.active),
             favIconUrl: t.favIconUrl,
+            windowId: t.windowId,
           }));
           this.notify();
         } catch (_) {}
@@ -245,6 +279,7 @@ export class SidepanelStateManager {
       updateTabs();
       chrome.tabs.onActivated?.addListener(updateTabs);
       chrome.tabs.onUpdated?.addListener(updateTabs);
+      chrome.windows?.onFocusChanged?.addListener(updateTabs);
     }
   }
 
@@ -656,14 +691,16 @@ export class SidepanelStateManager {
     if (this.state.isDetached) {
       if (typeof chrome !== 'undefined' && chrome.sidePanel) {
         try {
-          const windows = await chrome.windows.getAll();
-          const normalWin = windows.find((w: any) => w.type === 'normal');
+          const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+          const normalWin = windows.find((w: any) => w.type === 'normal') || windows[0];
           if (normalWin?.id) {
             await chrome.sidePanel.open({ windowId: normalWin.id });
           }
         } catch (_) {}
       }
-      window.close();
+      try {
+        window.close();
+      } catch (_) {}
     } else {
       if (typeof chrome !== 'undefined' && chrome.windows) {
         chrome.windows.create({
@@ -672,6 +709,10 @@ export class SidepanelStateManager {
           width: 440,
           height: 720,
           focused: true,
+        }, () => {
+          try {
+            window.close();
+          } catch (_) {}
         });
       }
     }
@@ -925,11 +966,31 @@ export class SidepanelStateManager {
     const lastMsg = active.messages[active.messages.length - 1];
     if (!lastMsg || lastMsg.role !== 'assistant') return;
 
+    // Helper to push tool step to both steps array and activities timeline
+    const recordStep = (step: ToolStep) => {
+      if (!lastMsg.steps) lastMsg.steps = [];
+      lastMsg.steps.push(step);
+      if (!lastMsg.activities) lastMsg.activities = [];
+      lastMsg.activities.push({
+        id: step.id,
+        type: 'step',
+        step,
+        timestamp: step.timestamp,
+      });
+    };
+
     // 1. Genuine LLM Reasoning / Thinking emission
     if (type === 'REASONING') {
       const thinkingText = payload.thinking || evt.message || '';
       if (thinkingText) {
         lastMsg.thought = (lastMsg.thought ? lastMsg.thought + '\n\n' : '') + thinkingText;
+        if (!lastMsg.activities) lastMsg.activities = [];
+        lastMsg.activities.push({
+          id: 'act_th_' + Date.now() + Math.random().toString(36).slice(2, 5),
+          type: 'reasoning',
+          thought: thinkingText,
+          timestamp: Date.now(),
+        });
       }
     }
 
@@ -946,8 +1007,7 @@ export class SidepanelStateManager {
         result: { scroll_y: payload.scroll_y, pixels_below: payload.pixels_below },
         timestamp: Date.now(),
       };
-      if (!lastMsg.steps) lastMsg.steps = [];
-      lastMsg.steps.push(step);
+      recordStep(step);
     }
 
     // 3. Parallel Multi-Tab Research Started
@@ -963,8 +1023,7 @@ export class SidepanelStateManager {
         result: { status: 'in_progress' },
         timestamp: Date.now(),
       };
-      if (!lastMsg.steps) lastMsg.steps = [];
-      lastMsg.steps.push(step);
+      recordStep(step);
     }
 
     // 4. Handle tool steps with icons and verification
@@ -989,8 +1048,7 @@ export class SidepanelStateManager {
         verification: payload.verification,
         timestamp: Date.now(),
       };
-      if (!lastMsg.steps) lastMsg.steps = [];
-      lastMsg.steps.push(step);
+      recordStep(step);
     }
 
     // 5. Deterministic Verification Evidence
@@ -1017,21 +1075,24 @@ export class SidepanelStateManager {
 
     // 8. Visual Artifacts
     if (type === 'SCREENSHOT_CAPTURED' || type === 'SCREENSHOT') {
-      if (!lastMsg.steps) lastMsg.steps = [];
-      lastMsg.steps.push({
+      const screenshotData = payload.screenshotDataUrl || payload.screenshot || payload.dataUrl;
+      const step: ToolStep = {
         id: 'step_sc_' + Date.now(),
         name: 'Tangkapan Layar Viewport',
         icon: 'screenshot',
         status: 'succeeded',
         duration: '100ms',
-        result: { screenshot: payload.screenshot ? 'Captured' : 'OK' },
+        result: {
+          screenshot: screenshotData || 'Captured',
+          fileName: payload.fileName,
+        },
         timestamp: Date.now(),
-      });
+      };
+      recordStep(step);
     }
 
     if (type === 'PDF_SAVED') {
-      if (!lastMsg.steps) lastMsg.steps = [];
-      lastMsg.steps.push({
+      const step: ToolStep = {
         id: 'step_pdf_' + Date.now(),
         name: `Ekspor PDF: ${payload.fileName || 'document.pdf'}`,
         icon: 'picture_as_pdf',
@@ -1039,7 +1100,8 @@ export class SidepanelStateManager {
         duration: '350ms',
         result: payload,
         timestamp: Date.now(),
-      });
+      };
+      recordStep(step);
     }
 
     // 9. Completion
@@ -1105,12 +1167,9 @@ export class SidepanelStateManager {
     const provider = activeModel.provider;
     const apiKey = this.state.apiKeys[provider] || this.state.apiKeys.gemini || '';
 
-    let activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) activeTab = { id: tab.id || 0, url: tab.url || '', title: tab.title || '', active: true, windowId: tab.windowId };
-      } catch (_) {}
+    let activeTab = await this.getTargetActiveTab();
+    if (!activeTab) {
+      activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
     }
 
     try {

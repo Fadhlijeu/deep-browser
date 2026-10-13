@@ -300,6 +300,8 @@
                 });
                 return { success: true, result: finalAnswer, totalSteps: this.step };
               }
+            } else if (actionName === 'screenshot' || actionName === 'take_screenshot') {
+              this._emit('SCREENSHOT_CAPTURED', actionResult.message || 'Tangkapan layar berhasil diambil.', actionResult.data);
             } else if (actionName === 'extract_html_snippet') {
               this._emit('HTML_SNIPPET_CAPTURED', `Struktur informasi visual berhasil diekstrak.`, actionResult.data);
             }
@@ -431,6 +433,10 @@
           break;
         case 'switch_tab':
           this._emit('TAB_SWITCHED', `Beralih ke tab ${params.tab_id}`, params);
+          break;
+        case 'screenshot':
+        case 'take_screenshot':
+          this._emit('SCREENSHOT', 'Mengambil tangkapan layar viewport', params);
           break;
         case 'close_tab':
           this._emit('TAB_CLOSED', `Menutup tab ${params.tab_id || 'aktif'}`, params);

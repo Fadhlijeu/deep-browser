@@ -76,19 +76,36 @@
       if (this.tabId) {
         try {
           const tab = await chrome.tabs.get(this.tabId);
-          if (tab) return tab;
+          if (tab && !tab.url?.startsWith('chrome-extension://')) return tab;
         } catch {
           // Tab might have closed, fallback to querying active tab
         }
       }
 
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs && tabs.length > 0) {
-        const activeTab = tabs[0];
-        this.tabId = activeTab.id;
-        this.windowId = activeTab.windowId;
-        this.activeTabInfo = activeTab;
-        return activeTab;
+      if (chrome.windows) {
+        try {
+          const windows = await chrome.windows.getAll({ populate: true, windowTypes: ['normal'] });
+          const targetWin = windows.find((w) => w.focused) || windows[0];
+          if (targetWin && targetWin.tabs) {
+            const activeTab = targetWin.tabs.find((t) => t.active && !t.url?.startsWith('chrome-extension://'))
+              || targetWin.tabs.find((t) => !t.url?.startsWith('chrome-extension://'));
+            if (activeTab) {
+              this.tabId = activeTab.id;
+              this.windowId = activeTab.windowId;
+              this.activeTabInfo = activeTab;
+              return activeTab;
+            }
+          }
+        } catch (_) {}
+      }
+
+      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const validTab = (tabs || []).find((t) => !t.url?.startsWith('chrome-extension://'));
+      if (validTab) {
+        this.tabId = validTab.id;
+        this.windowId = validTab.windowId;
+        this.activeTabInfo = validTab;
+        return validTab;
       }
 
       throw new EdgeActiveTabNotFoundError();
@@ -101,7 +118,17 @@
       if (typeof chrome === 'undefined' || !chrome.tabs) {
         return [{ id: 101, url: 'https://www.google.com', title: 'Google', active: true }];
       }
-      return chrome.tabs.query({ currentWindow: true });
+      if (chrome.windows) {
+        try {
+          const windows = await chrome.windows.getAll({ populate: true, windowTypes: ['normal'] });
+          const targetWin = windows.find((w) => w.focused) || windows[0];
+          if (targetWin && targetWin.tabs) {
+            return targetWin.tabs.filter((t) => !t.url?.startsWith('chrome-extension://'));
+          }
+        } catch (_) {}
+      }
+      const tabs = await chrome.tabs.query({});
+      return tabs.filter((t) => !t.url?.startsWith('chrome-extension://'));
     }
 
     /**
@@ -583,6 +610,18 @@
           func: (searchText, colorChoice, shouldScroll) => {
             if (!searchText || !searchText.trim()) return { success: false, error: 'Teks kosong.' };
 
+            // Check for native PDF viewer (Edge / Chrome PDFium embed plugin)
+            const isNativePdf = document.querySelector('embed[type="application/pdf"]') ||
+                                (window.location.protocol === 'file:' && window.location.pathname.toLowerCase().endsWith('.pdf')) ||
+                                document.contentType === 'application/pdf';
+            if (isNativePdf) {
+              return {
+                success: false,
+                isPdf: true,
+                error: 'Dokumen dibuka di Penampil PDF bawaan browser (PDFium/Canvas plugin). Teks berada di dalam sandboxed PDF engine tanpa elemen DOM HTML biasa, sehingga penyorotan DOM elemen tidak dapat dimanipulasi secara langsung.'
+              };
+            }
+
             // Ensure animated CSS keyframes & styles are injected into document.head
             let styleEl = document.getElementById('__deep_browser_highlight_style__');
             if (!styleEl) {
@@ -979,7 +1018,7 @@
       }
 
       let formattedUrl = url.trim();
-      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://') && !formattedUrl.startsWith('file://')) {
         formattedUrl = 'https://' + formattedUrl;
       }
 

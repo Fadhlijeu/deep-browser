@@ -55,6 +55,7 @@ export const App: React.FC = () => {
             events={activeSession.events}
             filter={state.logFilter}
             search={state.logSearch}
+            runState={state.runState}
             onSetFilter={(f) => sidepanelStore.setLogFilter(f)}
             onSetSearch={(s) => sidepanelStore.setLogSearch(s)}
           />

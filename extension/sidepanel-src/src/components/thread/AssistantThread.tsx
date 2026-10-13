@@ -78,11 +78,16 @@ export const AssistantThread: React.FC<AssistantThreadProps> = ({
           {session.messages.length === 0 ? (
             <EmptyState onSelectPrompt={(p) => setComposerPrompt(p)} />
           ) : (
-            session.messages.map((m) => (
+            session.messages.map((m, idx) => (
               m.role === 'user' ? (
                 <UserMessage key={m.id} message={m} />
               ) : (
-                <AssistantMessage key={m.id} message={m} />
+                <AssistantMessage
+                  key={m.id}
+                  message={m}
+                  isCurrentMessage={idx === session.messages.length - 1}
+                  runState={runState}
+                />
               )
             ))
           )}

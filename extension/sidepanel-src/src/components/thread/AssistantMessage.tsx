@@ -1,17 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
-interface AssistantMessageProps {
-  message: ChatMessage;
+interface ReasoningItemProps {
+  thought: string;
+  isStreaming?: boolean;
 }
 
-export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) => {
-  const [timelineOpen, setTimelineOpen] = useState(true);
-  const [thoughtOpen, setThoughtOpen] = useState(false);
+const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought }) => {
+  const [open, setOpen] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll reasoning container to bottom as new tokens arrive
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [thought]);
+
+  return (
+    <div className="activity-reasoning-item">
+      <div className="activity-reasoning-header" onClick={() => setOpen(!open)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <Brain size={12} style={{ color: '#a78bfa', flexShrink: 0 }} />
+          <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            Penalaran Agen (Reasoning)
+          </span>
+        </div>
+        <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
+          {open ? 'expand_less' : 'expand_more'}
+        </span>
+      </div>
+      {open && (
+        <div ref={scrollRef} className="activity-reasoning-body">
+          {thought}
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface AssistantMessageProps {
+  message: ChatMessage;
+  isCurrentMessage?: boolean;
+  runState?: string;
+}
+
+export const AssistantMessage: React.FC<AssistantMessageProps> = ({
+  message,
+  isCurrentMessage = false,
+  runState = 'idle',
+}) => {
+  const isRunning = isCurrentMessage && runState === 'running';
+
+  // State for unified activity accordion:
+  // While running, open by default; once finished, auto-collapse so only final text is shown!
+  const [userToggle, setUserToggle] = useState<boolean | null>(null);
+  const isOpen = userToggle !== null ? userToggle : isRunning;
+
   const [copied, setCopied] = useState(false);
 
   const copyText = () => {
@@ -20,7 +69,10 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const activities = message.activities || [];
   const steps = message.steps || [];
+  const hasActivities = activities.length > 0 || steps.length > 0 || Boolean(message.thought);
+  const totalStepsCount = steps.length || activities.filter((a) => a.type === 'step').length;
 
   return (
     <div className="assistant-message-row">
@@ -49,31 +101,61 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
           </button>
         </div>
 
-        {/* Real-time Execution Steps Accordion */}
-        {steps.length > 0 && (
+        {/* Unified Real-time Interleaved Steps & Reasoning Accordion */}
+        {hasActivities && (
           <div className="timeline-accordion">
-            <div className="timeline-accordion-header" onClick={() => setTimelineOpen(!timelineOpen)}>
+            <div
+              className="timeline-accordion-header"
+              onClick={() => setUserToggle(!isOpen)}
+              style={{ cursor: 'pointer' }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <ChevronRight
                   size={13}
                   style={{
-                    transform: timelineOpen ? 'rotate(90deg)' : 'none',
+                    transform: isOpen ? 'rotate(90deg)' : 'none',
                     transition: 'transform 0.15s ease',
                     flexShrink: 0,
                   }}
                 />
-                <span>Langkah Tindakan Browser</span>
+                <span style={{ fontWeight: 600 }}>Langkah & Penalaran Browser</span>
+                {isRunning && <span className="spinner-mini" style={{ marginLeft: '4px' }} />}
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                {steps.length} langkah
+                {isRunning ? 'Sedang Berjalan...' : `${totalStepsCount} langkah selesai`}
               </span>
             </div>
 
-            {timelineOpen && (
+            {isOpen && (
               <div className="timeline-steps-list">
-                {steps.map((st) => (
-                  <ToolStepCard key={st.id} step={st} />
-                ))}
+                {activities.length > 0 ? (
+                  activities.map((act) => {
+                    if (act.type === 'step' && act.step) {
+                      return <ToolStepCard key={act.id} step={act.step} defaultOpen={isRunning} />;
+                    }
+                    if (act.type === 'reasoning' && act.thought) {
+                      return <ReasoningItem key={act.id} thought={act.thought} isStreaming={isRunning} />;
+                    }
+                    return null;
+                  })
+                ) : (
+                  <>
+                    {steps.map((st) => (
+                      <ToolStepCard key={st.id} step={st} defaultOpen={isRunning} />
+                    ))}
+                    {message.thought && (
+                      <ReasoningItem thought={message.thought} isStreaming={isRunning} />
+                    )}
+                  </>
+                )}
+
+                {/* Animated Future Log / Loading Spinner while Step is actively executing */}
+                {isRunning && (
+                  <div className="activity-loading-item">
+                    <span className="spinner-mini" />
+                    <span>Mengeksekusi langkah berikutnya...</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -84,35 +166,9 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
           <HitlApprovalCard hitl={message.hitl} />
         )}
 
-        {/* Thought / Reasoning Block (Collapsed by default for a clean, compact view) */}
-        {message.thought && (
-          <div className="thought-accordion">
-            <div
-              className="thought-accordion-header"
-              onClick={() => setThoughtOpen(!thoughtOpen)}
-            >
-              <ChevronRight
-                size={13}
-                style={{
-                  transform: thoughtOpen ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 0.15s ease',
-                  flexShrink: 0,
-                }}
-              />
-              <Brain size={13} style={{ color: '#a78bfa', flexShrink: 0 }} />
-              <span>Penalaran Agen (Reasoning)</span>
-            </div>
-            {thoughtOpen && (
-              <div className="thought-accordion-body">
-                {message.thought}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* User-Friendly Response Body */}
         {message.text && (
-          <div style={{ marginTop: '2px' }}>
+          <div style={{ marginTop: '4px' }}>
             {message.isError && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--status-error)', fontWeight: 600, marginBottom: '4px' }}>
                 <AlertCircle size={13} style={{ flexShrink: 0 }} />

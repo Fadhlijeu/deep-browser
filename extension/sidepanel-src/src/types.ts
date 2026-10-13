@@ -39,6 +39,14 @@ export interface HitlInteraction {
   isMultiSelect?: boolean;
 }
 
+export interface ActivityItem {
+  id: string;
+  type: 'step' | 'reasoning';
+  timestamp: number;
+  step?: ToolStep;
+  thought?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -46,6 +54,7 @@ export interface ChatMessage {
   thought?: string;
   timestamp: number;
   steps?: ToolStep[];
+  activities?: ActivityItem[];
   modelName?: string;
   preset?: string;
   isError?: boolean;
