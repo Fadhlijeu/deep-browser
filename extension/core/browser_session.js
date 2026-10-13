@@ -466,7 +466,9 @@
         };
       }, [index, xpath]);
 
-      await this.waitForDOMStability(800);
+      const elText = (result?.text || '').toLowerCase();
+      const isAsyncTrigger = /commit|submit|simpan|kirim|save|apply|confirm|merge|publish/i.test(elText);
+      await this.waitForDOMStability(isAsyncTrigger ? 2000 : 800);
       return result;
     }
 

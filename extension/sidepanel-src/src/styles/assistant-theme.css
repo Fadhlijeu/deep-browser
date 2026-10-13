@@ -3603,6 +3603,12 @@ h1, h2 {
   border: 1px solid rgba(244, 63, 94, 0.25);
 }
 
+.log-type-badge.waiting {
+  background: rgba(234, 179, 8, 0.14);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
 .log-step-badge {
   font-size: 9.5px;
   font-family: var(--font-mono, monospace);

@@ -91,7 +91,7 @@ export type PresetId = 'default' | 'research' | 'data_extraction' | 'form_fillin
 
 export type ExecutionMode = 'agent_decide' | 'auto' | 'hitl';
 
-export type LogCategory = 'all' | 'tools' | 'reasoning' | 'observations' | 'verifications' | 'approvals' | 'errors';
+export type LogCategory = 'all' | 'tools' | 'reasoning' | 'observations' | 'verifications' | 'approvals' | 'waiting' | 'errors';
 
 export interface LogEvent {
   id: string;

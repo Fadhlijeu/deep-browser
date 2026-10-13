@@ -248,11 +248,12 @@
         },
         {
           name: 'wait',
-          description: 'Wait for a specified duration in seconds for dynamic content to load.',
+          description: 'Wait for a specified duration (e.g. 2 to 5 seconds) for background processing, commit changes, async jobs, or dynamic page mutations to settle. Does NOT terminate the task—the agent resumes when updated info arrives.',
           parameters: {
             type: 'object',
             properties: {
-              seconds: { type: 'number', description: 'Seconds to wait (e.g. 2, 5).' },
+              seconds: { type: 'number', description: 'Seconds to wait (default: 3, max: 10).' },
+              reason: { type: 'string', description: 'What process or operation is being waited for (e.g. "Menunggu commit changes diproses").' },
             },
           },
         },
@@ -472,9 +473,14 @@
           }
 
           case 'wait': {
-            const seconds = parseFloat(params.seconds) || 2;
+            const seconds = Math.min(10, Math.max(1, parseFloat(params.seconds) || 3));
+            const reason = params.reason || 'Menunggu proses halaman/sistem selesai';
             await this.browserSession.wait(seconds);
-            return { success: true, message: `Waited for ${seconds}s`, data: { seconds } };
+            return {
+              success: true,
+              message: `Waiting: ${reason} (${seconds}s)`,
+              data: { seconds, reason },
+            };
           }
 
           case 'extract': {

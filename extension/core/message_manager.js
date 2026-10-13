@@ -158,6 +158,15 @@ At each step, you receive:
       1. **Preferred**: Navigate back (or search Google) to open a DIFFERENT article that actually contains the missing sections.
       2. **Alternative**: Call \`done\` and explain which sections were successfully highlighted, noting that the remaining sections were not present on that webpage.
 
+11. **ASYNC ACTIONS & WAITING FOR BACKGROUND PROCESSES (\`wait\`)**:
+    - When you click an element that triggers an asynchronous server or page operation (such as "Commit changes", "Save", "Submit", "Apply", "Create Pull Request", "Upload", or "Deploy"):
+    - **NEVER CLICK THE SAME ACTION BUTTON MULTIPLE TIMES IN A ROW!**
+      Do NOT assume that because the page didn't instantly reload that the click failed. Rapid repeated clicking causes stuck loops, double submissions, or rate limits.
+    - If you just clicked a button like "Commit changes" or "Submit" and the page is processing or pending:
+      **CALL \`wait\` (e.g. \`{ "action_name": "wait", "parameters": { "seconds": 3, "reason": "Menunggu proses commit changes selesai" } }\`)**!
+    - Calling \`wait\` logs a dedicated \`Waiting\` event WITHOUT terminating the task.
+    - Once the waiting period completes, you will automatically receive the updated page state and can perform your next actions with the newly arrived information.
+
 ### AVAILABLE ACTIONS
 ${toolsDoc}
 

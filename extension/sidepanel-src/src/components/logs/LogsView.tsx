@@ -16,7 +16,8 @@ import {
   X, 
   ShieldCheck, 
   Activity, 
-  Maximize2 
+  Maximize2,
+  Hourglass
 } from 'lucide-react';
 import { LogEvent, LogCategory } from '../../types';
 import { normalizeImageSrc } from '../thread/ToolStepCard';
@@ -59,13 +60,21 @@ export const LogsView: React.FC<LogsViewProps> = ({
     tools: events.filter((e) => e.category === 'tools').length,
     reasoning: events.filter((e) => e.category === 'reasoning').length,
     observations: events.filter((e) => e.category === 'observations').length,
+    waiting: events.filter((e) => e.category === 'waiting' || (e.type || '').toUpperCase().includes('WAIT')).length,
     verifications: events.filter((e) => e.category === 'verifications').length,
     approvals: events.filter((e) => e.category === 'approvals').length,
     errors: events.filter((e) => e.category === 'errors').length,
   };
 
   const filteredEvents = events.filter((e) => {
-    if (filter !== 'all' && e.category !== filter) return false;
+    if (filter !== 'all') {
+      if (filter === 'waiting') {
+        const isWait = e.category === 'waiting' || (e.type || '').toUpperCase().includes('WAIT');
+        if (!isWait) return false;
+      } else if (e.category !== filter) {
+        return false;
+      }
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       const msgMatch = (e.message || '').toLowerCase().includes(q);
@@ -125,6 +134,9 @@ export const LogsView: React.FC<LogsViewProps> = ({
     if (cat === 'errors' || up.includes('ERR') || up.includes('FAIL')) {
       return { icon: AlertTriangle, label: 'Error', colorClass: 'error' };
     }
+    if (cat === 'waiting' || up.includes('WAIT')) {
+      return { icon: Hourglass, label: 'Waiting', colorClass: 'waiting' };
+    }
     if (cat === 'reasoning' || up.includes('REASON') || up.includes('PLAN')) {
       return { icon: Brain, label: 'Reasoning', colorClass: 'reasoning' };
     }
@@ -148,6 +160,7 @@ export const LogsView: React.FC<LogsViewProps> = ({
     { id: 'tools', label: 'Tools', count: counts.tools },
     { id: 'reasoning', label: 'Reasoning', count: counts.reasoning },
     { id: 'observations', label: 'Observasi', count: counts.observations },
+    { id: 'waiting', label: 'Waiting', count: counts.waiting },
     { id: 'verifications', label: 'Verifikasi', count: counts.verifications },
     { id: 'approvals', label: 'Persetujuan', count: counts.approvals },
     { id: 'errors', label: 'Errors', count: counts.errors },

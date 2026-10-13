@@ -163,6 +163,8 @@
         let consecutiveScrollCount = 0;
         let reachedBottomOnPage = false;
         let reachedTopOnPage = false;
+        let lastClickedIndex = null;
+        let consecutiveClickCount = 0;
 
         while (this.step < this.maxSteps && !this.isStopped) {
           this.step++;
@@ -293,6 +295,42 @@
               this._emit('ACTION_FAILED', blockedMsg, { error: blockedMsg, action_name: actionName, preset: this.preset });
               this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: blockedMsg });
               continue;
+            }
+          }
+
+          // Anti-loop duplicate click guard:
+          // If the agent attempts to click the exact same element consecutively right after clicking it,
+          // intercept it with an automatic Waiting process (without terminating) so background operations
+          // like commit changes, form submissions, or async saves can complete.
+          if (actionName === 'click_element') {
+            if (params.index === lastClickedIndex) {
+              consecutiveClickCount++;
+            } else {
+              lastClickedIndex = params.index;
+              consecutiveClickCount = 1;
+            }
+
+            if (consecutiveClickCount >= 2) {
+              const waitReason = `Elemen [${params.index}] telah diklik di langkah sebelumnya. Menjalankan proses Waiting (tanpa terminasi) untuk memberi waktu proses halaman (commit/submit/mutasi) selesai...`;
+              this._emit('WAITING', waitReason, {
+                seconds: 3.5,
+                index: params.index,
+                reason: 'Menunggu proses background / commit selesai',
+              });
+              await this.browserSession.wait(3.5);
+              consecutiveClickCount = 0;
+              this.messageManager.recordStep(
+                this.step,
+                decision.thinking,
+                { name: 'wait', parameters: { seconds: 3.5, reason: 'Menunggu proses selesai setelah klik' } },
+                { success: true, message: 'Proses waiting selesai, memeriksa pembaruan halaman.' }
+              );
+              continue;
+            }
+          } else {
+            consecutiveClickCount = 0;
+            if (actionName !== 'wait') {
+              lastClickedIndex = null;
             }
           }
 
@@ -456,9 +494,12 @@
         case 'send_keys':
           this._emit('ACTION_EXECUTED', `Kirim tombol: ${params.keys}`, params);
           break;
-        case 'wait':
-          this._emit('WAITING', `Menunggu ${params.seconds || 2} detik...`, params);
+        case 'wait': {
+          const sec = params.seconds || 3;
+          const reasonStr = params.reason ? ` (${params.reason})` : '';
+          this._emit('WAITING', `[Waiting] Menunggu proses halaman/sistem selesai ${sec} detik${reasonStr}...`, { seconds: sec, reason: params.reason });
           break;
+        }
         case 'hover':
           this._emit('HOVER', `Hover pointer pada elemen [${params.index}]`, params);
           break;

@@ -1078,6 +1078,7 @@ export class SidepanelStateManager {
     const getCategory = (t: string): LogCategory => {
       const up = t.toUpperCase();
       if (up.includes('ERR') || up.includes('FAIL')) return 'errors';
+      if (up.includes('WAIT')) return 'waiting';
       if (up.includes('TOOL') || up.includes('ACTION') || up.includes('CLICK') || up.includes('TYPE') || up.includes('SCROLL') || up.includes('NAV') || up.includes('SEARCH') || up.includes('HIGHLIGHT')) return 'tools';
       if (up.includes('VERIF')) return 'verifications';
       if (up.includes('REASON') || up.includes('PLAN')) return 'reasoning';
@@ -1170,8 +1171,29 @@ export class SidepanelStateManager {
       recordStep(step);
     }
 
-    // 4. Handle tool steps with icons and verification
-    if (type.includes('TOOL') || type.includes('NAV') || type.includes('CLICK') || type.includes('TYPE') || type.includes('SCROLL') || type.includes('EXTRACT') || type.includes('SEARCH') || type.includes('TAB') || type === 'ACTION_EXECUTED') {
+    // 4. Waiting Process (Tanpa Terminasi)
+    if (type === 'WAITING' || (type.includes('WAIT') && !type.includes('WAITING_FOR_USER'))) {
+      this.state.stepCount++;
+      const seconds = payload.seconds || 3;
+      const step: ToolStep = {
+        id: 'step_wait_' + Date.now(),
+        name: evt.message || `Waiting (${seconds}s) — Menunggu proses halaman/sistem selesai`,
+        icon: 'hourglass_top',
+        status: 'succeeded',
+        duration: `${seconds}s`,
+        args: payload.args || payload,
+        result: {
+          status: 'settled',
+          seconds,
+          message: 'Proses waiting selesai (tanpa terminasi), siap menerima dan membaca info baru.',
+        },
+        timestamp: Date.now(),
+      };
+      recordStep(step);
+    }
+
+    // 5. Handle tool steps with icons and verification
+    if ((type.includes('TOOL') || type.includes('NAV') || type.includes('CLICK') || type.includes('TYPE') || type.includes('SCROLL') || type.includes('EXTRACT') || type.includes('SEARCH') || type.includes('TAB') || type === 'ACTION_EXECUTED') && !type.includes('WAIT')) {
       this.state.stepCount++;
       const icon = type.includes('NAV') ? 'navigation'
         : type.includes('CLICK') ? 'touch_app'
