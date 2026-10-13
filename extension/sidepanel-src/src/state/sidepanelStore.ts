@@ -1,4 +1,4 @@
-import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, ConnectionMode, PresetId, ExecutionMode, LogEvent, ToolStep, HitlInteraction } from '../types';
+import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, ConnectionMode, PresetId, ExecutionMode, LogEvent, LogCategory, ToolStep, HitlInteraction } from '../types';
 
 declare const chrome: any;
 
@@ -44,7 +44,7 @@ export interface SidepanelState {
   isDetached: boolean;
   stepCount: number;
   currentView: 'chat' | 'logs';
-  logFilter: 'all' | 'tools' | 'approvals' | 'errors' | 'verifications';
+  logFilter: LogCategory;
   logSearch: string;
   modals: {
     drawer: boolean;
@@ -614,7 +614,7 @@ export class SidepanelStateManager {
     this.notify();
   }
 
-  public setLogFilter(filter: 'all' | 'tools' | 'approvals' | 'errors' | 'verifications') {
+  public setLogFilter(filter: LogCategory) {
     this.state.logFilter = filter;
     this.notify();
   }
@@ -622,6 +622,15 @@ export class SidepanelStateManager {
   public setLogSearch(query: string) {
     this.state.logSearch = query;
     this.notify();
+  }
+
+  public clearLogs() {
+    const active = this.getActiveSession();
+    if (active) {
+      active.events = [];
+      this.saveStorage();
+      this.notify();
+    }
   }
 
   public setModal(modalName: keyof SidepanelState['modals'], open: boolean) {
@@ -943,13 +952,25 @@ export class SidepanelStateManager {
     const type = evt.event_type || evt.type || '';
     const payload = evt.data || evt.payload || {};
 
+    const getCategory = (t: string): LogCategory => {
+      const up = t.toUpperCase();
+      if (up.includes('ERR') || up.includes('FAIL')) return 'errors';
+      if (up.includes('TOOL') || up.includes('ACTION') || up.includes('CLICK') || up.includes('TYPE') || up.includes('SCROLL') || up.includes('NAV') || up.includes('SEARCH') || up.includes('HIGHLIGHT')) return 'tools';
+      if (up.includes('VERIF')) return 'verifications';
+      if (up.includes('REASON') || up.includes('PLAN')) return 'reasoning';
+      if (up.includes('APPROV') || up.includes('HITL') || up.includes('USER_INPUT') || up.includes('USER_RESP')) return 'approvals';
+      if (up.includes('OBSERV') || up.includes('SCREEN') || up.includes('ATTACH')) return 'observations';
+      return 'all';
+    };
+
     // Add to event logs
     const logEvt: LogEvent = {
       id: 'log_' + Date.now() + Math.random().toString(36).slice(2, 5),
       timestamp: Date.now(),
       type,
-      category: type.includes('TOOL') || type.includes('CLICK') || type.includes('NAV') ? 'tools' : type.includes('VERIF') ? 'verifications' : type.includes('ERR') ? 'errors' : 'all',
-      message: evt.message || JSON.stringify(payload).slice(0, 80),
+      step: evt.step || undefined,
+      category: getCategory(type),
+      message: evt.message || JSON.stringify(payload).slice(0, 120),
       payload,
     };
     active.events.push(logEvt);

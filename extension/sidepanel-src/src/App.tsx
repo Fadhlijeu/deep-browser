@@ -58,6 +58,7 @@ export const App: React.FC = () => {
             runState={state.runState}
             onSetFilter={(f) => sidepanelStore.setLogFilter(f)}
             onSetSearch={(s) => sidepanelStore.setLogSearch(s)}
+            onClearLogs={() => sidepanelStore.clearLogs()}
           />
         )}
       </main>

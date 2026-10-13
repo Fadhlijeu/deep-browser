@@ -91,11 +91,15 @@ export type PresetId = 'default' | 'research' | 'data_extraction' | 'form_fillin
 
 export type ExecutionMode = 'agent_decide' | 'auto' | 'hitl';
 
+export type LogCategory = 'all' | 'tools' | 'reasoning' | 'observations' | 'verifications' | 'approvals' | 'errors';
+
 export interface LogEvent {
   id: string;
   timestamp: number;
   type: string;
-  category: 'all' | 'tools' | 'approvals' | 'errors' | 'verifications';
+  step?: number;
+  category: LogCategory;
   message: string;
   payload?: unknown;
 }
+

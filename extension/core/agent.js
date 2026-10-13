@@ -159,12 +159,43 @@
           return { success: true, result: report, totalSteps: 1 };
         }
 
+        let lastPageUrl = null;
+        let consecutiveScrollCount = 0;
+        let reachedBottomOnPage = false;
+        let reachedTopOnPage = false;
+
         while (this.step < this.maxSteps && !this.isStopped) {
           this.step++;
 
           // ─── 1. OBSERVE ──────────────────────────────────────────────────────────
           const state = await this.browserSession.getState(true);
           if (this.isStopped) break;
+
+          const currentUrl = state.url || '';
+          if (currentUrl !== lastPageUrl) {
+            lastPageUrl = currentUrl;
+            consecutiveScrollCount = 0;
+            reachedBottomOnPage = false;
+            reachedTopOnPage = false;
+          }
+
+          const pixelsBelow = state.pageInfo?.pixels_below ?? 0;
+          const scrollY = state.pageInfo?.scroll_y ?? 0;
+          const scrollPercentage = state.pageInfo?.scroll_percentage ?? 0;
+
+          if (pixelsBelow <= 25 || scrollPercentage >= 85 || state.pageInfo?.has_more_content_below === false) {
+            reachedBottomOnPage = true;
+          }
+          if (scrollY <= 50 || scrollPercentage <= 15) {
+            reachedTopOnPage = true;
+          }
+
+          // Anti-loop trigger: If agent has already scanned both top and bottom of this page,
+          // and has scrolled 3 or more times consecutively without any other productive action
+          const isStuckOscillating = consecutiveScrollCount >= 3 && reachedBottomOnPage && reachedTopOnPage;
+          if (isStuckOscillating) {
+            this._emit('LOOP_DETECTED', `Deteksi looping terpicu: agen telah menjelajahi seluruh halaman bolak-balik tanpa menemukan konten target. Mengarahkan agen untuk pivot atau terminasi...`, { url: currentUrl });
+          }
 
           this._emit(
             'OBSERVATION',
@@ -183,7 +214,7 @@
           }
 
           // ─── 2. CONTEXT & PROMPT ────────────────────────────────────────────────
-          const stepPayload = this.messageManager.buildStepPrompt(state, this.step);
+          const stepPayload = this.messageManager.buildStepPrompt(state, this.step, { isStuckOscillating });
           if (this.isStopped) break;
 
           // ─── 3. PLANNING ────────────────────────────────────────────────────────
@@ -305,6 +336,13 @@
             } else if (actionName === 'extract_html_snippet') {
               this._emit('HTML_SNIPPET_CAPTURED', `Struktur informasi visual berhasil diekstrak.`, actionResult.data);
             }
+          }
+
+          // Update consecutive scroll counter for anti-loop detection
+          if (actionName === 'scroll_page') {
+            consecutiveScrollCount++;
+          } else if (['highlight_text', 'click_element', 'input_text', 'navigate', 'parallel_research'].includes(actionName)) {
+            consecutiveScrollCount = 0;
           }
 
           // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────

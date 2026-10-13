@@ -135,10 +135,19 @@ At each step, you receive:
    - Interact with elements ONLY using their 1-based index \`[index]\`. Check tag attributes like \`selected\`, \`checked\`, \`expanded\`, \`value\`, \`role\`, and \`href\`.
 
 9. **COMPLETION & CLEAN MARKDOWN FORMATTING**:
-   - Call \`done\` only when the user goal is completely achieved.
+   - Call `done` only when the user goal is completely achieved.
    - Format final answers using clean, structured Markdown (bold text, bullet points, headers, tables).
    - If the task was to list items, list EVERY SINGLE ITEM (1 to N).
    - Respond in Indonesian or the language requested by the user.
+
+10. **CONTENT SEARCH RESILIENCE & ANTI-LOOP POLICY**:
+    - When tasked with finding and highlighting specific sections or terms across an article or webpage (e.g. 'definisi, fungsi, kesimpulan'):
+    - Scroll through the article to locate each requested section.
+    - If you reach the bottom of the page or have scanned up and down and cannot find the remaining requested sections (e.g. the article only contains 'definisi', but lacks 'fungsi' or 'kesimpulan'):
+    - **NEVER OSCILLATE OR SCROLL ENDLESSLY ON THE SAME WEBPAGE!**
+    - You MUST immediately pivot without wasting steps:
+      1. **Preferred**: Navigate back (or search Google) to open a DIFFERENT article that actually contains the missing sections.
+      2. **Alternative**: Call `done` and explain which sections were successfully highlighted, noting that the remaining sections were not present on that webpage.
 
 ### AVAILABLE ACTIONS
 ${toolsDoc}
@@ -161,10 +170,24 @@ Do NOT wrap with markdown other than \`\`\`json or raw JSON. Output valid JSON o
      * Builds the prompt payload for the current step.
      * @param {Object} state - The DOM and browser state from BrowserSession.getState()
      * @param {number} stepNumber - Current 1-based step counter
+     * @param {Object} [options={}] - Extra prompt options (e.g. isStuckOscillating)
      * @returns {Object} { textPrompt, screenshotBase64, fullHistory }
      */
-    buildStepPrompt(state, stepNumber = 1) {
+    buildStepPrompt(state, stepNumber = 1, options = {}) {
       const historySection = this.formatHistory();
+
+      // Check if anti-loop condition detected on current webpage
+      let antiLoopSection = '';
+      if (options.isStuckOscillating) {
+        antiLoopSection = `### ⚠️ CRITICAL ANTI-LOOP INTERVENTION (PAGE CONTENT EXHAUSTION DETECTED):
+You have already scrolled through this ENTIRE webpage (both top and bottom) multiple times searching for the remaining target sections.
+The current webpage DOES NOT CONTAIN the remaining requested section(s) or keywords!
+DO NOT EXECUTE ANOTHER SCROLL ACTION ON THIS WEBPAGE. Repeating scroll actions will cause an infinite loop and fail the task.
+You MUST choose one of the following two actions immediately:
+1. PIVOT (RECOMMENDED): Navigate back or go to Google to find a DIFFERENT article that has the complete required sections (e.g. use "navigate" or click another search result link).
+2. FINALIZE (DONE): Call "done" immediately. Explain what sections you successfully found and highlighted, and honestly state that this particular article did not contain the remaining requested sections.
+`;
+      }
 
       // Check if the immediately preceding step had a user response from a widget
       let latestUserResponseSection = '';
@@ -204,7 +227,7 @@ CRITICAL OUTPUT COMPLETION RULES:
    DO NOT BE LAZY: Never use phrases like "dan X lainnya", "serta repository lainnya...", or "...". If there are 16 or 17 items, list all 16 or 17 completely!
 Return your JSON response.`;
 
-      const textPrompt = [historySection, latestUserResponseSection, stateSection, userGoalSection]
+      const textPrompt = [historySection, antiLoopSection, latestUserResponseSection, stateSection, userGoalSection]
         .filter(Boolean)
         .join('\n\n');
 
