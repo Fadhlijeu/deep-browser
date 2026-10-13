@@ -63,6 +63,7 @@ export class SidepanelStateManager {
   private currentTransportTaskId: string | null = null;
   private activeAgent: any = null;
   private coreLoadedPromise: Promise<void> | null = null;
+  private pendingCloseOnCompletion: boolean = false;
 
   constructor() {
     const initId = 'session_' + Date.now();
@@ -91,6 +92,8 @@ export class SidepanelStateManager {
     };
 
     this.loadFromStorage();
+    this.initStorageListener();
+    this.initCrossWindowMessaging();
     this.initTabsListener();
     this.initWebSocket();
     this.ensureCoreRuntimeLoaded().catch((err) => {
@@ -155,7 +158,11 @@ export class SidepanelStateManager {
   private async loadFromStorage() {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       try {
-        const stored = await chrome.storage.local.get(['sessions', 'activeSessionId', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled', 'indexLabelingEnabled', 'connectionMode']);
+        const stored = await chrome.storage.local.get([
+          'sessions', 'activeSessionId', 'selectedModelId', 'selectedMode',
+          'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled',
+          'indexLabelingEnabled', 'connectionMode', 'runState', 'stepCount'
+        ]);
         if (stored.sessions && stored.sessions.length > 0) {
           this.state.sessions = stored.sessions;
         }
@@ -174,6 +181,12 @@ export class SidepanelStateManager {
           if (stored.connectionMode === 'standalone') {
             this.state.connectionStatus = 'standalone';
           }
+        }
+        if (stored.runState && !this.activeAgent) {
+          this.state.runState = stored.runState;
+        }
+        if (typeof stored.stepCount === 'number' && !this.activeAgent) {
+          this.state.stepCount = stored.stepCount;
         }
         this.notify();
       } catch (err) {
@@ -196,10 +209,82 @@ export class SidepanelStateManager {
           sidepanelEnabled: this.state.sidepanelEnabled,
           indexLabelingEnabled: this.state.indexLabelingEnabled,
           connectionMode: this.state.connectionMode,
+          runState: this.state.runState,
+          stepCount: this.state.stepCount,
         });
       } catch (err) {
         console.warn('[DeepBrowser] Error saving storage:', err);
       }
+    }
+  }
+
+  private initStorageListener() {
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener((changes: any, areaName: string) => {
+        if (areaName !== 'local') return;
+        let changed = false;
+        if (changes.sessions) {
+          this.state.sessions = changes.sessions.newValue || [];
+          changed = true;
+        }
+        if (changes.activeSessionId) {
+          this.state.activeSessionId = changes.activeSessionId.newValue;
+          changed = true;
+        }
+        if (changes.runState && !this.activeAgent) {
+          this.state.runState = changes.runState.newValue || 'idle';
+          changed = true;
+        }
+        if (changes.stepCount && !this.activeAgent) {
+          this.state.stepCount = changes.stepCount.newValue || 0;
+          changed = true;
+        }
+        if (changes.selectedModelId) {
+          this.state.selectedModelId = changes.selectedModelId.newValue;
+          changed = true;
+        }
+        if (changes.models) {
+          this.state.models = changes.models.newValue;
+          changed = true;
+        }
+        if (changes.apiKeys) {
+          this.state.apiKeys = changes.apiKeys.newValue;
+          changed = true;
+        }
+        if (changed) {
+          this.notify();
+        }
+      });
+    }
+  }
+
+  private initCrossWindowMessaging() {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener((msg: any) => {
+        if (msg?.action === 'STOP_AGENT') {
+          if (this.activeAgent) {
+            try { this.activeAgent.stop(); } catch (_) {}
+            this.activeAgent = null;
+            this.state.runState = 'idle';
+            this.saveStorage();
+            this.notify();
+          }
+        } else if (msg?.action === 'RESOLVE_HITL') {
+          if (this.activeAgent && (this.activeAgent as any).interactionManager) {
+            const im = (this.activeAgent as any).interactionManager;
+            const targetId = (im.activeInteraction && im.activeInteraction.status === 'pending')
+              ? im.activeInteraction.interaction_id
+              : msg.interactionId;
+            try {
+              if (typeof im.submitResponse === 'function') {
+                im.submitResponse(targetId, msg.value);
+              } else if (typeof im.resolveInteraction === 'function') {
+                im.resolveInteraction(targetId, msg.value);
+              }
+            } catch (_) {}
+          }
+        }
+      });
     }
   }
 
@@ -707,6 +792,23 @@ export class SidepanelStateManager {
           }
         } catch (_) {}
       }
+
+      // If the AI agent is currently running in this popup window context,
+      // calling window.close() immediately will kill the JS runtime and abort in-flight fetch(),
+      // throwing "LLM Error: Failed to fetch".
+      // Instead, minimize this popup window, let the agent complete safely in background,
+      // and close the window once the task finishes!
+      if (this.state.runState === 'running' || this.activeAgent) {
+        this.pendingCloseOnCompletion = true;
+        try {
+          const currentWin = await chrome.windows.getCurrent();
+          if (currentWin?.id) {
+            await chrome.windows.update(currentWin.id, { state: 'minimized', focused: false });
+          }
+        } catch (_) {}
+        return;
+      }
+
       try {
         window.close();
       } catch (_) {}
@@ -719,9 +821,13 @@ export class SidepanelStateManager {
           height: 720,
           focused: true,
         }, () => {
-          try {
-            window.close();
-          } catch (_) {}
+          if (this.state.runState !== 'running' && !this.activeAgent) {
+            try {
+              window.close();
+            } catch (_) {}
+          } else {
+            this.pendingCloseOnCompletion = true;
+          }
         });
       }
     }
@@ -881,11 +987,17 @@ export class SidepanelStateManager {
   }
 
   public cancelRun() {
-    if (this.state.runState !== 'running') return;
     if (this.activeAgent) {
       try { this.activeAgent.stop(); } catch (_) {}
       this.activeAgent = null;
     }
+    // Broadcast stop command to other windows (e.g. background/popup window)
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'STOP_AGENT' }).catch(() => {});
+      }
+    } catch (_) {}
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.currentRunId) {
       try {
         fetch('http://127.0.0.1:7788/api/agent/stop', { method: 'POST' }).catch(() => {});
@@ -912,6 +1024,7 @@ export class SidepanelStateManager {
       }).catch(() => {});
     }
     this.state.runState = 'idle';
+    this.saveStorage();
     this.notify();
   }
 
@@ -930,6 +1043,16 @@ export class SidepanelStateManager {
         console.warn('[DeepBrowser] Error submitting interaction response:', err);
       }
     }
+    // Relay HITL resolution to any detached window holding the active agent
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          action: 'RESOLVE_HITL',
+          interactionId,
+          value,
+        }).catch(() => {});
+      }
+    } catch (_) {}
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
         type: 'RESOLVE_INTERACTION',
@@ -1250,6 +1373,14 @@ export class SidepanelStateManager {
       }
       this.notify();
       this.saveStorage();
+
+      if (this.pendingCloseOnCompletion) {
+        setTimeout(() => {
+          try {
+            window.close();
+          } catch (_) {}
+        }, 400);
+      }
     }
   }
 }

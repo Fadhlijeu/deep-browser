@@ -120,11 +120,20 @@ At each step, you receive:
    - A search result snippet or table preview is NOT the final answer.
    - Click into the target entity's detail page before extracting complete information or taking the final screenshot.
 
-6. **TEXT HIGHLIGHTING (\`highlight_text\`)**:
-   - When the user asks to find, locate, or highlight a specific sentence, paragraph, or section (e.g. "carikan paragraf ini...", "highlight bagian..."):
-   - Call \`highlight_text\` with \`text\` and optional \`color\` (\`"amber"\`, \`"emerald"\`, \`"cyan"\`, \`"violet"\`, \`"rose"\`).
-   - The webpage will smoothly center on the text and execute an animated highlighter sweep from left to right across the text/paragraph with high-contrast Color Theory illumination.
-   - Once highlighted, call \`done\` with a clear confirmation mentioning the exact highlighted sentence and page context.
+6. **TEXT HIGHLIGHTING (\`highlight_text\`) — SUBSTANTIVE CONTENT & EXPLANATION ONLY**:
+   - When asked to highlight concepts, definitions ("definisi"), functions ("fungsi"), benefits ("manfaat"), conclusions ("kesimpulan"), or summaries:
+   - **CRITICAL ANTI-SLOP RULE: NEVER HIGHLIGHT JUST A BARE HEADING OR TITLE LABEL!**
+     - ❌ STRICTLY FORBIDDEN: NEVER pass \`text: "Manfaat AI"\` or \`text: "Definisi"\` or \`text: "Fungsi"\`. A 2-word heading title is NOT content and explains nothing!
+     - ✅ MANDATORY: You MUST locate and highlight the actual SUBSTANTIVE EXPLANATION, NARRATIVE PARAGRAPH, or INFORMATIVE SENTENCES explaining the concept directly under or near that heading.
+       Example: For "Manfaat AI", highlight: \`text: "AI memang teknologi yang sengaja dikembangkan untuk bisa melakukan berbagai jenis pekerjaan yang biasanya dikerjakan oleh manusia dan memiliki kemampuan untuk belajar hingga berpikir..."\`.
+   - Highlight the informative context and narrative sentences that explain what it is, how it works, what benefits it brings, and related context.
+   - You can highlight multiple distinct sentences/paragraphs across the page by calling \`highlight_text\` for each relevant topic.
+   - Use distinct Color Theory palettes to distinguish concepts:
+     - Definisi: \`"cyan"\` or \`"emerald"\`
+     - Fungsi / Cara Kerja: \`"amber"\`
+     - Manfaat / Keuntungan: \`"emerald"\` or \`"violet"\`
+     - Kesimpulan / Catatan: \`"rose"\`
+   - Once the substantive paragraphs are highlighted, call \`done\` with a comprehensive Markdown summary of the highlighted substantive text.
 
 7. **INTERACTIVE CLARIFICATION VIA WIDGETS (\`ask_user\`)**:
    - If a search query yields multiple ambiguous matches or requires user preference/confirmation:
@@ -205,6 +214,12 @@ YOU MUST IMMEDIATELY ACT ON THIS NEW USER INPUT. Do not repeat previous searches
         }
       }
 
+      const visibleContentStr = (state.visibleTextBlocks && state.visibleTextBlocks.length > 0)
+        ? `### VISIBLE ARTICLE & TEXT CONTENT (In Viewport):
+Use these real sentences/paragraphs when finding definitions, benefits ("manfaat"), functions, or quoting context:
+${state.visibleTextBlocks.map((b) => `* <${b.tag}>: "${b.text}"`).join('\n')}\n`
+        : '';
+
       const stateSection = `### CURRENT BROWSER STATE (Step ${stepNumber})
 * URL: ${state.url || 'about:blank'}
 * Title: ${state.title || 'Untitled'}
@@ -212,7 +227,7 @@ YOU MUST IMMEDIATELY ACT ON THIS NEW USER INPUT. Do not repeat previous searches
 * Pixels Above: ${state.pageInfo?.pixels_above || 0}px | Pixels Below: ${state.pageInfo?.pixels_below || 0}px (${state.pageInfo?.scroll_percentage ?? 0}% scrolled)
 * More Content Below Viewport: ${state.pageInfo?.has_more_content_below ? 'YES (More content exists below - scroll down if seeking exhaustive results)' : 'NO (At bottom of page)'}
 
-### SIMPLIFIED INTERACTIVE DOM TREE
+${visibleContentStr}### SIMPLIFIED INTERACTIVE DOM TREE
 ${state.simplifiedTreeText ? state.simplifiedTreeText : '(No interactive elements detected on this view)'}
 `;
 

@@ -191,10 +191,27 @@
           return `[${item.index}]<${item.tag}${attrs}>${content}</${item.tag}>`;
         });
 
+        // Extract visible content/text blocks (headings, paragraphs, blockquotes) in viewport
+        const visibleTextBlocks = [];
+        const contentCandidates = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, [role="article"] p, article p');
+        contentCandidates.forEach((el) => {
+          if (visibleTextBlocks.length >= 30) return;
+          const rect = el.getBoundingClientRect();
+          if (!isVisible(el, rect)) return;
+          const txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+          if (txt.length >= 8) {
+            visibleTextBlocks.push({
+              tag: el.tagName.toLowerCase(),
+              text: txt.length > 350 ? txt.slice(0, 350) + '...' : txt,
+            });
+          }
+        });
+
         return {
           elements: elementsList,
           selectorMap,
           simplifiedTreeText: simplifiedTreeLines.join('\n'),
+          visibleTextBlocks,
           pageInfo: {
             viewport_width: viewportWidth,
             viewport_height: viewportHeight,

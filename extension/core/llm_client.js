@@ -137,6 +137,28 @@ Respond strictly with a JSON object:
     }
 
 
+    /**
+     * Resilient fetch with retry for transient network hiccups or socket drops.
+     */
+    async _fetchWithRetry(url, options, maxRetries = 2) {
+      let lastErr;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const res = await fetch(url, options);
+          return res;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < maxRetries && err.name !== 'AbortError') {
+            console.warn(`[LLMClient] Network fetch attempt ${attempt} failed (${err.message}). Retrying in 1.2s...`);
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw lastErr;
+    }
+
     // ─── Gemini Provider ───────────────────────────────────────────────────────
     async _callGemini(systemPrompt, textPrompt, screenshotBase64) {
       if (!this.apiKey) {
@@ -180,7 +202,7 @@ Respond strictly with a JSON object:
         },
       };
 
-      const res = await fetch(url, {
+      const res = await this._fetchWithRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -245,7 +267,7 @@ Respond strictly with a JSON object:
         headers['Authorization'] = `Bearer ${this.apiKey}`;
       }
 
-      const res = await fetch(endpoint, {
+      const res = await this._fetchWithRetry(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
@@ -294,7 +316,7 @@ Respond strictly with a JSON object:
         temperature: 0.1,
       };
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await this._fetchWithRetry('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,7 +366,7 @@ Respond strictly with a JSON object:
 
       let res;
       try {
-        res = await fetch(url, {
+        res = await this._fetchWithRetry(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),

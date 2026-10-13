@@ -271,12 +271,12 @@
         },
         {
           name: 'highlight_text',
-          description: 'Highlight specific text or paragraph on the active webpage, smoothly center the viewport on it, and apply a high-contrast Color Theory background that stays anchored while scrolling.',
+          description: 'Highlight substantive text, sentences, or explanatory paragraphs on the active webpage. NEVER highlight just a bare 2-word heading or title label (e.g. never just "Manfaat AI"); always highlight the actual narrative explanatory sentence or paragraph explaining the concept.',
           parameters: {
             type: 'object',
             properties: {
-              text: { type: 'string', description: 'The text snippet, phrase, or paragraph to locate and highlight on the webpage.' },
-              color: { type: 'string', enum: ['amber', 'emerald', 'cyan', 'violet', 'rose'], description: 'Color theme from Color Theory (default: "amber").' },
+              text: { type: 'string', description: 'The substantive explanatory sentence, paragraph, or narrative text to highlight. DO NOT pass bare headings or label titles alone; pass the actual informative sentence.' },
+              color: { type: 'string', enum: ['amber', 'emerald', 'cyan', 'violet', 'rose'], description: 'Color theme from Color Theory: cyan/emerald for definitions, amber for functions/how it works, emerald/violet for benefits (manfaat), rose for conclusion (default: "amber").' },
               scroll_to: { type: 'boolean', description: 'Whether to scroll the webpage so the highlighted text is centered in view (default: true).' },
             },
             required: ['text'],

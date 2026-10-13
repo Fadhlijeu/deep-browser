@@ -680,6 +680,13 @@
                   transition: all 0.3s ease;
                   line-height: inherit;
                 }
+                .__deep_browser_narrative_context__ {
+                  display: block !important;
+                  margin-top: 6px !important;
+                  padding: 4px 8px !important;
+                  border-radius: 4px !important;
+                  line-height: 1.5 !important;
+                }
                 .__deep_browser_highlight_label__ {
                   display: inline-block;
                   font-size: 10px;
@@ -867,6 +874,42 @@
             if (afterText) fragment.appendChild(document.createTextNode(afterText));
 
             parent.replaceChild(fragment, matchedNode);
+
+            // Smart Narrative Expansion:
+            // If the matched node is inside a heading (h1-h6), bold label, or is a very short title (< 40 chars),
+            // automatically also highlight the following explanatory narrative paragraph!
+            const parentTag = (parent.tagName || '').toLowerCase();
+            const isHeading = /^h[1-6]$/i.test(parentTag) || (parent.closest && parent.closest('h1, h2, h3, h4, h5, h6') != null) || parentTag === 'strong' || parentTag === 'b';
+            const isShortTitle = targetText.trim().length < 40;
+
+            if (isHeading || isShortTitle) {
+              const headingContainer = (parent.closest && parent.closest('h1, h2, h3, h4, h5, h6')) || parent;
+              let sibling = headingContainer.nextElementSibling;
+              let hops = 0;
+              while (sibling && hops < 4) {
+                const sTag = (sibling.tagName || '').toLowerCase();
+                if (['p', 'div', 'ul', 'ol', 'blockquote'].includes(sTag)) {
+                  const sText = (sibling.innerText || sibling.textContent || '').trim();
+                  if (sText.length > 25 && !sibling.querySelector('.__deep_browser_text_highlight__')) {
+                    const narrativeMark = document.createElement('mark');
+                    narrativeMark.className = '__deep_browser_text_highlight__ __deep_browser_narrative_context__';
+                    narrativeMark.style.setProperty('--db-hl-bg-start', theme.bgStart);
+                    narrativeMark.style.setProperty('--db-hl-bg-mid', theme.bgMid);
+                    narrativeMark.style.setProperty('--db-hl-bg-end', theme.bgEnd);
+                    narrativeMark.style.setProperty('--db-hl-border', theme.border);
+                    narrativeMark.style.setProperty('--db-hl-shadow', theme.shadow);
+
+                    while (sibling.firstChild) {
+                      narrativeMark.appendChild(sibling.firstChild);
+                    }
+                    sibling.appendChild(narrativeMark);
+                    break;
+                  }
+                }
+                sibling = sibling.nextElementSibling;
+                hops++;
+              }
+            }
 
             if (shouldScroll) {
               mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
