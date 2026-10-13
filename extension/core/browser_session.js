@@ -599,7 +599,7 @@
      * @param {string} [colorTheme='amber'] - 'amber' | 'emerald' | 'cyan' | 'violet' | 'rose'
      * @param {boolean} [scrollTo=true] - Whether to center the highlighted text in viewport
      */
-    async highlightText(text, colorTheme = 'amber', scrollTo = true) {
+    async highlightText(text, colorTheme = 'amber', scrollTo = true, clearPrevious = false) {
       if (typeof chrome === 'undefined' || !chrome.scripting || !this.tabId) {
         return { success: false, error: 'Extension tab context not available' };
       }
@@ -607,7 +607,7 @@
       try {
         const result = await chrome.scripting.executeScript({
           target: { tabId: this.tabId },
-          func: (searchText, colorChoice, shouldScroll) => {
+          func: (searchText, colorChoice, shouldScroll, clearOld) => {
             if (!searchText || !searchText.trim()) return { success: false, error: 'Teks kosong.' };
 
             // Check for native PDF viewer (Edge / Chrome PDFium embed plugin)
@@ -740,14 +740,16 @@
             };
             const theme = colorMap[colorChoice] || colorMap.amber;
 
-            // Remove previous text highlights
-            document.querySelectorAll('.__deep_browser_text_highlight__').forEach((el) => {
-              const parent = el.parentNode;
-              if (parent) {
-                parent.replaceChild(document.createTextNode(el.textContent), el);
-                parent.normalize();
-              }
-            });
+            // Only remove previous text highlights if explicitly requested (allows multiple simultaneous highlights)
+            if (clearOld) {
+              document.querySelectorAll('.__deep_browser_text_highlight__').forEach((el) => {
+                const parent = el.parentNode;
+                if (parent) {
+                  parent.replaceChild(document.createTextNode(el.textContent), el);
+                  parent.normalize();
+                }
+              });
+            }
 
             // Find text using TreeWalker
             const walker = document.createTreeWalker(
@@ -877,7 +879,7 @@
               color: colorChoice,
             };
           },
-          args: [text, colorTheme, scrollTo],
+          args: [text, colorTheme, scrollTo, clearPrevious],
         });
 
         const res = result[0]?.result;

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { LogEvent } from '../../types';
 
+import { normalizeImageSrc } from '../thread/ToolStepCard';
+
 interface LogsViewProps {
   events: LogEvent[];
   filter: 'all' | 'tools' | 'approvals' | 'errors' | 'verifications';
@@ -41,20 +43,17 @@ export const LogsView: React.FC<LogsViewProps> = ({
   const getPayloadImage = (payload: any): string | null => {
     if (!payload || typeof payload !== 'object') return null;
     const img = payload.screenshotDataUrl || payload.screenshot || payload.dataUrl;
-    if (typeof img === 'string' && (img.startsWith('data:image') || img.startsWith('blob:') || img.startsWith('http'))) {
-      return img;
-    }
-    return null;
+    return normalizeImageSrc(img);
   };
 
   const getCleanPayload = (payload: any): any => {
     if (!payload || typeof payload !== 'object') return payload;
     const copy: any = { ...payload };
-    if (copy.screenshotDataUrl && typeof copy.screenshotDataUrl === 'string') {
-      copy.screenshotDataUrl = `[DataURL Image: ${copy.screenshotDataUrl.slice(0, 30)}...]`;
+    if (copy.screenshotDataUrl && normalizeImageSrc(copy.screenshotDataUrl)) {
+      copy.screenshotDataUrl = '[Gambar Tangkapan Layar Viewport]';
     }
-    if (copy.screenshot && typeof copy.screenshot === 'string' && copy.screenshot.startsWith('data:image')) {
-      copy.screenshot = `[DataURL Image: ${copy.screenshot.slice(0, 30)}...]`;
+    if (copy.screenshot && normalizeImageSrc(copy.screenshot)) {
+      copy.screenshot = '[Gambar Tangkapan Layar Viewport]';
     }
     return copy;
   };
@@ -161,10 +160,14 @@ export const LogsView: React.FC<LogsViewProps> = ({
           })
         )}
 
-        {/* Live Loading Spinner for Upcoming Logs / In-Progress Tasks */}
+        {/* Live Loading Indicator for Upcoming Logs / In-Progress Tasks */}
         {runState === 'running' && (
           <div className="log-running-card">
-            <span className="spinner-mini" />
+            <div className="sleek-pulse-indicator">
+              <span />
+              <span />
+              <span />
+            </div>
             <span>Mengeksekusi event browser berikutnya...</span>
           </div>
         )}

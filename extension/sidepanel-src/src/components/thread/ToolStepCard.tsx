@@ -6,15 +6,31 @@ interface ToolStepCardProps {
   defaultOpen?: boolean;
 }
 
-export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = false }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+export function normalizeImageSrc(val: unknown): string | null {
+  if (typeof val !== 'string') return null;
+  const s = val.trim();
+  if (!s || s === 'Captured' || s === 'OK') return null;
+  if (s.startsWith('data:image') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('blob:')) {
+    return s;
+  }
+  // Check if it's base64 (PNG starts with iVBOR, JPEG with /9j/, WebP with UklG, or raw base64 string)
+  if (s.startsWith('iVBOR') || s.startsWith('/9j/') || s.startsWith('UklG') || (s.length > 50 && !s.includes(' ') && !s.includes('\n'))) {
+    return `data:image/png;base64,${s}`;
+  }
+  return null;
+}
+
+export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step }) => {
+  // Always default to false - step details remain collapsed unless explicitly clicked
+  const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
 
   // Extract screenshot image data if present
   const resultObj = step.result && typeof step.result === 'object' ? (step.result as any) : null;
-  const rawScreenshot = resultObj?.screenshotDataUrl || resultObj?.screenshot || (typeof step.result === 'string' && step.result.startsWith('data:image') ? step.result : null);
-  const hasScreenshotImage = typeof rawScreenshot === 'string' && (rawScreenshot.startsWith('data:image') || rawScreenshot.startsWith('blob:') || rawScreenshot.startsWith('http'));
+  const rawCandidate = resultObj?.screenshotDataUrl || resultObj?.screenshot || (typeof step.result === 'string' ? step.result : null);
+  const screenshotImgSrc = normalizeImageSrc(rawCandidate);
+  const hasScreenshotImage = Boolean(screenshotImgSrc);
 
   const copyPayload = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -26,16 +42,16 @@ export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = 
   // Filter huge base64 data out of the JSON snippet display so user sees clean JSON
   const getCleanResult = () => {
     if (!step.result) return undefined;
-    if (typeof step.result === 'string' && step.result.startsWith('data:image')) {
-      return { screenshot: '[Gambar Base64 Tersimpan]' };
+    if (typeof step.result === 'string' && normalizeImageSrc(step.result)) {
+      return { screenshot: '[Gambar Tangkapan Layar Viewport]' };
     }
     if (typeof step.result === 'object') {
       const copy: any = { ...step.result };
-      if (copy.screenshotDataUrl && typeof copy.screenshotDataUrl === 'string') {
-        copy.screenshotDataUrl = `[DataURL Image: ${copy.screenshotDataUrl.slice(0, 30)}...]`;
+      if (copy.screenshotDataUrl && normalizeImageSrc(copy.screenshotDataUrl)) {
+        copy.screenshotDataUrl = '[Gambar Tangkapan Layar Viewport]';
       }
-      if (copy.screenshot && typeof copy.screenshot === 'string' && copy.screenshot.startsWith('data:image')) {
-        copy.screenshot = `[DataURL Image: ${copy.screenshot.slice(0, 30)}...]`;
+      if (copy.screenshot && normalizeImageSrc(copy.screenshot)) {
+        copy.screenshot = '[Gambar Tangkapan Layar Viewport]';
       }
       return copy;
     }
@@ -52,7 +68,7 @@ export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = 
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
           {step.duration && <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{step.duration}</span>}
           <span className={`tool-status-tag ${step.status}`}>
-            {step.status === 'running' && <span className="spinner-mini" />}
+            {step.status === 'running' && <span className="sleek-micro-spinner" />}
             {step.status}
           </span>
           <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
@@ -75,11 +91,11 @@ export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = 
           </div>
 
           {/* Screenshot Visual Image Preview */}
-          {hasScreenshotImage && (
+          {hasScreenshotImage && screenshotImgSrc && (
             <div className="tool-screenshot-section">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  Tangkapan Layar Aktif
+                  Tangkapan Layar Viewport
                 </span>
                 <button
                   type="button"
@@ -97,8 +113,8 @@ export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = 
                 title="Klik untuk memperbesar gambar"
               >
                 <img
-                  src={rawScreenshot}
-                  alt="Tangkapan layar browser"
+                  src={screenshotImgSrc}
+                  alt="Tangkapan layar viewport"
                   className="tool-screenshot-img"
                 />
               </div>
@@ -139,7 +155,7 @@ export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = 
       )}
 
       {/* Lightbox Modal for Full View Screenshot */}
-      {showImageModal && hasScreenshotImage && (
+      {showImageModal && hasScreenshotImage && screenshotImgSrc && (
         <div className="modal-backdrop" onClick={() => setShowImageModal(false)} style={{ zIndex: 9999 }}>
           <div className="screenshot-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="screenshot-modal-header">
@@ -149,7 +165,7 @@ export const ToolStepCard: React.FC<ToolStepCardProps> = ({ step, defaultOpen = 
               </button>
             </div>
             <div className="screenshot-modal-body">
-              <img src={rawScreenshot} alt="Full Screenshot Preview" style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '4px' }} />
+              <img src={screenshotImgSrc} alt="Full Screenshot Preview" style={{ width: '100%', height: 'auto', display: 'block', borderRadius: '4px' }} />
             </div>
           </div>
         </div>

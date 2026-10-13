@@ -3140,15 +3140,54 @@ h1, h2 {
   color: #09090b;
 }
 
-/* --- In-progress Spinner & Active Running Indicators --- */
-.spinner-mini {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--accent, #3b82f6);
+/* --- Sleek Minimalist Monochrome Running & Progress Indicators (Non-AI-Slop) --- */
+.sleek-pulse-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  flex-shrink: 0;
+}
+
+.sleek-pulse-indicator span {
+  width: 3.5px;
+  height: 3.5px;
+  background: #e4e4e7;
   border-radius: 50%;
-  animation: spinSymbol 0.8s linear infinite;
+  opacity: 0.25;
+  animation: sleek-pulse-wave 1.4s ease-in-out infinite;
+}
+
+.sleek-pulse-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.sleek-pulse-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.sleek-pulse-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes sleek-pulse-wave {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.sleek-micro-spinner {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spinSymbol 0.7s linear infinite;
   vertical-align: middle;
   flex-shrink: 0;
 }
@@ -3157,15 +3196,15 @@ h1, h2 {
 .log-running-card {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 6px 10px;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px dashed rgba(59, 130, 246, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-sm, 6px);
   color: var(--text-secondary, #a1a1aa);
-  font-size: 10.5px;
-  font-family: var(--font-mono, monospace);
-  animation: pulse-dot 2s infinite ease-in-out;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: -0.01em;
 }
 
 /* --- Interleaved Reasoning Activity Item --- */

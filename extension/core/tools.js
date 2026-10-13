@@ -508,7 +508,7 @@
           case 'highlight': {
             const text = String(params.text || params.query || '');
             if (!text) return { success: false, error: 'highlight_text requires a "text" parameter.' };
-            const res = await this.browserSession.highlightText(text, params.color || 'amber', params.scroll_to !== false);
+            const res = await this.browserSession.highlightText(text, params.color || 'amber', params.scroll_to !== false, Boolean(params.clear_previous));
             if (res.error) return { success: false, error: res.error };
             return {
               success: true,

@@ -119,7 +119,13 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                   }}
                 />
                 <span style={{ fontWeight: 600 }}>Langkah & Penalaran Browser</span>
-                {isRunning && <span className="spinner-mini" style={{ marginLeft: '4px' }} />}
+                {isRunning && (
+                  <div className="sleek-pulse-indicator" style={{ marginLeft: '6px' }}>
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                )}
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)' }}>
                 {isRunning ? 'Sedang Berjalan...' : `${totalStepsCount} langkah selesai`}
@@ -131,7 +137,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                 {activities.length > 0 ? (
                   activities.map((act) => {
                     if (act.type === 'step' && act.step) {
-                      return <ToolStepCard key={act.id} step={act.step} defaultOpen={isRunning} />;
+                      return <ToolStepCard key={act.id} step={act.step} />;
                     }
                     if (act.type === 'reasoning' && act.thought) {
                       return <ReasoningItem key={act.id} thought={act.thought} isStreaming={isRunning} />;
@@ -141,7 +147,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                 ) : (
                   <>
                     {steps.map((st) => (
-                      <ToolStepCard key={st.id} step={st} defaultOpen={isRunning} />
+                      <ToolStepCard key={st.id} step={st} />
                     ))}
                     {message.thought && (
                       <ReasoningItem thought={message.thought} isStreaming={isRunning} />
@@ -149,11 +155,15 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                   </>
                 )}
 
-                {/* Animated Future Log / Loading Spinner while Step is actively executing */}
+                {/* Sleek Minimal Monochrome Progress Indicator */}
                 {isRunning && (
                   <div className="activity-loading-item">
-                    <span className="spinner-mini" />
-                    <span>Mengeksekusi langkah berikutnya...</span>
+                    <div className="sleek-pulse-indicator">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <span>Mengeksekusi tindakan browser...</span>
                   </div>
                 )}
               </div>
