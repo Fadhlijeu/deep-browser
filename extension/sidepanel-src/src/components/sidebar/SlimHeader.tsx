@@ -115,22 +115,9 @@ export const SlimHeader: React.FC<SlimHeaderProps> = ({
           onClick={onToggleOnline}
           title={connInfo.title}
         >
-          <div className={`status-dot dot-${connectionStatus}`} />
-          {connInfo.icon}
+          <span className={`status-dot dot-${connectionStatus}`} />
           <span className="status-label">{connInfo.label}</span>
         </button>
-
-        {/* Quick Go Online action button if disconnected */}
-        {connectionStatus === 'disconnected' && (
-          <button
-            className="quick-online-btn"
-            onClick={onToggleOnline}
-            title="Aktifkan Mode Online In-Browser langsung"
-          >
-            <Zap size={10} style={{ flexShrink: 0 }} />
-            <span>Go Online</span>
-          </button>
-        )}
       </div>
     </header>
   );

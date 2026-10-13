@@ -79,7 +79,7 @@ export class SidepanelStateManager {
       tabs: [],
       runState: 'idle',
       connectionStatus: 'standalone',
-      connectionMode: 'auto',
+      connectionMode: 'standalone',
       sidepanelEnabled: true,
       indexLabelingEnabled: true,
       isDetached,
