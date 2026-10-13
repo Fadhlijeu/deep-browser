@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { sidepanelStore, SidepanelState } from './state/sidepanelStore';
 import { Topbar } from './components/topbar/Topbar';
-import { TabStrip } from './components/topbar/TabStrip';
 import { AssistantThread } from './components/thread/AssistantThread';
 import { LogsView } from './components/logs/LogsView';
 import { SessionDrawer } from './components/modals/SessionDrawer';
@@ -43,9 +42,6 @@ export const App: React.FC = () => {
         indexLabelingEnabled={state.indexLabelingEnabled}
         onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
       />
-
-      {/* Tabs Strip */}
-      <TabStrip tabs={state.tabs} />
 
       {/* Main View Area */}
       <main className="main-content">
