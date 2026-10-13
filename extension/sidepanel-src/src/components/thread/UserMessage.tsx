@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -26,13 +27,16 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
           className="icon-btn"
           onClick={copyText}
           title="Salin Pesan"
-          style={{ width: '16px', height: '16px', padding: 0 }}
+          style={{ width: '18px', height: '18px', padding: 0 }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-            {copied ? 'check' : 'content_copy'}
-          </span>
+          {copied ? (
+            <Check size={11} style={{ color: 'var(--status-success)' }} />
+          ) : (
+            <Copy size={11} style={{ color: 'var(--text-tertiary)' }} />
+          )}
         </button>
       </div>
     </div>
   );
 };
+

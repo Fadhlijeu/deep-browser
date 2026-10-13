@@ -44,6 +44,10 @@
 
         const pixelsAbove = scrollY;
         const pixelsBelow = Math.max(0, docHeight - (scrollY + viewportHeight));
+        const scrollPercentage = docHeight > viewportHeight
+          ? Math.min(100, Math.round((scrollY / (docHeight - viewportHeight)) * 100))
+          : 100;
+        const hasMoreContentBelow = pixelsBelow > 80;
 
         // Interactive tag selectors
         const INTERACTIVE_SELECTORS = [
@@ -129,6 +133,13 @@
 
           el.setAttribute('data-deep-browser-idx', String(idx));
 
+          // Extract interactive states (tabs, toggles, checkboxes, sliders, accordions)
+          const ariaSelected = el.getAttribute('aria-selected');
+          const ariaChecked = el.getAttribute('aria-checked');
+          const ariaExpanded = el.getAttribute('aria-expanded');
+          const isChecked = (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? 'true' : 'false') : null;
+          const sliderVal = (el.type === 'range' || el.tagName === 'PROGRESS') ? el.value : null;
+
           const elementData = {
             index: idx,
             tag,
@@ -138,6 +149,10 @@
             placeholder: el.getAttribute('placeholder') || null,
             role: el.getAttribute('role') || null,
             href: el.getAttribute('href') || null,
+            selected: ariaSelected || null,
+            checked: ariaChecked || isChecked || null,
+            expanded: ariaExpanded || null,
+            value: sliderVal || null,
             text,
             xpath,
             bounds: {
@@ -166,6 +181,10 @@
           if (item.name) attrs += ` name="${item.name}"`;
           if (item.placeholder) attrs += ` placeholder="${item.placeholder}"`;
           if (item.role) attrs += ` role="${item.role}"`;
+          if (item.selected !== null && item.selected !== undefined) attrs += ` selected="${item.selected}"`;
+          if (item.checked !== null && item.checked !== undefined) attrs += ` checked="${item.checked}"`;
+          if (item.expanded !== null && item.expanded !== undefined) attrs += ` expanded="${item.expanded}"`;
+          if (item.value !== null && item.value !== undefined) attrs += ` value="${item.value}"`;
           if (item.href) attrs += ` href="${item.href.slice(0, 60)}"`;
 
           const content = item.text ? item.text : '';
@@ -183,6 +202,8 @@
             scroll_y: scrollY,
             pixels_above: pixelsAbove,
             pixels_below: pixelsBelow,
+            scroll_percentage: scrollPercentage,
+            has_more_content_below: hasMoreContentBelow,
             document_width: docWidth,
             document_height: docHeight,
           },

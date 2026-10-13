@@ -278,45 +278,7 @@
           } else {
             this._emit('ACTION_EXECUTED', actionResult.message || `Aksi ${actionName} dieksekusi`, { data: actionResult.data });
 
-            if (actionName === 'screenshot' || actionName === 'take_screenshot') {
-              const rawImg = actionResult.data?.screenshotDataUrl;
-              
-              // ─── Multimodal Vision Context Verification ─────────────────────────
-              this._emit('REASONING', 'Memeriksa keakuratan konteks visual screenshot dengan Gemini Vision...');
-              const evalRes = await this.llmClient.evaluateScreenshotWithVision({
-                imageBase64: rawImg,
-                userGoal: this.task,
-                currentUrl: state.url,
-              });
-
-              if (!evalRes.valid) {
-                const failMsg = `Screenshot ditolak oleh Evaluator Vision: ${evalRes.reason}. (Saran: ${evalRes.suggested_action})`;
-                this._emit('REASONING', `⚠️ ${failMsg}`);
-                this._emit('ACTION_FAILED', failMsg, { evalResult: evalRes });
-                this.messageManager.recordStep(
-                  this.step,
-                  decision.thinking,
-                  { name: actionName, parameters: params },
-                  { success: false, error: failMsg, evalResult: evalRes }
-                );
-                continue; // Do not send invalid screenshot to user, continue step loop to navigate/scroll to real article!
-              }
-
-              this._emit('REASONING', `✓ Screenshot terverifikasi: ${evalRes.reason}`);
-              this._emit('SCREENSHOT_CAPTURED', 'Screenshot viewport berhasil diambil.', actionResult.data);
-              
-              const taskLower = (this.task || '').toLowerCase().trim();
-              if (taskLower.includes('screenshot') || taskLower.includes('tangkap layar') || taskLower.includes('gambar')) {
-                const finalAnswer = `Screenshot terverifikasi berhasil diambil dari sumber:\n**${state.title || state.url}**\n\n> *${evalRes.reason}*`;
-                this.isRunning = false;
-                this._emit('TASK_COMPLETED', finalAnswer, {
-                  result: finalAnswer,
-                  totalSteps: this.step,
-                  success: true,
-                });
-                return { success: true, result: finalAnswer, totalSteps: this.step };
-              }
-            } else if (actionName === 'parallel_research') {
+            if (actionName === 'parallel_research') {
               const report = actionResult.data?.synthesizedReport || actionResult.message;
               this.isRunning = false;
               this._emit('TASK_COMPLETED', report, {

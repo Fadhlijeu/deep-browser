@@ -1,11 +1,23 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { PRESET_OPTIONS, MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Cpu,
+  ArrowUp,
+  Square,
+  Bot,
+  Search,
+  Database,
+  FileText,
+  Eye,
+} from 'lucide-react';
+import { PRESET_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
 import { PresetId, ExecutionMode, ModelDef } from '../../types';
 
 interface ComposerProps {
   runState: string;
   selectedPreset: PresetId;
-  selectedMode: ExecutionMode;
+  selectedMode?: ExecutionMode;
   selectedModel: ModelDef;
   onSend: (text: string) => void;
   onCancel: () => void;
@@ -17,12 +29,10 @@ interface ComposerProps {
 export const Composer: React.FC<ComposerProps> = ({
   runState,
   selectedPreset,
-  selectedMode,
   selectedModel,
   onSend,
   onCancel,
   onOpenModels,
-  onOpenSettings,
   initialPrompt = '',
 }) => {
   const [text, setText] = useState(initialPrompt);
@@ -93,7 +103,21 @@ export const Composer: React.FC<ComposerProps> = ({
     e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
   };
 
-  const currentModeDef = MODE_OPTIONS.find((m) => m.id === selectedMode) || MODE_OPTIONS[0];
+  const renderPresetIcon = (id: PresetId) => {
+    switch (id) {
+      case 'research':
+        return <Search size={12} style={{ flexShrink: 0 }} />;
+      case 'data_extraction':
+        return <Database size={12} style={{ flexShrink: 0 }} />;
+      case 'form_filling':
+        return <FileText size={12} style={{ flexShrink: 0 }} />;
+      case 'read_only':
+        return <Eye size={12} style={{ flexShrink: 0 }} />;
+      case 'default':
+      default:
+        return <Bot size={12} style={{ flexShrink: 0 }} />;
+    }
+  };
 
   return (
     <div className="composer-dock">
@@ -106,7 +130,7 @@ export const Composer: React.FC<ComposerProps> = ({
             title="Scroll preset kiri"
             aria-label="Scroll preset kiri"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>chevron_left</span>
+            <ChevronLeft size={12} />
           </button>
         )}
 
@@ -118,7 +142,7 @@ export const Composer: React.FC<ComposerProps> = ({
               onClick={() => sidepanelStore.setSelectedPreset(p.id)}
               title={`Mode Preset: ${p.name}`}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{p.icon}</span>
+              {renderPresetIcon(p.id)}
               <span>{p.name}</span>
             </button>
           ))}
@@ -131,7 +155,7 @@ export const Composer: React.FC<ComposerProps> = ({
             title="Scroll preset kanan"
             aria-label="Scroll preset kanan"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>chevron_right</span>
+            <ChevronRight size={12} />
           </button>
         )}
       </div>
@@ -158,22 +182,8 @@ export const Composer: React.FC<ComposerProps> = ({
             onClick={onOpenModels}
             title={`Model Aktif: ${selectedModel.name}`}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '12px', color: 'var(--accent)' }}>
-              {selectedModel.icon}
-            </span>
+            <Cpu size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span>{selectedModel.name}</span>
-          </button>
-
-          {/* Mode Selector Pill */}
-          <button
-            className="pill-selector-btn"
-            onClick={onOpenSettings}
-            title={`Mode Eksekusi: ${currentModeDef.name}`}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '12px', color: 'var(--status-warning)' }}>
-              {currentModeDef.icon}
-            </span>
-            <span>{currentModeDef.name}</span>
           </button>
         </div>
 
@@ -184,11 +194,14 @@ export const Composer: React.FC<ComposerProps> = ({
           disabled={runState !== 'running' && !text.trim()}
           title={runState === 'running' ? 'Hentikan Eksekusi' : 'Kirim Perintah'}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-            {runState === 'running' ? 'stop' : 'arrow_upward'}
-          </span>
+          {runState === 'running' ? (
+            <Square size={13} fill="currentColor" />
+          ) : (
+            <ArrowUp size={15} strokeWidth={2.4} />
+          )}
         </button>
       </div>
     </div>
   );
 };
+

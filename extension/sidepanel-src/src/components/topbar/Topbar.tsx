@@ -1,4 +1,17 @@
 import React from 'react';
+import {
+  Menu,
+  Zap,
+  Network,
+  RefreshCw,
+  Unlink,
+  MessageSquare,
+  Terminal,
+  ExternalLink,
+  Minimize2,
+  Plus,
+  Settings,
+} from 'lucide-react';
 import { RunState, ConnectionStatus } from '../../types';
 
 interface TopbarProps {
@@ -27,16 +40,12 @@ export const Topbar: React.FC<TopbarProps> = ({
   stepCount,
   currentView,
   logsCount,
-  indexLabelingEnabled = true,
   onSetView,
   onOpenDrawer,
   onNewSession,
-  onOpenApikeys,
   onOpenSettings,
-  onReconnect,
   onToggleOnline,
   onToggleDetach,
-  onToggleIndexLabeling,
 }) => {
   const getBrowserIcon = () => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
@@ -76,17 +85,17 @@ export const Topbar: React.FC<TopbarProps> = ({
     }
   };
 
-  const getConnectionSymbol = () => {
+  const renderConnectionIcon = () => {
     switch (connectionStatus) {
       case 'connected':
-        return 'lan';
+        return <Network size={11} className="status-symbol" />;
       case 'standalone':
-        return 'bolt';
+        return <Zap size={11} className="status-symbol" />;
       case 'reconnecting':
-        return 'sync';
+        return <RefreshCw size={11} className="status-symbol" style={{ animation: 'spinSymbol 1.5s linear infinite' }} />;
       case 'disconnected':
       default:
-        return 'link_off';
+        return <Unlink size={11} className="status-symbol" />;
     }
   };
 
@@ -108,11 +117,11 @@ export const Topbar: React.FC<TopbarProps> = ({
     <div className="topbar">
       <div className="topbar-left">
         <button className="icon-btn" onClick={onOpenDrawer} title="Menu Sesi">
-          <span className="material-symbols-outlined">menu</span>
+          <Menu size={16} />
         </button>
 
         <div className="brand-wrap">
-          {/* Browser Icon (No text abbreviation) */}
+          {/* Browser Icon */}
           <div className="browser-icon-badge" title="Browser Terintegrasi">
             {getBrowserIcon()}
           </div>
@@ -124,9 +133,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             title={getConnectionTitle()}
           >
             <div className={`status-dot dot-${connectionStatus}`}></div>
-            <span className={`material-symbols-outlined status-symbol symbol-${connectionStatus}`}>
-              {getConnectionSymbol()}
-            </span>
+            {renderConnectionIcon()}
             <span className="status-label">
               {getConnectionLabel()}
             </span>
@@ -139,7 +146,7 @@ export const Topbar: React.FC<TopbarProps> = ({
               onClick={onToggleOnline}
               title="Aktifkan Mode Online In-Browser langsung tanpa backend Python"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>bolt</span>
+              <Zap size={12} style={{ flexShrink: 0 }} />
               <span>Go Online</span>
             </button>
           )}
@@ -163,7 +170,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             aria-selected={currentView === 'chat'}
             title="Tampilan Chat & Timeline"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>chat</span>
+            <MessageSquare size={13} style={{ flexShrink: 0 }} />
             <span>Chat</span>
           </button>
           <button
@@ -173,7 +180,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             aria-selected={currentView === 'logs'}
             title="Tampilan Event Logs"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>terminal</span>
+            <Terminal size={13} style={{ flexShrink: 0 }} />
             <span>Logs</span>
             {logsCount > 0 && <span className="badge-count">{logsCount}</span>}
           </button>
@@ -187,17 +194,16 @@ export const Topbar: React.FC<TopbarProps> = ({
           onClick={onToggleDetach}
           title={isDetached ? 'Pasang Kembali ke Sidepanel' : 'Lepas dari Sidepanel (Buka Jendela Melayang)'}
         >
-          <span className="material-symbols-outlined">
-            {isDetached ? 'dock_to_right' : 'open_in_new'}
-          </span>
+          {isDetached ? <Minimize2 size={14} /> : <ExternalLink size={14} />}
         </button>
         <button className="icon-btn" onClick={onNewSession} title="Sesi Baru">
-          <span className="material-symbols-outlined">add</span>
+          <Plus size={15} />
         </button>
         <button className="icon-btn" onClick={onOpenSettings} title="Pengaturan & Mode Engine">
-          <span className="material-symbols-outlined">tune</span>
+          <Settings size={15} />
         </button>
       </div>
     </div>
   );
 };
+

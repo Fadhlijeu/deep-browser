@@ -88,23 +88,29 @@
 Your mission is to evaluate a captured screenshot against the user's explicit goal.
 
 RULES FOR EVALUATION:
-1. If the user asked for an ARTICLE, NEWS, or REPORT (e.g. "Cari artikel terbaru mengenai perkembangan AI di Google"):
-   - Is this an actual article page with headline, author/date, and paragraphs?
-   - Or is this just a generic corporate homepage, marketing landing page (e.g. "Create images", "Try in Gemini", "Flow Agent"), login screen, or cookie popup? If it is a generic marketing/commercial landing page, IT IS INVALID (valid: false)!
-2. If the user asked for a PROFILE or BIODATA (e.g. PDDIKTI student profile):
-   - Is this an actual profile detail page?
-   - Or is this a search results table with multiple rows? If it is just a search results list, IT IS INVALID (valid: false)!
-3. If the page is blank, errored, or blocked by a full-screen cookie consent dialog, IT IS INVALID (valid: false).
+1. CONTENT QUALITY & COMPLETENESS:
+   - Does this image show the true substantive content requested (specific article, record, repository, profile, or detail view)?
+   - Or is this just a generic corporate homepage, marketing landing page, login screen, or cookie popup? If it is a generic landing page or cookie popup, IT IS INVALID (valid: false)!
+2. SEARCH LIST VS DETAIL VIEW:
+   - If the user requested a specific profile, entity biodata, product detail, or article:
+   - Is this an actual detail view?
+   - Or is this merely a search results list or table with candidate links? If it is just a search results list, IT IS INVALID (valid: false)!
+3. VISUAL TRUNCATION & SCROLL COMPLETION:
+   - Is essential requested text or table data noticeably cut off, sliced in half at the bottom border, or truncated where scrolling down is required to view it in full? If critical text is cut off, IT IS INVALID (valid: false) with issue: "truncated_content".
+4. INTERACTIVE STATE (SLIDERS, DRAWERS, TOGGLES):
+   - Are required drawers, accordions, or sliders closed or unexpanded when they should be opened to view target details? If so, IT IS INVALID (valid: false) with issue: "unopened_container".
+5. ERROR OR BLANK STATE:
+   - If the page is blank, errored, or obscured by an overlay, IT IS INVALID (valid: false).
 
 Respond strictly with a JSON object:
 {
   "valid": true | false,
-  "issue": "marketing_landing_page" | "search_results_list" | "cookie_popup" | "blank_page" | "wrong_topic" | "none",
+  "issue": "marketing_landing_page" | "search_results_list" | "cookie_popup" | "blank_page" | "truncated_content" | "unopened_container" | "wrong_topic" | "none",
   "reason": "Clear explanation in Indonesian or English of what the screenshot actually shows and why it passes or fails",
-  "suggested_action": "e.g. 'Search on Google for specific blog article', 'Click target profile link [index]', 'Dismiss cookie popup', 'Scroll down'"
+  "suggested_action": "e.g. 'Scroll down to reveal truncated content', 'Click target detail link [index]', 'Expand accordion or drawer', 'Search on Google for working portal'"
 }`;
 
-      const evalUserPrompt = `User Goal: "${userGoal}"\nCurrent Webpage URL: "${currentUrl}"\n\nCarefully inspect the screenshot image above. Does this image show the true substantive information/article/profile requested, or is it a commercial landing page/search list? Return your JSON evaluation.`;
+      const evalUserPrompt = `User Goal: "${userGoal}"\nCurrent Webpage URL: "${currentUrl}"\n\nCarefully inspect the screenshot image above. Does this image show the true substantive information requested, without being truncated, blocked, or stuck on a search list? Return your JSON evaluation.`;
 
       try {
         let rawResponse = '';
@@ -361,38 +367,141 @@ Respond strictly with a JSON object:
     _parseActionJSON(raw) {
       const clean = String(raw || '').trim();
 
-      // Attempt 1: Direct JSON.parse
-      try {
-        const obj = JSON.parse(clean);
-        return this._validateActionObject(obj);
-      } catch {}
+      const tryParse = (str) => {
+        try {
+          const obj = JSON.parse(str);
+          if (obj && typeof obj === 'object') return obj;
+        } catch {}
+        return null;
+      };
 
-      // Attempt 2: Extract from ```json ... ``` code fence
+      // 1. Direct JSON.parse
+      let parsed = tryParse(clean);
+      if (parsed) return this._validateActionObject(parsed);
+
+      // 2. Extract from ```json ... ``` code fence
       const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (fenceMatch) {
-        try {
-          const obj = JSON.parse(fenceMatch[1]);
-          return this._validateActionObject(obj);
-        } catch {}
+        parsed = tryParse(fenceMatch[1].trim());
+        if (parsed) return this._validateActionObject(parsed);
       }
 
-      // Attempt 3: Extract first { ... } block
+      // 3. Balanced Braces Extraction (safely skips trailing braces like } } or post-json chatter)
+      const balancedJSON = this._extractBalancedJSON(clean);
+      if (balancedJSON) {
+        parsed = tryParse(balancedJSON);
+        if (parsed) return this._validateActionObject(parsed);
+      }
+
+      // 4. Heuristic slice between first '{' and last '}' with trailing closing brace trimming
       const firstBrace = clean.indexOf('{');
       const lastBrace = clean.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace > firstBrace) {
-        try {
-          const jsonSubstring = clean.slice(firstBrace, lastBrace + 1);
-          const obj = JSON.parse(jsonSubstring);
-          return this._validateActionObject(obj);
-        } catch {}
+        let candidate = clean.slice(firstBrace, lastBrace + 1);
+        parsed = tryParse(candidate);
+        if (parsed) return this._validateActionObject(parsed);
+
+        // Try trimming trailing duplicate braces
+        while (candidate.endsWith('}}') || candidate.endsWith('}\n}') || candidate.endsWith('} }')) {
+          candidate = candidate.slice(0, candidate.lastIndexOf('}')).trim();
+          parsed = tryParse(candidate);
+          if (parsed) return this._validateActionObject(parsed);
+        }
       }
 
-      // Fallback: If unparseable, construct a done or wait action with the raw text
+      // 5. Intelligent Action Recovery via Regex
+      // If the model intended an action (e.g. highlight_text, click_element), recover it instead of failing to done!
+      const actionMatch = clean.match(/"action_name"\s*:\s*"([^"]+)"/i) || clean.match(/"action"\s*:\s*"([^"]+)"/i);
+      if (actionMatch) {
+        const action_name = actionMatch[1].trim();
+        const thinkingMatch = clean.match(/"thinking"\s*:\s*"((?:\\.|[^"\\])*)"/i);
+        const thinking = thinkingMatch ? thinkingMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+
+        // Extract parameters block: "parameters": { ... }
+        const paramIndex = clean.indexOf('"parameters"');
+        let params = {};
+        if (paramIndex !== -1) {
+          const paramSubstring = clean.slice(paramIndex);
+          const paramJSON = this._extractBalancedJSON(paramSubstring);
+          if (paramJSON) {
+            params = tryParse(paramJSON) || {};
+          }
+        }
+
+        // If parameters JSON extraction failed, recover known individual parameters via regex
+        if (Object.keys(params).length === 0) {
+          const textMatch = clean.match(/"text"\s*:\s*"((?:\\.|[^"\\])*)"/i);
+          const colorMatch = clean.match(/"color"\s*:\s*"([^"]+)"/i);
+          const indexMatch = clean.match(/"index"\s*:\s*(\d+)/i);
+          const scrollMatch = clean.match(/"scroll_to"\s*:\s*(true|false)/i);
+          const urlMatch = clean.match(/"url"\s*:\s*"([^"]+)"/i);
+          
+          if (textMatch) params.text = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+          if (colorMatch) params.color = colorMatch[1];
+          if (indexMatch) params.index = parseInt(indexMatch[1], 10);
+          if (scrollMatch) params.scroll_to = scrollMatch[1] === 'true';
+          if (urlMatch) params.url = urlMatch[1];
+        }
+
+        return this._validateActionObject({
+          thinking: thinking || 'Recovered action from LLM output',
+          action_name,
+          parameters: params,
+        });
+      }
+
+      // 6. Conversational Plain-Text Fallback
+      // Strip any stray JSON envelope so raw JSON syntax never leaks to the user chat
+      let cleanedText = clean
+        .replace(/^\s*\{[\s\S]*?"thinking":\s*"/i, '')
+        .replace(/"\s*,?\s*\}?\s*$/i, '')
+        .trim();
+
       return {
-        thinking: 'Output was not formatted as valid JSON: ' + clean.slice(0, 100),
+        thinking: 'Output formatted as text response',
         action_name: 'done',
-        parameters: { text: clean, success: true },
+        parameters: { text: cleanedText || clean, success: true },
       };
+    }
+
+    /**
+     * Extracts the first balanced JSON { ... } substring respecting string boundaries and escapes.
+     */
+    _extractBalancedJSON(str) {
+      if (!str) return null;
+      const startIdx = str.indexOf('{');
+      if (startIdx === -1) return null;
+
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+
+      for (let i = startIdx; i < str.length; i++) {
+        const char = str[i];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (char === '\\') {
+          escape = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (char === '{') {
+            depth++;
+          } else if (char === '}') {
+            depth--;
+            if (depth === 0) {
+              return str.slice(startIdx, i + 1);
+            }
+          }
+        }
+      }
+      return null;
     }
 
     _validateActionObject(obj) {

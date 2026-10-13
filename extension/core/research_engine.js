@@ -171,7 +171,7 @@
             worker.keyPoints = [`Prinsip dan model teoritis ${worker.topic}`, `Analisis parameter teknis dan perkembangan mutakhir`];
           }
 
-          worker.status = 'Deep Scraping Selesai ✓';
+          worker.status = 'Deep Scraping Selesai [Selesai]';
           worker.progress = 100;
           worker.done = true;
           this._broadcastWorkersState();
@@ -233,7 +233,7 @@
         return `### ${i + 1}. ${w.topic}\n**Ringkasan Inti**:\n${cleanContent}\n\n**Poin Penting**:\n${bulletPoints}`;
       });
 
-      return `## 🔬 Laporan Riset Paralel Multi-Sumber (${workersList.length} Topik)\n\n${sections.join('\n\n---\n\n')}\n\n> *Data dihimpun secara simultan melalui ${workersList.length} worker peramban paralel.*`;
+      return `## Laporan Riset Paralel Multi-Sumber (${workersList.length} Topik)\n\n${sections.join('\n\n---\n\n')}\n\n> *Data dihimpun secara simultan melalui ${workersList.length} worker peramban paralel.*`;
     }
 
     _broadcastWorkersState() {

@@ -62,7 +62,7 @@
           <button class="db-control-btn" id="db-btn-win-minimize" title="Minimize ke Island Pill (Esc)">
             <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
           </button>
-          <button class="db-control-btn close-btn" id="db-btn-win-close" title="Tutup Floating (✕)">
+          <button class="db-control-btn close-btn" id="db-btn-win-close" title="Tutup Floating">
             <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -432,7 +432,7 @@
     }
     card.innerHTML = `
       <div class="db-snippet-header">
-        <span style="font-weight:600;font-size:11px;color:#c4b5fd">⚡ Riset Paralel (${workers.length} Worker)</span>
+        <span style="font-weight:600;font-size:11px;color:#c4b5fd">Riset Paralel (${workers.length} Worker)</span>
         <span class="db-header-badge running" style="font-size:9px">Aktif</span>
       </div>
       <div class="db-snippet-body" style="display:flex;flex-direction:column;gap:6px">
@@ -457,7 +457,7 @@
     card.className = 'db-media-card';
     card.innerHTML = `
       <div class="db-media-header">
-        <span style="font-weight:600;font-size:11px;color:#f4f4f5">📸 ${esc(fileName)}</span>
+        <span style="font-weight:600;font-size:11px;color:#f4f4f5">${esc(fileName)}</span>
         <a href="${dataUrl}" download="${esc(fileName)}" class="db-media-dl" title="Unduh Screenshot">
           <svg class="db-svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </a>
@@ -475,7 +475,7 @@
     card.className = 'db-snippet-card';
     card.innerHTML = `
       <div class="db-snippet-header">
-        <span style="font-weight:600;font-size:11px;color:#4ade80">📋 ${esc(title)}</span>
+        <span style="font-weight:600;font-size:11px;color:#4ade80">${esc(title)}</span>
         <button class="db-control-btn btn-copy-snip" title="Salin HTML" style="width:20px;height:20px">
           <svg class="db-svg-icon" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
         </button>
@@ -494,7 +494,7 @@
     card.className = 'db-pdf-card';
     card.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px;color:#ef4444">📄</span>
+        <svg class="db-svg-icon" style="color:#ef4444;width:16px;height:16px" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         <div>
           <div style="font-weight:600;font-size:11px;color:#f4f4f5">${esc(fileName)}</div>
           <div style="font-size:9.5px;color:#a1a1aa">${esc(title || 'Dokumen PDF')}</div>
@@ -594,7 +594,7 @@
     const handleChoiceSubmit = (val, label) => {
       card.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#22c55e;padding:4px 0">
-          <span>✓</span>
+          <svg class="db-svg-icon" style="width:13px;height:13px" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           <span>Pilihan terkirim: <strong>${esc(label || val)}</strong> · Memproses...</span>
         </div>
       `;

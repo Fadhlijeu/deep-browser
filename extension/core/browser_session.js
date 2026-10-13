@@ -583,13 +583,121 @@
           func: (searchText, colorChoice, shouldScroll) => {
             if (!searchText || !searchText.trim()) return { success: false, error: 'Teks kosong.' };
 
+            // Ensure animated CSS keyframes & styles are injected into document.head
+            let styleEl = document.getElementById('__deep_browser_highlight_style__');
+            if (!styleEl) {
+              styleEl = document.createElement('style');
+              styleEl.id = '__deep_browser_highlight_style__';
+              styleEl.textContent = `
+                @keyframes __db_hl_sweep__ {
+                  0% {
+                    background-size: 0% 100%;
+                    border-color: transparent;
+                  }
+                  100% {
+                    background-size: 100% 100%;
+                    border-color: var(--db-hl-border);
+                  }
+                }
+                @keyframes __db_hl_glow__ {
+                  0% {
+                    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+                  }
+                  60% {
+                    box-shadow: var(--db-hl-shadow);
+                  }
+                  100% {
+                    box-shadow: var(--db-hl-shadow);
+                  }
+                }
+                @keyframes __db_hl_label_fade__ {
+                  0% {
+                    opacity: 0;
+                    transform: translateY(-2px) scale(0.92);
+                  }
+                  100% {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                  }
+                }
+                .__deep_browser_text_highlight__ {
+                  position: relative;
+                  display: inline;
+                  color: inherit;
+                  font-weight: inherit;
+                  padding: 2px 6px;
+                  margin: 0 1px;
+                  border-radius: 4px;
+                  border: 1px solid var(--db-hl-border);
+                  border-left: 3px solid var(--db-hl-border);
+                  background-image: linear-gradient(90deg, var(--db-hl-bg-start) 0%, var(--db-hl-bg-mid) 70%, var(--db-hl-bg-end) 100%);
+                  background-repeat: no-repeat;
+                  background-position: left center;
+                  background-size: 0% 100%;
+                  box-decoration-break: clone;
+                  -webkit-box-decoration-break: clone;
+                  animation: __db_hl_sweep__ 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+                             __db_hl_glow__ 1.2s ease forwards;
+                  transition: all 0.3s ease;
+                  line-height: inherit;
+                }
+                .__deep_browser_highlight_label__ {
+                  display: inline-block;
+                  font-size: 10px;
+                  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  letter-spacing: 0.5px;
+                  padding: 1px 5px;
+                  margin-right: 5px;
+                  border-radius: 3px;
+                  background: var(--db-hl-border);
+                  color: #ffffff;
+                  vertical-align: middle;
+                  animation: __db_hl_label_fade__ 0.4s ease forwards;
+                  pointer-events: none;
+                }
+              `;
+              document.head.appendChild(styleEl);
+            }
+
             // Color Theory Palette: high contrast against text, semi-translucent background, subtle glow
             const colorMap = {
-              amber: { bg: 'rgba(245, 158, 11, 0.35)', border: '#f59e0b', shadow: '0 0 10px rgba(245, 158, 11, 0.45)' },
-              emerald: { bg: 'rgba(16, 185, 129, 0.35)', border: '#10b981', shadow: '0 0 10px rgba(16, 185, 129, 0.45)' },
-              cyan: { bg: 'rgba(6, 182, 212, 0.35)', border: '#06b6d4', shadow: '0 0 10px rgba(6, 182, 212, 0.45)' },
-              violet: { bg: 'rgba(168, 85, 247, 0.35)', border: '#a855f7', shadow: '0 0 10px rgba(168, 85, 247, 0.45)' },
-              rose: { bg: 'rgba(244, 63, 94, 0.35)', border: '#f43f5e', shadow: '0 0 10px rgba(244, 63, 94, 0.45)' },
+              amber: {
+                bgStart: 'rgba(251, 191, 36, 0.48)',
+                bgMid: 'rgba(245, 158, 11, 0.38)',
+                bgEnd: 'rgba(217, 119, 6, 0.28)',
+                border: '#f59e0b',
+                shadow: '0 0 12px rgba(245, 158, 11, 0.5)',
+              },
+              emerald: {
+                bgStart: 'rgba(52, 211, 153, 0.48)',
+                bgMid: 'rgba(16, 185, 129, 0.38)',
+                bgEnd: 'rgba(5, 150, 105, 0.28)',
+                border: '#10b981',
+                shadow: '0 0 12px rgba(16, 185, 129, 0.5)',
+              },
+              cyan: {
+                bgStart: 'rgba(34, 211, 238, 0.48)',
+                bgMid: 'rgba(6, 182, 212, 0.38)',
+                bgEnd: 'rgba(8, 145, 178, 0.28)',
+                border: '#06b6d4',
+                shadow: '0 0 12px rgba(6, 182, 212, 0.5)',
+              },
+              violet: {
+                bgStart: 'rgba(192, 132, 252, 0.48)',
+                bgMid: 'rgba(168, 85, 247, 0.38)',
+                bgEnd: 'rgba(147, 51, 234, 0.28)',
+                border: '#a855f7',
+                shadow: '0 0 12px rgba(168, 85, 247, 0.5)',
+              },
+              rose: {
+                bgStart: 'rgba(251, 113, 133, 0.48)',
+                bgMid: 'rgba(244, 63, 94, 0.38)',
+                bgEnd: 'rgba(225, 29, 72, 0.28)',
+                border: '#f43f5e',
+                shadow: '0 0 12px rgba(244, 63, 94, 0.5)',
+              },
             };
             const theme = colorMap[colorChoice] || colorMap.amber;
 
@@ -617,13 +725,26 @@
               }
             );
 
-            const searchLower = searchText.trim().toLowerCase();
+            const normalize = (str) => {
+              return (str || '')
+                .toLowerCase()
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/[\u201c\u201d]/g, '"')
+                .replace(/[\u2013\u2014]/g, '-')
+                .replace(/\u00a0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            };
+
+            const searchNorm = normalize(searchText);
             let matchedNode = null;
             let matchStart = -1;
 
+            // Strategy 1: Normalized search in text nodes
             while (walker.nextNode()) {
               const node = walker.currentNode;
-              const idx = node.nodeValue.toLowerCase().indexOf(searchLower);
+              const nodeNorm = normalize(node.nodeValue);
+              const idx = nodeNorm.indexOf(searchNorm);
               if (idx !== -1) {
                 matchedNode = node;
                 matchStart = idx;
@@ -631,17 +752,48 @@
               }
             }
 
-            // Fallback: match first 4 words if exact string is slightly modified by whitespace
+            // Strategy 2: Match significant words prefix (first 4, 3, 2 words)
             if (!matchedNode) {
-              const words = searchLower.split(/\s+/).slice(0, 4).join(' ');
-              const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-              while (walker2.nextNode()) {
-                const node = walker2.currentNode;
-                const idx = node.nodeValue.toLowerCase().indexOf(words);
-                if (idx !== -1) {
-                  matchedNode = node;
-                  matchStart = idx;
-                  break;
+              const words = searchNorm.split(' ').filter(w => w.length > 1);
+              for (const count of [4, 3, 2, 1]) {
+                if (words.length >= count) {
+                  const subSearch = words.slice(0, count).join(' ');
+                  const walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                  while (walker2.nextNode()) {
+                    const node = walker2.currentNode;
+                    const tag = node.parentElement ? node.parentElement.tagName.toLowerCase() : '';
+                    if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'textarea') continue;
+                    const idx = normalize(node.nodeValue).indexOf(subSearch);
+                    if (idx !== -1) {
+                      matchedNode = node;
+                      matchStart = idx;
+                      break;
+                    }
+                  }
+                  if (matchedNode) break;
+                }
+              }
+            }
+
+            // Strategy 3: Cross-tag paragraph / article block search
+            if (!matchedNode) {
+              const blocks = document.querySelectorAll('p, blockquote, li, h1, h2, h3, h4, [role="article"], article');
+              for (const block of blocks) {
+                if (normalize(block.textContent).includes(searchNorm)) {
+                  const innerWalker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+                  const words = searchNorm.split(' ').filter(w => w.length > 2);
+                  while (innerWalker.nextNode()) {
+                    const node = innerWalker.currentNode;
+                    if (node.nodeValue && node.nodeValue.trim().length > 2) {
+                      const hasWord = words.some(w => normalize(node.nodeValue).includes(w));
+                      if (hasWord) {
+                        matchedNode = node;
+                        matchStart = 0;
+                        break;
+                      }
+                    }
+                  }
+                  if (matchedNode) break;
                 }
               }
             }
@@ -662,18 +814,11 @@
             const mark = document.createElement('mark');
             mark.className = '__deep_browser_text_highlight__';
             mark.textContent = targetText;
-            mark.style.cssText = `
-              background: ${theme.bg};
-              color: inherit;
-              border: 1px solid ${theme.border};
-              border-radius: 4px;
-              padding: 2px 4px;
-              margin: 0 1px;
-              box-shadow: ${theme.shadow};
-              transition: all 0.3s ease;
-              display: inline;
-              line-height: inherit;
-            `;
+            mark.style.setProperty('--db-hl-bg-start', theme.bgStart);
+            mark.style.setProperty('--db-hl-bg-mid', theme.bgMid);
+            mark.style.setProperty('--db-hl-bg-end', theme.bgEnd);
+            mark.style.setProperty('--db-hl-border', theme.border);
+            mark.style.setProperty('--db-hl-shadow', theme.shadow);
 
             const fragment = document.createDocumentFragment();
             if (beforeText) fragment.appendChild(document.createTextNode(beforeText));

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Compass, ArrowRight } from 'lucide-react';
 
 interface EmptyStateProps {
   onSelectPrompt: (prompt: string) => void;
@@ -14,7 +15,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
   return (
     <div className="empty-state">
       <div className="empty-icon-wrap">
-        <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>explore</span>
+        <Compass size={22} style={{ color: 'var(--accent)' }} />
       </div>
       <div>
         <h2 className="empty-title">Deep Browser Copilot</h2>
@@ -31,10 +32,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
             onClick={() => onSelectPrompt(s.prompt)}
           >
             <span>{s.label}</span>
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>arrow_forward</span>
+            <ArrowRight size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
           </button>
         ))}
       </div>
     </div>
   );
 };
+

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
@@ -10,7 +11,7 @@ interface AssistantMessageProps {
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) => {
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [thoughtOpen, setThoughtOpen] = useState(true);
+  const [thoughtOpen, setThoughtOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const copyText = () => {
@@ -27,38 +28,40 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
         {/* Run Metadata Strip */}
         <div className="assistant-meta-strip">
           <span className="meta-chip">
-            <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--accent)' }}>bolt</span>
+            <Bot size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <strong>{message.modelName || 'Deep Browser'}</strong>
           </span>
           <span className="meta-chip">
-            <span className="material-symbols-outlined" style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>schedule</span>
+            <Clock size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
             <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </span>
-          {message.preset && (
-            <span className="meta-chip preset-chip">
-              {message.preset.toUpperCase()}
-            </span>
-          )}
           <button
             className="icon-btn"
             onClick={copyText}
             title="Salin Jawaban"
-            style={{ width: '18px', height: '18px', marginLeft: 'auto' }}
+            style={{ width: '20px', height: '20px', marginLeft: 'auto' }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
-              {copied ? 'check' : 'content_copy'}
-            </span>
+            {copied ? (
+              <Check size={12} style={{ color: 'var(--status-success)' }} />
+            ) : (
+              <Copy size={12} style={{ color: 'var(--text-secondary)' }} />
+            )}
           </button>
         </div>
 
-        {/* Execution Timeline Accordion (Collapsed by default so user sees the answer first) */}
+        {/* Execution Timeline Accordion */}
         {steps.length > 0 && (
           <div className="timeline-accordion">
             <div className="timeline-accordion-header" onClick={() => setTimelineOpen(!timelineOpen)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '14px', transform: timelineOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
-                  chevron_right
-                </span>
+                <ChevronRight
+                  size={13}
+                  style={{
+                    transform: timelineOpen ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 0.15s ease',
+                    flexShrink: 0,
+                  }}
+                />
                 <span>Langkah Tindakan Browser</span>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)' }}>
@@ -81,21 +84,26 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
           <HitlApprovalCard hitl={message.hitl} />
         )}
 
-        {/* Thought / Reasoning Block */}
+        {/* Thought / Reasoning Block (Collapsed by default for a clean, compact view) */}
         {message.thought && (
-          <div className="thought-accordion" style={{ margin: '6px 0', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: '6px', background: 'rgba(139, 92, 246, 0.05)', overflow: 'hidden' }}>
+          <div className="thought-accordion">
             <div
+              className="thought-accordion-header"
               onClick={() => setThoughtOpen(!thoughtOpen)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px', cursor: 'pointer', fontSize: '11px', color: '#a78bfa', fontWeight: 600, userSelect: 'none' }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '13px', transform: thoughtOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}>
-                chevron_right
-              </span>
-              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>psychology</span>
+              <ChevronRight
+                size={13}
+                style={{
+                  transform: thoughtOpen ? 'rotate(90deg)' : 'none',
+                  transition: 'transform 0.15s ease',
+                  flexShrink: 0,
+                }}
+              />
+              <Brain size={13} style={{ color: '#a78bfa', flexShrink: 0 }} />
               <span>Penalaran Agen (Reasoning)</span>
             </div>
             {thoughtOpen && (
-              <div style={{ padding: '6px 10px 8px 10px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(139, 92, 246, 0.15)', maxHeight: '180px', overflowY: 'auto' }}>
+              <div className="thought-accordion-body">
                 {message.thought}
               </div>
             )}
@@ -106,8 +114,8 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
         {message.text && (
           <div style={{ marginTop: '2px' }}>
             {message.isError && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--status-error)', fontWeight: 600, marginBottom: '4px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>error</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--status-error)', fontWeight: 600, marginBottom: '4px' }}>
+                <AlertCircle size={13} style={{ flexShrink: 0 }} />
                 <span>Gagal Memproses Permintaan</span>
               </div>
             )}
@@ -120,3 +128,4 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
     </div>
   );
 };
+
