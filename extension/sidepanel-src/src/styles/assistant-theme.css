@@ -3302,6 +3302,55 @@ h1, h2 {
   background: #000000;
 }
 
+/* --- Typewriter & Dynamic Fade-in Typography Animations --- */
+.typing-fade-in {
+  position: relative;
+  animation: typingFadeIn 0.25s ease-out forwards;
+}
 
+@keyframes typingFadeIn {
+  from {
+    opacity: 0.85;
+    transform: translateY(1px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
+.typewriter-cursor {
+  display: inline-block;
+  width: 4px;
+  height: 12px;
+  background: #e4e4e7;
+  margin-left: 3px;
+  vertical-align: middle;
+  border-radius: 1px;
+  opacity: 0.9;
+  animation: typewriterCaretBlink 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 
+@keyframes typewriterCaretBlink {
+  0%, 100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scaleY(0.85);
+  }
+}
+
+.reasoning-typing-pill {
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  background: rgba(167, 139, 250, 0.15);
+  color: #c4b5fd;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  margin-left: 4px;
+  letter-spacing: -0.01em;
+  animation: pulse-dot 1.8s infinite ease-in-out;
+}

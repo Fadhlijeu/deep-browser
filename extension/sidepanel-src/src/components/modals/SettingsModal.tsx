@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import { 
   Bot, 
   Shield, 
@@ -8,8 +7,6 @@ import {
   Pencil, 
   Trash2, 
   Check, 
-  ChevronLeft, 
-  ChevronRight, 
   X, 
   RotateCcw, 
   ExternalLink,
@@ -53,9 +50,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('models');
 
-  // Model CRUD pagination & form state
-  const MODELS_PER_PAGE = 3;
-  const [modelPage, setModelPage] = useState(1);
+  // Model CRUD form state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
@@ -69,19 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Pagination calculation for models
-  const totalModelPages = Math.max(1, Math.ceil(models.length / MODELS_PER_PAGE));
-  const activeModelPage = Math.min(modelPage, totalModelPages);
-  const displayedModels = models.slice((activeModelPage - 1) * MODELS_PER_PAGE, activeModelPage * MODELS_PER_PAGE);
-
-  // Tab navigation helpers
-  const currentTabIndex = TABS.findIndex((t) => t.id === currentTab);
-  const handlePrevTab = () => {
-    if (currentTabIndex > 0) setCurrentTab(TABS[currentTabIndex - 1].id);
-  };
-  const handleNextTab = () => {
-    if (currentTabIndex < TABS.length - 1) setCurrentTab(TABS[currentTabIndex + 1].id);
-  };
+  const displayedModels = models;
 
   // Model CRUD handlers
   const handleOpenAdd = () => {
@@ -126,8 +109,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         baseUrl: formBaseUrl.trim() || undefined,
       };
       sidepanelStore.addModel(newModel);
-      // Navigate to last page to see new model
-      setModelPage(Math.ceil((models.length + 1) / MODELS_PER_PAGE));
     }
     setIsFormOpen(false);
     setEditingModelId(null);
@@ -136,9 +117,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleDeleteModel = (id: string) => {
     if (models.length <= 1) return;
     sidepanelStore.deleteModel(id);
-    if (displayedModels.length === 1 && activeModelPage > 1) {
-      setModelPage(activeModelPage - 1);
-    }
   };
 
   const handleSaveKeys = () => {
@@ -156,9 +134,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="modal-header">
           <div className="modal-header-brand">
             <span className="settings-header-title">Pengaturan Deep Browser</span>
-            <span className="settings-page-badge">
-              Hal {currentTabIndex + 1} / {TABS.length}
-            </span>
           </div>
           <button className="icon-btn" onClick={onClose} title="Tutup">
             <X size={15} />
@@ -368,29 +343,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       );
                     })}
                   </div>
-
-                  {/* Model List Pagination Controls */}
-                  <div className="model-pagination-strip">
-                    <button
-                      className="pagination-btn"
-                      disabled={activeModelPage <= 1}
-                      onClick={() => setModelPage(activeModelPage - 1)}
-                    >
-                      <ChevronLeft size={12} />
-                      <span>Sebelumnya</span>
-                    </button>
-                    <span className="pagination-info">
-                      Halaman {activeModelPage} dari {totalModelPages}
-                    </span>
-                    <button
-                      className="pagination-btn"
-                      disabled={activeModelPage >= totalModelPages}
-                      onClick={() => setModelPage(activeModelPage + 1)}
-                    >
-                      <span>Selanjutnya</span>
-                      <ChevronRight size={12} />
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
@@ -549,30 +501,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
 
-        {/* Modal Pagination Footer (Prev, Page X/Y, Next, Close) */}
-        <div className="modal-footer settings-pagination-footer">
-          <div className="settings-page-stepper">
-            <button
-              className="pagination-btn"
-              disabled={currentTabIndex <= 0}
-              onClick={handlePrevTab}
-            >
-              <ChevronLeft size={12} />
-              <span>Sebelumnya</span>
-            </button>
-            <span className="settings-stepper-label">
-              {TABS[currentTabIndex].label} ({currentTabIndex + 1} dari {TABS.length})
-            </span>
-            <button
-              className="pagination-btn"
-              disabled={currentTabIndex >= TABS.length - 1}
-              onClick={handleNextTab}
-            >
-              <span>Selanjutnya</span>
-              <ChevronRight size={12} />
-            </button>
-          </div>
-
+        {/* Modal Clean Footer */}
+        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 16px' }}>
           <button className="btn-secondary" onClick={onClose}>
             Selesai
           </button>

@@ -4,22 +4,29 @@ import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { useTypewriter } from '../../hooks/useTypewriter';
 
 interface ReasoningItemProps {
   thought: string;
   isStreaming?: boolean;
 }
 
-const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought }) => {
+const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought, isStreaming = false }) => {
   const [open, setOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic accelerating typewriter with fade-in
+  const { displayedText, isTyping } = useTypewriter(thought, {
+    isStreaming,
+    immediate: !isStreaming,
+  });
 
   // Auto-scroll reasoning container to bottom as new tokens arrive
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [thought]);
+  }, [displayedText]);
 
   return (
     <div className="activity-reasoning-item">
@@ -29,14 +36,18 @@ const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought }) => {
           <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
             Penalaran Agen (Reasoning)
           </span>
+          {isTyping && (
+            <span className="reasoning-typing-pill">menalar...</span>
+          )}
         </div>
         <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
           {open ? 'expand_less' : 'expand_more'}
         </span>
       </div>
       {open && (
-        <div ref={scrollRef} className="activity-reasoning-body">
-          {thought}
+        <div ref={scrollRef} className={`activity-reasoning-body ${isTyping ? 'typing-fade-in' : ''}`}>
+          {displayedText}
+          {isTyping && <span className="typewriter-cursor" />}
         </div>
       )}
     </div>
@@ -55,6 +66,15 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   runState = 'idle',
 }) => {
   const isRunning = isCurrentMessage && runState === 'running';
+
+  // Dynamic accelerating typewriter with fade-in for normal response writing
+  const { displayedText: displayedMessageText, isTyping: isMessageTyping } = useTypewriter(
+    message.text || '',
+    {
+      isStreaming: isRunning,
+      immediate: !isCurrentMessage,
+    }
+  );
 
   // State for unified activity accordion:
   // While running, open by default; once finished, auto-collapse so only final text is shown!
@@ -177,7 +197,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
         )}
 
         {/* User-Friendly Response Body */}
-        {message.text && (
+        {displayedMessageText && (
           <div style={{ marginTop: '4px' }}>
             {message.isError && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--status-error)', fontWeight: 600, marginBottom: '4px' }}>
@@ -185,8 +205,9 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                 <span>Gagal Memproses Permintaan</span>
               </div>
             )}
-            <div className="markdown-body">
-              <MarkdownRenderer content={message.text} />
+            <div className={`markdown-body ${isMessageTyping ? 'typing-fade-in' : ''}`}>
+              <MarkdownRenderer content={displayedMessageText} />
+              {isMessageTyping && <span className="typewriter-cursor" />}
             </div>
           </div>
         )}

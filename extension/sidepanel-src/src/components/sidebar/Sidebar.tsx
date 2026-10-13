@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   X, 
   Plus, 
@@ -6,7 +5,6 @@ import {
   Folder, 
   ExternalLink, 
   Settings, 
-  Key, 
   Eye, 
 } from 'lucide-react';
 import { Session } from '../../types';
@@ -21,7 +19,6 @@ interface SidebarProps {
   onSwitchSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onClearActiveSession: () => void;
-  onOpenApikeys: () => void;
   onOpenSettings: () => void;
   onToggleDetach: () => void;
   indexLabelingEnabled: boolean;
@@ -38,7 +35,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSwitchSession,
   onDeleteSession,
   onClearActiveSession,
-  onOpenApikeys,
   onOpenSettings,
   onToggleDetach,
   indexLabelingEnabled,
@@ -144,13 +140,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title="Pengaturan & Mode Engine"
             >
               <Settings size={13} />
-            </button>
-            <button 
-              className="sidebar-icon-action" 
-              onClick={onOpenApikeys} 
-              title="Kunci API"
-            >
-              <Key size={13} />
             </button>
             <button 
               className={`sidebar-icon-action ${indexLabelingEnabled ? 'active' : ''}`} 

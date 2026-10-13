@@ -73,7 +73,6 @@ export const App: React.FC = () => {
         onSwitchSession={(id) => sidepanelStore.switchSession(id)}
         onDeleteSession={(id) => sidepanelStore.deleteSession(id)}
         onClearActiveSession={() => sidepanelStore.clearActiveSession()}
-        onOpenApikeys={() => sidepanelStore.setModal('apikeys', true)}
         onOpenSettings={() => sidepanelStore.setModal('settings', true)}
         onToggleDetach={() => sidepanelStore.toggleDetach()}
         indexLabelingEnabled={state.indexLabelingEnabled}
