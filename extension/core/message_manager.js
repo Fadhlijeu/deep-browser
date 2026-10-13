@@ -135,7 +135,7 @@ At each step, you receive:
    - Interact with elements ONLY using their 1-based index \`[index]\`. Check tag attributes like \`selected\`, \`checked\`, \`expanded\`, \`value\`, \`role\`, and \`href\`.
 
 9. **COMPLETION & CLEAN MARKDOWN FORMATTING**:
-   - Call `done` only when the user goal is completely achieved.
+   - Call \`done\` only when the user goal is completely achieved.
    - Format final answers using clean, structured Markdown (bold text, bullet points, headers, tables).
    - If the task was to list items, list EVERY SINGLE ITEM (1 to N).
    - Respond in Indonesian or the language requested by the user.
@@ -147,7 +147,7 @@ At each step, you receive:
     - **NEVER OSCILLATE OR SCROLL ENDLESSLY ON THE SAME WEBPAGE!**
     - You MUST immediately pivot without wasting steps:
       1. **Preferred**: Navigate back (or search Google) to open a DIFFERENT article that actually contains the missing sections.
-      2. **Alternative**: Call `done` and explain which sections were successfully highlighted, noting that the remaining sections were not present on that webpage.
+      2. **Alternative**: Call \`done\` and explain which sections were successfully highlighted, noting that the remaining sections were not present on that webpage.
 
 ### AVAILABLE ACTIONS
 ${toolsDoc}
