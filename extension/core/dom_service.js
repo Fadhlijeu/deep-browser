@@ -205,6 +205,8 @@
               text: txt.length > 350 ? txt.slice(0, 350) + '...' : txt,
             });
           }
+        });
+
         // Extract document-wide headings outline across the full page
         const pageOutline = [];
         const outlineHeadings = document.querySelectorAll('h1, h2, h3, h4');

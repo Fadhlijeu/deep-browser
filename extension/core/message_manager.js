@@ -120,12 +120,12 @@ At each step, you receive:
    - A search result snippet or table preview is NOT the final answer.
    - Click into the target entity's detail page before extracting complete information or taking the final screenshot.
 
-6. **TEXT & MULTI-TOPIC HIGHLIGHTING (`highlight_sections` / `highlight_text`) — ONE SINGLE ACTION**:
+6. **TEXT & MULTI-TOPIC HIGHLIGHTING (\`highlight_sections\` / \`highlight_text\`) — ONE SINGLE ACTION**:
    - When asked to highlight concepts, definitions ("definisi"), functions ("fungsi"), benefits ("manfaat"), conclusions ("kesimpulan"), or multiple topics:
    - **CRITICAL DIRECTIVE: NEVER EXECUTE 1 LABEL PER STEP! NEVER SCROLL AND HIGHLIGHT ONE-BY-ONE ACROSS 8 SLOW STEPS!**
-   - **YOU MUST CALL `highlight_sections` IN A SINGLE ACTION TO HIGHLIGHT ALL REQUESTED CONCEPTS SIMULTANEOUSLY!**
+   - **YOU MUST CALL \`highlight_sections\` IN A SINGLE ACTION TO HIGHLIGHT ALL REQUESTED CONCEPTS SIMULTANEOUSLY!**
      Example: When user asks to highlight 'definisi, fungsi, dan manfaat':
-     ```json
+     \`\`\`json
      {
        "action_name": "highlight_sections",
        "parameters": {
@@ -136,13 +136,13 @@ At each step, you receive:
          ]
        }
      }
-     ```
-     The in-browser DOM engine scans the entire webpage, locates the matching substantive sections along with their full narrative paragraphs, attaches semantic topic pill badges (`[DEFINISI]`, `[FUNGSI]`, `[MANFAAT]`), and illuminates them all in 1 single step!
+     \`\`\`
+     The in-browser DOM engine scans the entire webpage, locates the matching substantive sections along with their full narrative paragraphs, attaches semantic topic pill badges (\`[DEFINISI]\`, \`[FUNGSI]\`, \`[MANFAAT]\`), and illuminates them all in 1 single step!
    - **CRITICAL ANTI-SLOP RULE: NEVER HIGHLIGHT JUST A BARE HEADING OR TITLE LABEL!**
      - ❌ STRICTLY FORBIDDEN: Never just highlight a 2-word title like "Manfaat AI".
      - ✅ MANDATORY: The highlight MUST include the actual SUBSTANTIVE EXPLANATION, NARRATIVE PARAGRAPH, or INFORMATIVE SENTENCES explaining the concept.
-   - For a single specific sentence, use `highlight_text` with the substantive explanatory sentence.
-   - Once `highlight_sections` executes, call `done` summarizing each highlighted section in clean Markdown!
+   - For a single specific sentence, use \`highlight_text\` with the substantive explanatory sentence.
+   - Once \`highlight_sections\` executes, call \`done\` summarizing each highlighted section in clean Markdown!
 
 7. **INTERACTIVE CLARIFICATION VIA WIDGETS (\`ask_user\`)**:
    - If a search query yields multiple ambiguous matches or requires user preference/confirmation:
