@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle } from 'lucide-react';
 import { ChatMessage } from '../../types';
-import { BranchedExecutionTree } from './BranchedExecutionTree';
+import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -10,6 +10,7 @@ interface AssistantMessageProps {
 }
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) => {
+  const [timelineOpen, setTimelineOpen] = useState(true);
   const [thoughtOpen, setThoughtOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -48,9 +49,34 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
           </button>
         </div>
 
-        {/* Branched Execution Tree (Uiverse Vector SVG Tree Highlight) */}
+        {/* Real-time Execution Steps Accordion */}
         {steps.length > 0 && (
-          <BranchedExecutionTree steps={steps} />
+          <div className="timeline-accordion">
+            <div className="timeline-accordion-header" onClick={() => setTimelineOpen(!timelineOpen)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <ChevronRight
+                  size={13}
+                  style={{
+                    transform: timelineOpen ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 0.15s ease',
+                    flexShrink: 0,
+                  }}
+                />
+                <span>Langkah Tindakan Browser</span>
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)' }}>
+                {steps.length} langkah
+              </span>
+            </div>
+
+            {timelineOpen && (
+              <div className="timeline-steps-list">
+                {steps.map((st) => (
+                  <ToolStepCard key={st.id} step={st} />
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* HITL Review Card */}
@@ -102,4 +128,3 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({ message }) =
     </div>
   );
 };
-

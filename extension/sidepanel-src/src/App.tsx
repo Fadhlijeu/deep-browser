@@ -24,13 +24,16 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      {/* Sleek B&W Slim Header with Hamburger Menu */}
+      {/* Sleek Topbar with Hamburger, Chat/Logs Switcher, and Online Status */}
       <SlimHeader
         onOpenSidebar={() => setSidebarOpen(true)}
-        onNewSession={() => sidepanelStore.createNewSession()}
+        currentView={state.currentView}
+        logsCount={activeSession.events.length}
+        onSetView={(v) => sidepanelStore.setView(v)}
         connectionStatus={state.connectionStatus}
         runState={state.runState}
-        modelName={currentModel.name}
+        stepCount={state.stepCount}
+        onToggleOnline={() => sidepanelStore.toggleOnline()}
       />
 
       {/* Main View Area: Chat or Logs */}
@@ -58,27 +61,19 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Top Layer Overlay Sidebar (Slides in on top of chat when opened) */}
+      {/* Top Layer Overlay Sidebar (Slides over chat when open, vanishes when closed) */}
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        runState={state.runState}
-        connectionStatus={state.connectionStatus}
         isDetached={state.isDetached}
-        stepCount={state.stepCount}
-        currentView={state.currentView}
-        logsCount={activeSession.events.length}
         sessions={state.sessions}
         activeSessionId={state.activeSessionId}
-        onSetView={(v) => sidepanelStore.setView(v)}
         onNewSession={() => sidepanelStore.createNewSession()}
         onSwitchSession={(id) => sidepanelStore.switchSession(id)}
         onDeleteSession={(id) => sidepanelStore.deleteSession(id)}
         onClearActiveSession={() => sidepanelStore.clearActiveSession()}
         onOpenApikeys={() => sidepanelStore.setModal('apikeys', true)}
         onOpenSettings={() => sidepanelStore.setModal('settings', true)}
-        onReconnect={() => sidepanelStore.reconnect()}
-        onToggleOnline={() => sidepanelStore.toggleOnline()}
         onToggleDetach={() => sidepanelStore.toggleDetach()}
         indexLabelingEnabled={state.indexLabelingEnabled}
         onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
