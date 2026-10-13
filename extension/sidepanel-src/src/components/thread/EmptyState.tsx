@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 interface EmptyStateProps {
   onSelectPrompt: (prompt: string) => void;
@@ -7,36 +7,51 @@ interface EmptyStateProps {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
   const suggestions = [
-    { label: 'Cari data mahasiswa di PDDIKTI', prompt: 'Cari website pddikti yang benar lalu cari data mahasiswa dan ambil informasinya' },
-    { label: 'Rangkum konten halaman aktif', prompt: 'Jelajahi halaman aktif ini dan rangkum poin-poin pentingnya secara terstruktur' },
-    { label: 'Riset multi-tab perkembangan AI', prompt: 'Buka 3 tab secara paralel untuk meriset perkembangan AI reasoning terkini' },
+    {
+      code: '01 / AUDIT',
+      title: 'Cari data di PDDIKTI',
+      desc: 'Verifikasi profil, status mahasiswa, dan data kampus.',
+      prompt: 'Cari website pddikti yang benar lalu cari data mahasiswa dan ambil informasinya',
+    },
+    {
+      code: '02 / EXTRACT',
+      title: 'Rangkum Halaman',
+      desc: 'Ekstrak poin penting dan struktur informasi halaman aktif.',
+      prompt: 'Jelajahi halaman aktif ini dan rangkum poin-poin pentingnya secara terstruktur',
+    },
+    {
+      code: '03 / RESEARCH',
+      title: 'Riset Multi-Tab AI',
+      desc: 'Jelajahi beberapa sumber web secara simultan.',
+      prompt: 'Buka 3 tab secara paralel untuk meriset perkembangan AI reasoning terkini',
+    },
   ];
 
   return (
     <div className="empty-state">
-      <div className="empty-icon-wrap">
-        <Compass size={22} style={{ color: 'var(--accent)' }} />
-      </div>
-      <div>
-        <h2 className="empty-title">Deep Browser Copilot</h2>
-        <p className="empty-desc">
-          Otonom menjelajah, menganalisis data, dan mengeksekusi aksi terverifikasi pada Microsoft Edge & Chrome.
+      <div className="empty-header">
+        <h1 className="empty-headline">Deep Browser Copilot</h1>
+        <p className="empty-subtext">
+          Otonom menjelajah, menganalisis data, dan mengeksekusi instruksi terverifikasi langsung pada browser Anda.
         </p>
       </div>
 
-      <div className="prompt-suggestions">
+      <div className="empty-cards-grid">
         {suggestions.map((s, idx) => (
           <button
             key={idx}
-            className="suggestion-btn"
+            className="empty-card"
             onClick={() => onSelectPrompt(s.prompt)}
           >
-            <span>{s.label}</span>
-            <ArrowRight size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+            <div className="empty-card-top">
+              <span className="empty-card-code">{s.code}</span>
+              <ArrowRight size={12} className="empty-card-arrow" />
+            </div>
+            <div className="empty-card-title">{s.title}</div>
+            <div className="empty-card-desc">{s.desc}</div>
           </button>
         ))}
       </div>
     </div>
   );
 };
-
