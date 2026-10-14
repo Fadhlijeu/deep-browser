@@ -192,7 +192,7 @@ Respond strictly with a JSON object:
     }
 
     // ─── Gemini Provider ───────────────────────────────────────────────────────
-    async _callGemini(systemPrompt, textPrompt, screenshotBase64) {
+    async _callGemini(systemPrompt, textPrompt, screenshotBase64, _retryWithoutImage = false) {
       if (!this.apiKey) {
         throw new Error('Google Gemini API Key belum diisi. Masukkan API Key di pengaturan (ikon kunci).');
       }
@@ -204,8 +204,8 @@ Respond strictly with a JSON object:
 
       const parts = [];
 
-      // Add screenshot image if available
-      if (screenshotBase64) {
+      // Add screenshot image if available (skip on retry to avoid vision safety trigger)
+      if (screenshotBase64 && !_retryWithoutImage) {
         parts.push({
           inline_data: {
             mime_type: 'image/png',
@@ -214,8 +214,14 @@ Respond strictly with a JSON object:
         });
       }
 
-      // Add text prompt
-      parts.push({ text: textPrompt });
+      // Guard: Trim textPrompt if it approaches the input token limit (~28k chars ≈ 7k tokens).
+      // Oversized prompts cause Gemini to truncate or refuse, returning empty candidates.
+      const MAX_PROMPT_CHARS = 28000;
+      const trimmedPrompt = textPrompt.length > MAX_PROMPT_CHARS
+        ? textPrompt.slice(0, MAX_PROMPT_CHARS) + '\n[... CONTEXT TRIMMED DUE TO LENGTH LIMIT ...]'
+        : textPrompt;
+
+      parts.push({ text: trimmedPrompt });
 
       const body = {
         system_instruction: {
@@ -227,11 +233,22 @@ Respond strictly with a JSON object:
             parts,
           },
         ],
+        // NOTE: Do NOT set responseMimeType: 'application/json' here.
+        // When Gemini's safety filter fires in JSON-only mode it returns an empty
+        // candidate (no text, no tool calls) which causes the error:
+        //   "model output must contain either output text or tool calls"
+        // We parse JSON ourselves via _parseActionJSON, so plain text output is fine.
         generationConfig: {
           temperature: 0.1,
-          maxOutputTokens: 2048,
-          responseMimeType: 'application/json',
+          maxOutputTokens: 4096,
         },
+        // Relax safety thresholds so browsing content doesn't get blocked unnecessarily
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+        ],
       };
 
       const res = await this._fetchWithRetry(url, {
@@ -247,8 +264,46 @@ Respond strictly with a JSON object:
       }
 
       const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (!text) throw new Error('Gemini API returned empty response');
+
+      // Detect blocked / empty candidates and surface finishReason clearly
+      const candidate = data?.candidates?.[0];
+      const finishReason = candidate?.finishReason || '';
+
+      if (!candidate || !candidate.content) {
+        const blockReason = data?.promptFeedback?.blockReason || '';
+
+        // Auto-retry without image: vision content sometimes trips safety filters.
+        // Only retry once and only when an image was included in the original call.
+        if (!_retryWithoutImage && screenshotBase64) {
+          console.warn('[LLMClient] Gemini empty candidate with image — retrying without screenshot...');
+          return this._callGemini(systemPrompt, textPrompt, null, true);
+        }
+
+        const safetyDetail = blockReason
+          ? `Prompt diblokir oleh safety filter Gemini: ${blockReason}`
+          : finishReason === 'MAX_TOKENS'
+            ? 'Output terpotong karena melebihi batas token Gemini. Kurangi konteks atau histories.'
+            : finishReason === 'RECITATION'
+              ? 'Gemini menolak output karena recitation/copyright policy.'
+              : finishReason === 'SAFETY'
+                ? 'Gemini memblokir output karena safety policy.'
+                : `Gemini mengembalikan kandidat kosong (finishReason: ${finishReason || 'UNKNOWN'}).`;
+        throw new Error(safetyDetail);
+      }
+
+      // Collect all text parts (Gemini may split output across multiple parts)
+      const allParts = candidate.content?.parts || [];
+      const text = allParts.map(p => p.text || '').join('').trim();
+
+      if (!text) {
+        // One final retry without image before giving up
+        if (!_retryWithoutImage && screenshotBase64) {
+          console.warn('[LLMClient] Gemini returned empty text — retrying without screenshot...');
+          return this._callGemini(systemPrompt, textPrompt, null, true);
+        }
+        throw new Error(`Gemini mengembalikan teks kosong (finishReason: ${finishReason || 'STOP'}).`);
+      }
+
       return text;
     }
 
