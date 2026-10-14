@@ -191,15 +191,15 @@
           return `[${item.index}]<${item.tag}${attrs}>${content}</${item.tag}>`;
         });
 
-        // Extract visible content/text blocks (headings, paragraphs, blockquotes) in viewport
+        // Extract visible content/text blocks (headings, paragraphs, blockquotes, table rows, lists) in viewport
         const visibleTextBlocks = [];
-        const contentCandidates = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, [role="article"] p, article p');
+        const contentCandidates = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, tr, [role="row"], li, [role="article"] p, article p');
         contentCandidates.forEach((el) => {
-          if (visibleTextBlocks.length >= 30) return;
+          if (visibleTextBlocks.length >= 45) return;
           const rect = el.getBoundingClientRect();
           if (!isVisible(el, rect)) return;
           const txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-          if (txt.length >= 8) {
+          if (txt.length >= 6) {
             visibleTextBlocks.push({
               tag: el.tagName.toLowerCase(),
               text: txt.length > 350 ? txt.slice(0, 350) + '...' : txt,

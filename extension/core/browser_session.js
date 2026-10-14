@@ -220,7 +220,15 @@
 
       this.cachedSelectorMap = domResult.selectorMap || {};
 
-      // Capture visual viewport screenshot
+      // Update in-page element badges if highlights are enabled BEFORE capturing screenshot
+      // This guarantees 100% visual synchronization between DOM elements and the screenshot!
+      if (this.highlightsEnabled !== false) {
+        await this.updateInPageHighlights(domResult.elements || []);
+      } else {
+        await this.clearInPageHighlights();
+      }
+
+      // Capture visual viewport screenshot (captures live page with synchronized visual labels!)
       let screenshot = null;
       if (includeScreenshot && typeof chrome !== 'undefined' && chrome.tabs?.captureVisibleTab) {
         try {
@@ -248,14 +256,6 @@
       };
 
       this.lastState = stateSummary;
-
-      // Update in-page element badges if highlights are enabled
-      if (this.highlightsEnabled !== false) {
-        this.updateInPageHighlights(domResult.elements || []);
-      } else {
-        this.clearInPageHighlights();
-      }
-
       return stateSummary;
     }
 
@@ -308,26 +308,44 @@
 
             overlay = document.createElement('div');
             overlay.id = OVERLAY_ID;
-            overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483640;';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483640;overflow:hidden;';
 
             items.forEach((item) => {
               if (!item.bounds || item.bounds.width <= 0 || item.bounds.height <= 0) return;
 
+              // 1. Subtle bounding box around the interactive element
+              const box = document.createElement('div');
+              box.className = 'deep-browser-box';
+              box.style.cssText = `
+                position: fixed;
+                left: ${item.bounds.left}px;
+                top: ${item.bounds.top}px;
+                width: ${item.bounds.width}px;
+                height: ${item.bounds.height}px;
+                border: 1.5px solid ${item.tag === 'button' ? 'rgba(239, 68, 68, 0.7)' : item.tag === 'input' ? 'rgba(6, 182, 212, 0.7)' : item.tag === 'a' ? 'rgba(16, 185, 129, 0.7)' : 'rgba(139, 92, 246, 0.7)'};
+                border-radius: 3px;
+                pointer-events: none;
+                box-sizing: border-box;
+                z-index: 2147483645;
+              `;
+              overlay.appendChild(box);
+
+              // 2. High-contrast numeric badge [1], [2], ...
               const badge = document.createElement('div');
               badge.className = 'deep-browser-badge';
               badge.textContent = item.index;
               badge.style.cssText = `
-                position: absolute;
-                left: ${window.scrollX + item.bounds.left}px;
-                top: ${window.scrollY + item.bounds.top - 14}px;
+                position: fixed;
+                left: ${item.bounds.left}px;
+                top: ${Math.max(2, item.bounds.top - 15)}px;
                 background: ${item.tag === 'button' ? '#ef4444' : item.tag === 'input' ? '#06b6d4' : item.tag === 'a' ? '#10b981' : '#8b5cf6'};
                 color: #ffffff;
-                font-family: monospace;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
                 font-size: 10px;
                 font-weight: 700;
                 padding: 1px 4px;
                 border-radius: 3px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                box-shadow: 0 1px 4px rgba(0,0,0,0.5);
                 pointer-events: none;
                 z-index: 2147483647;
               `;
@@ -1203,13 +1221,13 @@
               let matchedTextSnippet = '';
 
               // ── Strategy A: Explicit Text Match (if text is given and not empty) ──────
-              if (sec.text && sec.text.trim().length > 10) {
+              if (sec.text && sec.text.trim().length > 5) {
                 const searchNorm = normalize(sec.text);
-                const candidateBlocks = document.querySelectorAll('p, li, blockquote, h1, h2, h3, h4, [role="article"]');
+                const candidateBlocks = document.querySelectorAll('p, li, blockquote, h1, h2, h3, h4, tr, [role="row"], td, [role="cell"], [role="article"]');
                 for (const block of candidateBlocks) {
                   const blockNorm = normalize(block.textContent);
                   if (blockNorm.includes(searchNorm) || blockNorm.includes(searchNorm.slice(0, 30))) {
-                    const targetBlock = block.closest('li') || block;
+                    const targetBlock = block.closest('tr') || block.closest('li') || block;
                     matchedMark = applyHighlightToElement(targetBlock, theme, sec.topic, false);
                     matchedTextSnippet = (targetBlock.innerText || targetBlock.textContent || '').slice(0, 100);
                     break;
@@ -1243,10 +1261,10 @@
                       if (/^h[1-4]$/i.test(sTag)) break; // stop at next major heading
 
                       let narrativeTargets = [];
-                      if (['p', 'ul', 'ol', 'blockquote'].includes(sTag)) {
+                      if (['p', 'ul', 'ol', 'blockquote', 'table', 'tbody', 'tr'].includes(sTag)) {
                         narrativeTargets.push(sibling);
                       } else if (sibling.querySelectorAll) {
-                        const innerP = sibling.querySelectorAll('p, ul, ol, blockquote');
+                        const innerP = sibling.querySelectorAll('p, ul, ol, blockquote, tr, [role="row"], table');
                         if (innerP.length > 0) {
                           narrativeTargets.push(...Array.from(innerP));
                         } else if (sibling.textContent.trim().length > 30) {
@@ -1256,7 +1274,7 @@
 
                       for (const nTarget of narrativeTargets) {
                         const nText = (nTarget.innerText || nTarget.textContent || '').trim();
-                        if (nText.length > 20 && !nTarget.querySelector('.__deep_browser_text_highlight__')) {
+                        if (nText.length > 10 && !nTarget.querySelector('.__deep_browser_text_highlight__')) {
                           applyHighlightToElement(nTarget, theme, null, true);
                           highlightedNarratives++;
                           if (!matchedTextSnippet || matchedTextSnippet.length < 30) {
@@ -1273,15 +1291,15 @@
                 }
               }
 
-              // ── Strategy C: Paragraph / List Item Keyword Match ───────────────────────
+              // ── Strategy C: Paragraph / Table Row / List Item Keyword Match ─────────
               if (!matchedMark) {
-                const textBlocks = document.querySelectorAll('p, li, blockquote');
+                const textBlocks = document.querySelectorAll('p, li, blockquote, tr, [role="row"], td, [role="cell"]');
                 for (const tb of textBlocks) {
                   if (tb.querySelector('.__deep_browser_text_highlight__')) continue;
                   const tbNorm = normalize(tb.textContent);
-                  const matchesTopic = keywords.some(kw => tbNorm.startsWith(kw) || tbNorm.includes(' ' + kw + ' ') || tbNorm.includes(kw + ':') || tbNorm.includes(kw + ' -'));
-                  if (matchesTopic && tbNorm.length > 25) {
-                    const targetBlock = tb.closest('li') || tb;
+                  const matchesTopic = keywords.some(kw => tbNorm.startsWith(kw) || tbNorm.includes(' ' + kw + ' ') || tbNorm.includes(kw + ':') || tbNorm.includes(kw + ' -') || tbNorm.includes(kw));
+                  if (matchesTopic && tbNorm.length > 10) {
+                    const targetBlock = tb.closest('tr') || tb.closest('li') || tb;
                     matchedMark = applyHighlightToElement(targetBlock, theme, sec.topic, false);
                     matchedTextSnippet = (targetBlock.innerText || targetBlock.textContent || '').slice(0, 100);
                     break;
