@@ -14,6 +14,7 @@ class ActionStage(str, Enum):
     EXECUTED = "EXECUTED"
     VERIFIED = "VERIFIED"
     COMMITTED = "COMMITTED"
+    OUTCOME_UNKNOWN = "OUTCOME_UNKNOWN"
     FAILED = "FAILED"
 
 

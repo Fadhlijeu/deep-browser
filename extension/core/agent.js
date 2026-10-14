@@ -268,11 +268,21 @@
             continue;
           }
 
-          if (this.mode === 'hitl' || (this.securityPolicy && this.securityPolicy.requiresReview(actionName, params))) {
-            this._emit('ACTION_PROPOSED', `Proposal Aksi: ${actionName}`, { action_name: actionName, parameters: params });
+          const requiresHumanReview = (
+            this.mode === 'hitl' ||
+            (this.securityPolicy && (
+              (typeof this.securityPolicy.isHighRisk === 'function' && this.securityPolicy.isHighRisk(actionName, params)) ||
+              (this.mode !== 'auto' && this.securityPolicy.requiresReview(actionName, params))
+            ))
+          );
+
+          if (requiresHumanReview) {
+            const proposalId = 'prop_' + Date.now().toString(36) + '_' + this.step;
+            this._emit('ACTION_PROPOSED', `Proposal Aksi: ${actionName}`, { action_name: actionName, parameters: params, proposal_id: proposalId });
             this._emit('USER_APPROVAL_REQUIRED', `Menunggu persetujuan untuk aksi: ${actionName}`, {
               action_name: actionName,
               parameters: params,
+              proposal_id: proposalId,
             });
 
             const approvalResult = await this.interactionManager.requestInteraction({
@@ -280,7 +290,15 @@
               question: `Konfirmasi aksi: ${actionName}`,
               action_name: actionName,
               parameters: params,
+              proposal_id: proposalId,
             });
+
+            // Validate approval binding: ensure response matches active proposal
+            if (approvalResult.action_name && approvalResult.action_name !== actionName) {
+              const mismatchMsg = `Persetujuan tidak cocok (proposal: ${actionName}, respon: ${approvalResult.action_name}).`;
+              this._emit('ACTION_FAILED', mismatchMsg, { error: mismatchMsg });
+              continue;
+            }
 
             if (!approvalResult.approved && approvalResult.value === 'reject') {
               const feedback = approvalResult.feedback || 'User rejected the action.';

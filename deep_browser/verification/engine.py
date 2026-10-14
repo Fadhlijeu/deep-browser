@@ -47,17 +47,21 @@ class VerificationEngine:
             session = getattr(target_obj, "browser_session", target_obj)
 
             # Check BrowserSession session_manager targets
+            title = ""
+            # Check BrowserSession session_manager targets
             if not url and hasattr(session, "session_manager"):
                 targets = session.session_manager.get_all_page_targets()
                 for target in targets:
                     if target.url and target.url != "about:blank":
                         url = target.url
+                        title = getattr(target, "title", "")
                         ready_state = "complete"
                         break
                 if not url and hasattr(session, "agent_focus_target_id") and session.agent_focus_target_id:
                     focus_target = session.session_manager.get_target(session.agent_focus_target_id)
                     if focus_target and focus_target.url:
                         url = focus_target.url
+                        title = getattr(focus_target, "title", "")
                         ready_state = "complete"
 
             # Direct url attribute fallback
@@ -65,17 +69,21 @@ class VerificationEngine:
                 url = session.url
                 ready_state = "complete"
 
-            dom_hash = hashlib.md5(f"{url}_{ready_state}_{dom_summary}".encode()).hexdigest()
+            if hasattr(target_obj, "last_result") and target_obj.last_result:
+                dom_summary = str(getattr(target_obj.last_result, "extracted_content", "") or "")
+
+            dom_hash = hashlib.md5(f"{url}_{ready_state}_{title}_{dom_summary}".encode()).hexdigest()
 
             return {
                 "url": url,
+                "title": title,
                 "ready_state": ready_state,
                 "dom_hash": dom_hash,
                 "dom_summary": dom_summary,
             }
         except Exception as e:
             logger.debug(f"State capture non-critical error: {e}")
-            return {"url": "", "ready_state": "unknown", "dom_hash": ""}
+            return {"url": "", "title": "", "ready_state": "unknown", "dom_hash": ""}
 
     async def verify_action(
         self,
@@ -89,18 +97,26 @@ class VerificationEngine:
         if rule:
             return await rule.verify(before_state, after_state, action_params)
 
-        # Fallback heuristic for generic actions
-        state_changed = before_state != after_state
+        # Fallback heuristic for generic actions: require actual observable mutation
+        state_changed = (
+            before_state.get("url") != after_state.get("url")
+            or before_state.get("dom_hash") != after_state.get("dom_hash")
+            or before_state.get("ready_state") != after_state.get("ready_state")
+        )
         evidence = Evidence(
             action_type=action_name,
             before_state=before_state,
             after_state=after_state,
-            mutations_observed=["State transition detected"] if state_changed else [],
+            mutations_observed=["Observable state transition detected"] if state_changed else [],
         )
 
         return VerificationResult(
-            verified=True,
-            stage=ActionStage.VERIFIED if state_changed else ActionStage.EXECUTED,
+            verified=state_changed,
+            stage=ActionStage.VERIFIED if state_changed else ActionStage.OUTCOME_UNKNOWN,
             evidence=evidence,
-            details=f"Generic action '{action_name}' executed",
+            details=(
+                f"Generic action '{action_name}' verified with observable state change"
+                if state_changed
+                else f"Action '{action_name}' executed but observable outcome is unknown"
+            ),
         )

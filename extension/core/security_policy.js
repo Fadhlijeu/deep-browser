@@ -62,12 +62,45 @@
     }
 
     /**
+     * Checks if an action is high-risk (financial transactions, account deletion, sensitive credentials),
+     * which MUST always require human confirmation even in 'Always Proceed' (auto) mode.
+     */
+    isHighRisk(actionName, params = {}) {
+      if (this.isBlocked(actionName)) return true;
+
+      const actLower = String(actionName || '').toLowerCase();
+      if (actLower.includes('delete') || actLower.includes('transfer') || actLower.includes('pay') || actLower.includes('purchase')) {
+        return true;
+      }
+
+      if (actionName === 'input_text') {
+        const text = String(params.text || '').toLowerCase();
+        if (text.includes('password') || text.includes('pin') || text.includes('credit') || text.includes('cvv') || text.includes('token') || text.includes('secret') || text.includes('private_key') || text.includes('seed')) {
+          return true;
+        }
+      }
+
+      if (actionName === 'click_element') {
+        const target = String(params.target || params.text || '').toLowerCase();
+        if (target.includes('bayar') || target.includes('pay') || target.includes('transfer') || target.includes('checkout') || target.includes('delete account') || target.includes('hapus akun')) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    /**
      * Checks if an action requires explicit human confirmation.
      * @param {string} actionName
      * @param {Object} params
      * @returns {boolean}
      */
     requiresReview(actionName, params = {}) {
+      if (this.isHighRisk(actionName, params)) {
+        return true;
+      }
+
       if (this.policies.BLOCKED.includes(actionName)) {
         return true;
       }
@@ -77,22 +110,14 @@
         return true;
       }
 
-      // Check if action touches sensitive keywords (password, token, secret, pin, credit)
-      if (actionName === 'input_text') {
-        const text = String(params.text || '').toLowerCase();
-        if (text.includes('password') || text.includes('pin') || text.includes('credit') || text.includes('token') || text.includes('secret') || text.includes('key')) {
-          return true;
-        }
-      }
-
-      if (actionName === 'download' || actionName === 'purchase' || actionName === 'delete') {
+      if (actionName === 'download') {
         return true;
       }
 
       // Form filling preset gates final submit clicks
       if (this.preset === 'form_filling' && actionName === 'click_element') {
         const targetText = String(params.target || '').toLowerCase();
-        if (targetText.includes('submit') || targetText.includes('kirim') || targetText.includes('bayar') || targetText.includes('pay') || targetText.includes('confirm')) {
+        if (targetText.includes('submit') || targetText.includes('kirim') || targetText.includes('confirm')) {
           return true;
         }
       }
