@@ -95,7 +95,9 @@ export class SidepanelStateManager {
     this.initStorageListener();
     this.initCrossWindowMessaging();
     this.initTabsListener();
-    this.initWebSocket();
+    if (this.state.connectionMode === 'daemon') {
+      this.initWebSocket();
+    }
     this.ensureCoreRuntimeLoaded().catch((err) => {
       console.warn('[DeepBrowser] Core runtime background preload notice:', err);
     });
@@ -180,6 +182,8 @@ export class SidepanelStateManager {
           this.state.connectionMode = stored.connectionMode;
           if (stored.connectionMode === 'standalone') {
             this.state.connectionStatus = 'standalone';
+          } else if (stored.connectionMode === 'daemon') {
+            this.initWebSocket();
           }
         }
         if (stored.runState && !this.activeAgent) {
@@ -945,8 +949,8 @@ export class SidepanelStateManager {
     this.notify();
     this.saveStorage();
 
-    // 3. Dispatch to Daemon if connected, or trigger local agent simulation
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    // 3. Dispatch to Daemon ONLY if connectionMode is 'daemon' and ws is connected
+    if (this.state.connectionMode === 'daemon' && this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
         const activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
         const resp = await fetch('http://127.0.0.1:7788/api/tasks', {
@@ -1087,7 +1091,8 @@ export class SidepanelStateManager {
       return 'all';
     };
 
-    // Add to event logs
+    // Add to event logs with full correlation
+    const activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
     const logEvt: LogEvent = {
       id: 'log_' + Date.now() + Math.random().toString(36).slice(2, 5),
       timestamp: Date.now(),
@@ -1096,6 +1101,9 @@ export class SidepanelStateManager {
       category: getCategory(type),
       message: evt.message || JSON.stringify(payload).slice(0, 120),
       payload,
+      runId: evt.taskId || evt.runId || this.currentRunId || undefined,
+      sessionId: active.id,
+      tabId: evt.tabId || activeTab?.id,
     };
     active.events.push(logEvt);
 

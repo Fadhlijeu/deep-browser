@@ -75,6 +75,8 @@
         message: message || '',
         data: data || {},
         step: this.step,
+        taskId: this.taskId,
+        tabId: this.browserSession?.tabId,
         timestamp: Date.now(),
       };
       try {

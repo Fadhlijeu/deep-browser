@@ -101,5 +101,8 @@ export interface LogEvent {
   category: LogCategory;
   message: string;
   payload?: unknown;
+  runId?: string;
+  sessionId?: string;
+  tabId?: number;
 }
 
