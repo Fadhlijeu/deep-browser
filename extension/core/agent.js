@@ -174,7 +174,7 @@
           this.step++;
 
           // ─── 1. OBSERVE ──────────────────────────────────────────────────────────
-          const state = await this.browserSession.getState(true);
+          let state = await this.browserSession.getState(true);
           if (this.isStopped) break;
 
           const currentUrl = state.url || '';
@@ -183,6 +183,23 @@
             consecutiveScrollCount = 0;
             reachedBottomOnPage = false;
             reachedTopOnPage = false;
+
+            // WAJIBKAN scroll setiap kali website mendapat informasi baru (saat terbuka, refresh, etc)
+            if (!currentUrl.startsWith('chrome://') && !currentUrl.startsWith('edge://') && !currentUrl.startsWith('about:') && !currentUrl.startsWith('chrome-extension://')) {
+              this._emit('OBSERVATION', `[Auto-Scan] Halaman baru terdeteksi: "${state.title || currentUrl}". Melakukan auto-scroll menyeluruh untuk menangkap konteks DOM dan screenshot...`, { url: currentUrl });
+              await this.browserSession.autoScrollScanPage(async (info) => {
+                if (this.isStopped) return;
+                if (info.screenshot) {
+                  this._emit('SCREENSHOT', `Tangkapan layar viewport (pemindaian auto-scroll ${info.percentage}%)`, {
+                    screenshot: info.screenshot,
+                    scroll_percentage: info.percentage,
+                  });
+                }
+              });
+              if (this.isStopped) break;
+              // Refresh state so DOM elements and outline reflect the complete page after settling at top
+              state = await this.browserSession.getState(true);
+            }
           }
 
           const pixelsBelow = state.pageInfo?.pixels_below ?? 0;
@@ -404,8 +421,11 @@
           // Update consecutive scroll counter for anti-loop detection
           if (actionName === 'scroll_page') {
             consecutiveScrollCount++;
-          } else if (['highlight_text', 'click_element', 'input_text', 'navigate', 'parallel_research'].includes(actionName)) {
+          } else if (['highlight_text', 'highlight_sections', 'click_element', 'input_text', 'navigate', 'refresh', 'parallel_research'].includes(actionName)) {
             consecutiveScrollCount = 0;
+            if (actionName === 'refresh') {
+              lastPageUrl = null; // triggers mandatory auto-scan on next step!
+            }
           }
 
           // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────

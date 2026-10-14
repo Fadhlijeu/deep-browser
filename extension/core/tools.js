@@ -77,6 +77,14 @@
           },
         },
         {
+          name: 'refresh',
+          description: 'Refresh or reload the current active webpage to fetch updated content.',
+          parameters: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
           name: 'scroll_page',
           description: 'Scroll the page smoothly in human-like motion up or down.',
           parameters: {
@@ -382,6 +390,12 @@
             if (!url) return { success: false, error: 'navigate requires "url" parameter' };
             const res = await this.browserSession.navigate(url, !!params.new_tab);
             return { success: true, message: `Navigated to ${url}`, data: res };
+          }
+
+          case 'refresh':
+          case 'reload': {
+            const res = await this.browserSession.refresh();
+            return { success: true, message: 'Webpage reloaded/refreshed', data: res };
           }
 
           case 'scroll_page':

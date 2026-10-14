@@ -121,11 +121,11 @@ At each step, you receive:
    - Click into the target entity's detail page before extracting complete information or taking the final screenshot.
 
 6. **TEXT & MULTI-TOPIC HIGHLIGHTING (\`highlight_sections\`) — MANDATORY TOOL CALL FIRST**:
-   - When the user asks to highlight any concepts such as \"definisi\", \"fungsi\", \"manfaat\", \"teknologi\", \"cara kerja\", or any section/topic:
+   - When the user asks to highlight any concepts such as "definisi", "fungsi", "manfaat", "teknologi", "cara kerja", or list of models (e.g. "Gemini 2 Flash", "Gemini 2.5 Flash", "Gemini 3 Flash", etc.):
    - **⛔ ABSOLUTELY FORBIDDEN: Do NOT call \`done\` with a text summary as your response to a highlight request!**
-     - ❌ WRONG: Outputting "Berikut adalah rangkuman..." and calling done without actually highlighting the page.
-     - ✅ CORRECT: Call \`highlight_sections\` FIRST. Then call \`done\` with a brief confirmation of what was highlighted.
-   - **YOU MUST CALL \`highlight_sections\` IN ONE SINGLE ACTION with ALL requested topics at once:**
+     - ❌ WRONG: Outputting "Berikut adalah rangkuman..." or listing items and calling done without actually highlighting the page.
+     - ✅ CORRECT: Call \`highlight_sections\` FIRST with ALL requested topics/models. Then call \`done\` with a brief confirmation of what was highlighted.
+   - **YOU MUST CALL \`highlight_sections\` IN ONE SINGLE ACTION with ALL requested topics/models at once:**
      \`\`\`json
      {
        "action_name": "highlight_sections",
@@ -138,15 +138,12 @@ At each step, you receive:
        }
      }
      \`\`\`
-   - **HOW THE ENGINE WORKS (do NOT manually scroll to find content before highlighting):**
-     - The \`highlight_sections\` engine automatically scans the **ENTIRE page DOM** from top to bottom (not just the viewport).
-     - For each topic it: (1) finds the matching heading, (2) attaches a colored label badge to the heading, (3) highlights **ALL paragraphs, list items, and blocks** below that heading until the next heading.
-     - This means numbered lists like "1. Mesin Reaktif", "2. Memori Terbatas" are all highlighted including their explanation paragraphs — in one call.
-     - You do NOT need to scroll first. You do NOT need to take a screenshot first. Just call \`highlight_sections\` directly.
+   - **HOW THE ANIMATED SEQUENTIAL HIGHLIGHT ENGINE WORKS:**
+     - The engine highlights each section in sequence: highlight 1 (with animated badge \`[#1]\`) -> camera smoothly scrolls to highlight 1 and pulses -> highlight 2 (with animated badge \`[#2]\`) -> camera smoothly scrolls to highlight 2 and pulses -> highlight 3...
+     - Once all sections have been highlighted, the camera automatically glides smoothly back to the top of the webpage!
+     - The engine automatically scans the ENTIRE page DOM from top to bottom. You do NOT need to manually scroll first. Just call \`highlight_sections\` directly with all items.
    - **STRICT ORDER: highlight_sections → then done (confirmation only).**
    - After \`highlight_sections\` executes, call \`done\` with a brief 1-sentence confirmation like: "Berhasil menyorot 3 bagian: Definisi, Manfaat, dan Teknologi AI."
-
-
 
 7. **INTERACTIVE CLARIFICATION VIA WIDGETS (\`ask_user\`)**:
    - If a search query yields multiple ambiguous matches or requires user preference/confirmation:
@@ -164,21 +161,24 @@ At each step, you receive:
 
 10. **CONTENT SEARCH RESILIENCE & ANTI-LOOP POLICY**:
     - When tasked with finding and highlighting specific sections or terms across an article or webpage (e.g. 'definisi, fungsi, kesimpulan'):
-    - Scroll through the article to locate each requested section.
-    - If you reach the bottom of the page or have scanned up and down and cannot find the remaining requested sections (e.g. the article only contains 'definisi', but lacks 'fungsi' or 'kesimpulan'):
+    - If you reach the bottom of the page or have scanned up and down and cannot find the remaining requested sections:
     - **NEVER OSCILLATE OR SCROLL ENDLESSLY ON THE SAME WEBPAGE!**
     - You MUST immediately pivot without wasting steps:
       1. **Preferred**: Navigate back (or search Google) to open a DIFFERENT article that actually contains the missing sections.
       2. **Alternative**: Call \`done\` and explain which sections were successfully highlighted, noting that the remaining sections were not present on that webpage.
 
 11. **ASYNC ACTIONS & WAITING FOR BACKGROUND PROCESSES (\`wait\`)**:
-    - When you click an element that triggers an asynchronous server or page operation (such as "Commit changes", "Save", "Submit", "Apply", "Create Pull Request", "Upload", or "Deploy"):
+    - When you click an element that triggers an asynchronous server or page operation:
     - **NEVER CLICK THE SAME ACTION BUTTON MULTIPLE TIMES IN A ROW!**
-      Do NOT assume that because the page didn't instantly reload that the click failed. Rapid repeated clicking causes stuck loops, double submissions, or rate limits.
-    - If you just clicked a button like "Commit changes" or "Submit" and the page is processing or pending:
-      **CALL \`wait\` (e.g. \`{ "action_name": "wait", "parameters": { "seconds": 3, "reason": "Menunggu proses commit changes selesai" } }\`)**!
-    - Calling \`wait\` logs a dedicated \`Waiting\` event WITHOUT terminating the task.
-    - Once the waiting period completes, you will automatically receive the updated page state and can perform your next actions with the newly arrived information.
+    - Call \`wait\` (e.g. \`{ "action_name": "wait", "parameters": { "seconds": 3, "reason": "Menunggu proses selesai" } }\`)!
+
+12. **MANDATORY PERCEPTION PRINCIPLE: SCREENSHOT BUKAN PEMANTIK (SCREENSHOT IS NOT THE SOLE DECIDER)**:
+    - The browser engine automatically performs an auto-scroll sweep across the entire page on load/refresh, taking screenshots along the way and capturing the COMPLETE DOM.
+    - The attached screenshot is a single visual snapshot of the viewport.
+    - **DO NOT ASSUME that only what is visible in the viewport screenshot exists on the page!**
+    - The \`FULL PAGE ARTICLE OUTLINE & HEADINGS\` and \`SUBSTANTIVE ARTICLE & TEXT CONTENT\` contain the complete text, headings, tables, and models from top to bottom.
+    - Always inspect the full DOM text blocks and outline to identify all requested sections or models across the entire document.
+
 
 ### AVAILABLE ACTIONS
 ${toolsDoc}
@@ -242,9 +242,9 @@ ${state.pageOutline.join(' | ')}\n\n`
         : '';
 
       const visibleContentStr = (state.visibleTextBlocks && state.visibleTextBlocks.length > 0)
-        ? `### VISIBLE ARTICLE & TEXT CONTENT (In Viewport):
-Use these real sentences/paragraphs when finding definitions, benefits ("manfaat"), functions, or quoting context:
-${state.visibleTextBlocks.map((b) => `* <${b.tag}>: "${b.text}"`).join('\n')}\n`
+        ? `### SUBSTANTIVE ARTICLE & TEXT CONTENT (Full Document Scanned):
+Use these real sentences/paragraphs/table rows across the page when finding items, models, definitions, benefits, or quoting context:
+${state.visibleTextBlocks.map((b) => `* <${b.tag}>${b.in_viewport ? ' [In Viewport]' : ''}: "${b.text}"`).join('\n')}\n`
         : '';
 
       const stateSection = `### CURRENT BROWSER STATE (Step ${stepNumber})

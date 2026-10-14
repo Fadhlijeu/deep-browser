@@ -191,18 +191,25 @@
           return `[${item.index}]<${item.tag}${attrs}>${content}</${item.tag}>`;
         });
 
-        // Extract visible content/text blocks (headings, paragraphs, blockquotes, table rows, lists) in viewport
+        // Extract substantive content/text blocks across the full document (not restricted to viewport)
         const visibleTextBlocks = [];
-        const contentCandidates = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, tr, [role="row"], li, [role="article"] p, article p');
+        const contentCandidates = document.querySelectorAll('h1, h2, h3, h4, h5, h6, p, blockquote, tr, [role="row"], li, [role="article"] p, article p, dt, dd');
+        const seenText = new Set();
         contentCandidates.forEach((el) => {
-          if (visibleTextBlocks.length >= 45) return;
-          const rect = el.getBoundingClientRect();
-          if (!isVisible(el, rect)) return;
+          if (visibleTextBlocks.length >= 85) return;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
+          if (el.offsetParent === null && el.tagName !== 'BODY') return;
+
           const txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-          if (txt.length >= 6) {
+          if (txt.length >= 6 && !seenText.has(txt)) {
+            seenText.add(txt);
+            const rect = el.getBoundingClientRect();
+            const inViewport = (rect.bottom >= 0 && rect.top <= viewportHeight);
             visibleTextBlocks.push({
               tag: el.tagName.toLowerCase(),
               text: txt.length > 350 ? txt.slice(0, 350) + '...' : txt,
+              in_viewport: inViewport,
             });
           }
         });

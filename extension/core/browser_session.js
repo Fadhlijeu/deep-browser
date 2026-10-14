@@ -998,7 +998,7 @@
       try {
         const result = await chrome.scripting.executeScript({
           target: { tabId: this.tabId },
-          func: (rawSections, shouldScroll, clearOld) => {
+          func: async (rawSections, shouldScroll, clearOld) => {
             if (!rawSections || (Array.isArray(rawSections) && rawSections.length === 0)) {
               return { success: false, error: 'Daftar section/topik kosong.' };
             }
@@ -1011,7 +1011,7 @@
               return { success: false, isPdf: true, error: 'Dokumen dibuka di Penampil PDF bawaan browser (PDFium plugin).' };
             }
 
-            // ── Inject CSS styles ──────────────────────────────────────────────
+            // ── Inject CSS styles with vibrant animations ───────────────────────
             let styleEl = document.getElementById('__deep_browser_highlight_style__');
             if (!styleEl) {
               styleEl = document.createElement('style');
@@ -1026,42 +1026,53 @@
                   60%  { box-shadow: var(--db-hl-shadow); }
                   100% { box-shadow: var(--db-hl-shadow); }
                 }
-                @keyframes __db_hl_label_fade__ {
-                  0%   { opacity: 0; transform: translateY(-4px) scale(0.9); }
-                  100% { opacity: 1; transform: translateY(0) scale(1); }
+                @keyframes __db_hl_badge_pop__ {
+                  0%   { opacity: 0; transform: scale(0.65) translateY(-6px); }
+                  70%  { opacity: 1; transform: scale(1.15) translateY(0); }
+                  100% { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                @keyframes __db_hl_focus_pulse__ {
+                  0%   { outline: 3px solid var(--db-hl-border); outline-offset: 2px; }
+                  50%  { outline: 6px solid var(--db-hl-border); outline-offset: 6px; box-shadow: 0 0 25px var(--db-hl-border); }
+                  100% { outline: 2px solid transparent; outline-offset: 2px; }
                 }
                 .__deep_browser_section_badge__ {
                   display: inline-block;
-                  font-size: 10px;
+                  font-size: 11px;
                   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                  font-weight: 700;
+                  font-weight: 800;
                   text-transform: uppercase;
-                  letter-spacing: 0.6px;
-                  padding: 2px 7px;
+                  letter-spacing: 0.8px;
+                  padding: 3px 9px;
                   margin-right: 8px;
-                  border-radius: 4px;
+                  border-radius: 5px;
                   background: var(--db-hl-border);
                   color: #fff;
                   vertical-align: middle;
-                  animation: __db_hl_label_fade__ 0.35s ease forwards;
+                  animation: __db_hl_badge_pop__ 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
                   pointer-events: none;
                   position: relative;
                   top: -1px;
                 }
                 .__deep_browser_text_highlight__ {
                   display: block !important;
-                  padding: 6px 12px 6px 14px !important;
-                  margin: 4px 0 !important;
+                  padding: 8px 14px 8px 16px !important;
+                  margin: 6px 0 !important;
                   border-radius: 6px !important;
-                  border-left: 4px solid var(--db-hl-border) !important;
+                  border-left: 5px solid var(--db-hl-border) !important;
                   background-image: linear-gradient(90deg, var(--db-hl-bg-start) 0%, var(--db-hl-bg-mid) 60%, var(--db-hl-bg-end) 100%);
                   background-repeat: no-repeat;
                   background-position: left center;
                   background-size: 0% 100%;
-                  animation: __db_hl_sweep__ 0.9s cubic-bezier(0.16,1,0.3,1) forwards,
-                             __db_hl_glow__ 1.3s ease forwards;
+                  animation: __db_hl_sweep__ 0.8s cubic-bezier(0.16,1,0.3,1) forwards,
+                             __db_hl_glow__ 1.2s ease forwards;
                   color: inherit;
                   line-height: inherit;
+                  transition: all 0.3s ease;
+                }
+                .__db_hl_active_focus__ {
+                  animation: __db_hl_focus_pulse__ 1.2s ease-in-out forwards !important;
                 }
                 .__deep_browser_highlight_label__ {
                   display: inline-block;
@@ -1072,11 +1083,11 @@
                   letter-spacing: 0.6px;
                   padding: 2px 6px;
                   margin-right: 6px;
-                  border-radius: 3px;
+                  border-radius: 4px;
                   background: var(--db-hl-border);
                   color: #fff;
                   vertical-align: middle;
-                  animation: __db_hl_label_fade__ 0.4s ease forwards;
+                  animation: __db_hl_badge_pop__ 0.35s ease forwards;
                   pointer-events: none;
                 }
               `;
@@ -1084,14 +1095,17 @@
             }
 
             const colorMap = {
-              cyan:    { bgStart:'rgba(34,211,238,0.35)',  bgMid:'rgba(6,182,212,0.22)',   bgEnd:'rgba(8,145,178,0.10)',  border:'#06b6d4', shadow:'0 0 14px rgba(6,182,212,0.4)'  },
-              amber:   { bgStart:'rgba(251,191,36,0.40)',  bgMid:'rgba(245,158,11,0.28)',  bgEnd:'rgba(217,119,6,0.14)',  border:'#f59e0b', shadow:'0 0 14px rgba(245,158,11,0.4)' },
-              emerald: { bgStart:'rgba(52,211,153,0.38)',  bgMid:'rgba(16,185,129,0.25)',  bgEnd:'rgba(5,150,105,0.12)',  border:'#10b981', shadow:'0 0 14px rgba(16,185,129,0.4)' },
-              violet:  { bgStart:'rgba(192,132,252,0.38)', bgMid:'rgba(168,85,247,0.25)',  bgEnd:'rgba(147,51,234,0.12)', border:'#a855f7', shadow:'0 0 14px rgba(168,85,247,0.4)' },
-              rose:    { bgStart:'rgba(251,113,133,0.38)', bgMid:'rgba(244,63,94,0.25)',   bgEnd:'rgba(225,29,72,0.12)',  border:'#f43f5e', shadow:'0 0 14px rgba(244,63,94,0.4)'  },
-              sky:     { bgStart:'rgba(56,189,248,0.38)',  bgMid:'rgba(14,165,233,0.25)',  bgEnd:'rgba(2,132,199,0.12)',  border:'#0ea5e9', shadow:'0 0 14px rgba(14,165,233,0.4)' },
+              cyan:    { bgStart:'rgba(34,211,238,0.35)',  bgMid:'rgba(6,182,212,0.22)',   bgEnd:'rgba(8,145,178,0.10)',  border:'#06b6d4', shadow:'0 0 16px rgba(6,182,212,0.45)' },
+              amber:   { bgStart:'rgba(251,191,36,0.40)',  bgMid:'rgba(245,158,11,0.28)',  bgEnd:'rgba(217,119,6,0.14)',  border:'#f59e0b', shadow:'0 0 16px rgba(245,158,11,0.45)' },
+              emerald: { bgStart:'rgba(52,211,153,0.38)',  bgMid:'rgba(16,185,129,0.25)',  bgEnd:'rgba(5,150,105,0.12)',  border:'#10b981', shadow:'0 0 16px rgba(16,185,129,0.45)' },
+              violet:  { bgStart:'rgba(192,132,252,0.38)', bgMid:'rgba(168,85,247,0.25)',  bgEnd:'rgba(147,51,234,0.12)', border:'#a855f7', shadow:'0 0 16px rgba(168,85,247,0.45)' },
+              rose:    { bgStart:'rgba(251,113,133,0.38)', bgMid:'rgba(244,63,94,0.25)',   bgEnd:'rgba(225,29,72,0.12)',  border:'#f43f5e', shadow:'0 0 16px rgba(244,63,94,0.45)' },
+              sky:     { bgStart:'rgba(56,189,248,0.38)',  bgMid:'rgba(14,165,233,0.25)',  bgEnd:'rgba(2,132,199,0.12)',  border:'#0ea5e9', shadow:'0 0 16px rgba(14,165,233,0.45)' },
+              orange:  { bgStart:'rgba(251,146,60,0.38)',  bgMid:'rgba(234,88,12,0.25)',   bgEnd:'rgba(194,65,12,0.12)',  border:'#ea580c', shadow:'0 0 16px rgba(234,88,12,0.45)' },
+              lime:    { bgStart:'rgba(163,230,53,0.38)',  bgMid:'rgba(101,163,13,0.25)',  bgEnd:'rgba(77,124,15,0.12)',  border:'#65a30d', shadow:'0 0 16px rgba(101,163,13,0.45)' },
+              fuchsia: { bgStart:'rgba(232,121,249,0.38)', bgMid:'rgba(192,38,211,0.25)',  bgEnd:'rgba(162,28,175,0.12)', border:'#c026d3', shadow:'0 0 16px rgba(192,38,211,0.45)' },
             };
-            const defaultThemeList = ['cyan', 'amber', 'emerald', 'violet', 'rose', 'sky'];
+            const defaultThemeList = ['cyan', 'amber', 'emerald', 'violet', 'rose', 'sky', 'orange', 'lime', 'fuchsia'];
 
             if (clearOld) {
               document.querySelectorAll('.__deep_browser_text_highlight__').forEach(el => {
@@ -1103,8 +1117,8 @@
 
             const normalize = str => (str || '')
               .toLowerCase()
-              .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
-              .replace(/[\u2013\u2014]/g, '-').replace(/\u00a0/g, ' ')
+              .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+              .replace(/[–—]/g, '-').replace(/ /g, ' ')
               .replace(/\s+/g, ' ').trim();
 
             const topicAliases = {
@@ -1129,6 +1143,12 @@
                   aliases.forEach(a => kws.add(a));
                 }
               }
+              // Model name version variations (e.g. "Gemini 2 Flash" <-> "Gemini 2.0 Flash")
+              const vMatch = normTopic.match(/(\d+)(?:\.0)?(\s+[a-z]+)/);
+              if (vMatch) {
+                kws.add(`${vMatch[1]}${vMatch[2]}`);
+                kws.add(`${vMatch[1]}.0${vMatch[2]}`);
+              }
               return [...kws];
             }
 
@@ -1140,7 +1160,7 @@
               el.style.setProperty('--db-hl-shadow',   theme.shadow);
             }
 
-            // Attach floating badge to heading (does NOT wrap heading text)
+            // Attach floating badge to heading
             function attachHeadingBadge(heading, theme, label) {
               if (heading.querySelector('.__deep_browser_section_badge__')) return;
               const badge = document.createElement('span');
@@ -1150,14 +1170,13 @@
               heading.insertBefore(badge, heading.firstChild);
             }
 
-            // Apply block highlight mark to a content element.
-            // NEVER wraps headings — headings only get floating badges.
+            // Apply block highlight mark to a content element
             function applyBlockHighlight(el, theme, labelText) {
               if (!el) return null;
               if (el.querySelector('.__deep_browser_text_highlight__')) return null;
               if (/^h[1-6]$/i.test(el.tagName)) return null; // headings: badges only
               const text = (el.innerText || el.textContent || '').trim();
-              if (text.length < 5) return null;
+              if (text.length < 4) return null;
 
               const mark = document.createElement('mark');
               mark.className = '__deep_browser_text_highlight__';
@@ -1175,17 +1194,12 @@
               return mark;
             }
 
-            /**
-             * Highlight ALL sibling content blocks after a heading,
-             * stopping at the next heading of same or higher level.
-             * Returns array of mark elements applied.
-             */
+            // Highlight sibling content blocks after a heading
             function highlightContentAfterHeading(heading, theme) {
               const headingLevel = parseInt((heading.tagName || 'H3').replace(/[Hh]/, ''), 10) || 3;
               const marks = [];
               const SKIP_TAGS = new Set(['script', 'style', 'img', 'picture', 'video', 'svg', 'noscript', 'iframe', 'header', 'footer', 'nav', 'aside']);
 
-              // Walk up to find a container that has a next sibling
               let container = heading;
               while (container && container !== document.body && !container.nextElementSibling) {
                 container = container.parentElement;
@@ -1197,18 +1211,17 @@
                 hops++;
                 const tag = (sibling.tagName || '').toLowerCase();
 
-                // Stop at a heading of same or higher level
                 const sibLevel = parseInt(tag.replace('h', ''), 10);
                 if (!isNaN(sibLevel) && sibLevel >= 1 && sibLevel <= 6 && sibLevel <= headingLevel) break;
 
                 if (SKIP_TAGS.has(tag)) { sibling = sibling.nextElementSibling; continue; }
 
                 const text = (sibling.innerText || sibling.textContent || '').trim();
-                if (text.length < 5) { sibling = sibling.nextElementSibling; continue; }
+                if (text.length < 4) { sibling = sibling.nextElementSibling; continue; }
 
                 if (tag === 'ul' || tag === 'ol') {
                   sibling.querySelectorAll('li').forEach(li => {
-                    if ((li.innerText || li.textContent || '').trim().length > 4) {
+                    if ((li.innerText || li.textContent || '').trim().length > 3) {
                       const m = applyBlockHighlight(li, theme, null);
                       if (m) marks.push(m);
                     }
@@ -1250,39 +1263,43 @@
               });
 
             const results = [];
-            let firstMark = null;
+            const delay = ms => new Promise(r => setTimeout(r, ms));
 
-            for (const sec of sectionsList) {
-              const theme    = colorMap[sec.color] || colorMap.amber;
+            // Sequential highlight loop per index:
+            // "highlight1 baru2 baru3, dan layarnya otomatis scroll ke bagian yg highlight tiap index"
+            for (let idx = 0; idx < sectionsList.length; idx++) {
+              const sec = sectionsList[idx];
+              const theme = colorMap[sec.color] || colorMap[defaultThemeList[idx % defaultThemeList.length]];
+              const badgeLabel = `[#${idx + 1}] ${sec.topic}`;
               const keywords = getKeywords(sec.topic, sec.query);
-              let matched    = false;
-              let snippets   = [];
+              let matched = false;
+              let snippets = [];
+              let primaryMark = null;
 
               // Strategy A: Explicit text match
               if (sec.text && sec.text.trim().length > 5) {
                 const needle = normalize(sec.text).slice(0, 50);
-                for (const block of document.querySelectorAll('p, li, blockquote, td')) {
+                for (const block of document.querySelectorAll('p, li, blockquote, td, tr, div')) {
+                  if (block.querySelector('.__deep_browser_text_highlight__')) continue;
                   if (normalize(block.textContent).includes(needle)) {
                     const target = block.closest('tr') || block.closest('li') || block;
-                    const m = applyBlockHighlight(target, theme, sec.topic);
-                    if (m) { if (!firstMark) firstMark = m; matched = true; snippets.push((target.innerText || '').slice(0, 80)); }
-                    break;
+                    const m = applyBlockHighlight(target, theme, badgeLabel);
+                    if (m) { primaryMark = m; matched = true; snippets.push((target.innerText || '').slice(0, 80)); break; }
                   }
                 }
               }
 
-              // Strategy B: Heading badge + highlight ALL content below it
+              // Strategy B: Heading badge + highlight sibling content
               if (!matched) {
                 for (const h of document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]')) {
                   const hNorm = normalize(h.textContent);
                   if (!keywords.some(kw => hNorm.includes(kw))) continue;
-                  attachHeadingBadge(h, theme, sec.topic);
+                  attachHeadingBadge(h, theme, badgeLabel);
+                  primaryMark = h;
                   const marks = highlightContentAfterHeading(h, theme);
                   if (marks.length > 0) {
-                    if (!firstMark) firstMark = marks[0];
                     marks.forEach(m => snippets.push((m.textContent || '').slice(0, 60).trim()));
                   } else {
-                    if (!firstMark) firstMark = h;
                     snippets.push((h.innerText || '').slice(0, 60));
                   }
                   matched = true;
@@ -1290,40 +1307,73 @@
                 }
               }
 
-              // Strategy C: Direct paragraph/list keyword match
+              // Strategy C: Direct table row, list item, or paragraph keyword match
               if (!matched) {
-                for (const tb of document.querySelectorAll('p, li, blockquote, tr, td')) {
+                for (const tb of document.querySelectorAll('tr, [role="row"], li, [role="listitem"], p, blockquote, td, [role="cell"]')) {
                   if (tb.querySelector('.__deep_browser_text_highlight__')) continue;
                   const tbNorm = normalize(tb.textContent);
-                  if (tbNorm.length < 10) continue;
+                  if (tbNorm.length < 4) continue;
                   if (keywords.some(kw => tbNorm.includes(kw))) {
                     const target = tb.closest('tr') || tb.closest('li') || tb;
-                    const m = applyBlockHighlight(target, theme, sec.topic);
-                    if (m) { if (!firstMark) firstMark = m; matched = true; snippets.push((target.innerText || '').slice(0, 80)); break; }
+                    const m = applyBlockHighlight(target, theme, badgeLabel);
+                    if (m) { primaryMark = m; matched = true; snippets.push((target.innerText || '').slice(0, 80)); break; }
                   }
                 }
               }
 
-              // Strategy D: Numbered list title scan (e.g. "1. Mesin Reaktif")
+              // Strategy D: Numbered list items (e.g. "1. Mesin Reaktif", "1. Gemini 2 Flash")
               if (!matched) {
-                for (const b of document.querySelectorAll('p, li, h3, h4, h5, dt')) {
+                for (const b of document.querySelectorAll('p, li, h3, h4, h5, dt, div')) {
+                  if (b.querySelector('.__deep_browser_text_highlight__')) continue;
                   const bNorm = normalize(b.textContent);
                   if (/^\d+[\.\)]\s/.test(bNorm) && keywords.some(kw => bNorm.includes(kw))) {
-                    const m = applyBlockHighlight(b, theme, sec.topic);
-                    if (m) { if (!firstMark) firstMark = m; matched = true; snippets.push(bNorm.slice(0, 60)); }
-                    const next = b.nextElementSibling;
-                    if (next && ['p','div','blockquote'].includes((next.tagName||'').toLowerCase())) applyBlockHighlight(next, theme, null);
-                    break;
+                    const m = applyBlockHighlight(b, theme, badgeLabel);
+                    if (m) {
+                      primaryMark = m; matched = true; snippets.push(bNorm.slice(0, 60));
+                      const next = b.nextElementSibling;
+                      if (next && ['p','div','blockquote'].includes((next.tagName||'').toLowerCase())) {
+                        applyBlockHighlight(next, theme, null);
+                      }
+                      break;
+                    }
                   }
                 }
               }
 
-              results.push({ topic: sec.topic, status: matched ? 'highlighted' : 'not_found', color: sec.color, snippet: snippets.slice(0,3).join(' | ') });
+              // Strategy E: Modern app cards, flex containers, or specific model name items
+              if (!matched) {
+                for (const card of document.querySelectorAll('.card, [class*="model"], [class*="card"], [class*="item"], [class*="row"], article, section')) {
+                  if (card.querySelector('.__deep_browser_text_highlight__')) continue;
+                  const cardNorm = normalize(card.textContent);
+                  if (cardNorm.length >= 4 && keywords.some(kw => cardNorm.includes(kw))) {
+                    const m = applyBlockHighlight(card, theme, badgeLabel);
+                    if (m) { primaryMark = m; matched = true; snippets.push((card.innerText || '').slice(0, 80)); break; }
+                  }
+                }
+              }
+
+              results.push({
+                topic: sec.topic,
+                index: idx + 1,
+                status: matched ? 'highlighted' : 'not_found',
+                color: sec.color,
+                snippet: snippets.slice(0, 3).join(' | '),
+              });
+
+              // ANIMATION & SEQUENTIAL FOCUS SCROLLING PER INDEX:
+              if (matched && primaryMark) {
+                primaryMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                primaryMark.classList.add('__db_hl_active_focus__');
+                await delay(750); // Pause so user and camera visually focus on this index
+                primaryMark.classList.remove('__db_hl_active_focus__');
+              }
             }
 
-            if (shouldScroll && firstMark) {
-              firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+            // ALL SECTIONS COMPLETED:
+            // "jika sudah selesai semua maka scroll ke paling atas"
+            await delay(600);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            await delay(600);
 
             const highlightedCount = results.filter(r => r.status === 'highlighted').length;
             return { success: highlightedCount > 0, totalSections: sectionsList.length, highlightedCount, sections: results };
@@ -1338,9 +1388,7 @@
       }
     }
 
-    /**
-     * Human-like smooth scrolling using requestAnimationFrame with settling verification.
-     */
+
     async smoothScroll(down = true, pages = 1.0, index = null) {
       return this._executeInTab((isDown, numPages, targetIdx) => {
         return new Promise((resolve) => {
@@ -1386,6 +1434,126 @@
     /**
      * Sends keyboard keys or shortcut combinations (e.g. Enter, Control+a).
      */
+    /**
+     * Mandatory full-page auto-scroll scan whenever new information arrives (load/refresh/navigate).
+     * Automatically scrolls top-to-bottom capturing DOM + screenshot at each step,
+     * then smoothly glides back to the top of the page.
+     * @param {Function} [onStepCallback] - Called per scroll position with { step, totalSteps, percentage, screenshot, atBottom }
+     */
+    async autoScrollScanPage(onStepCallback = null) {
+      const tab = await this.attach();
+      if (!tab || !tab.id) return { success: false, skipped: true };
+
+      // Guard: restricted browser internal URLs or PDFs
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:') || tab.url.startsWith('chrome-extension://')) {
+        return { success: false, skipped: true, reason: 'Restricted system tab' };
+      }
+      if (tab.url.toLowerCase().endsWith('.pdf')) {
+        return { success: false, skipped: true, reason: 'PDF document' };
+      }
+
+      try {
+        // Measure page height and viewport
+        const metrics = await this._executeInTab(() => {
+          const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+          const dh = Math.max(
+            document.body ? document.body.scrollHeight : 0,
+            document.documentElement ? document.documentElement.scrollHeight : 0,
+            document.body ? document.body.offsetHeight : 0,
+            document.documentElement ? document.documentElement.offsetHeight : 0
+          );
+          return { viewportHeight: vh, docHeight: dh, isScrollable: dh > vh + 100 };
+        });
+
+        if (!metrics || !metrics.isScrollable) {
+          // Document fits in one screen without scrolling, capture initial screenshot if callback provided
+          if (onStepCallback && typeof chrome !== 'undefined' && chrome.tabs?.captureVisibleTab) {
+            try {
+              const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+              if (dataUrl) {
+                const raw = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+                await onStepCallback({ step: 0, totalSteps: 1, percentage: 100, screenshot: raw, atBottom: true });
+              }
+            } catch {}
+          }
+          return { success: true, steps: 0, docHeight: metrics?.docHeight || 0, isScrollable: false };
+        }
+
+        const { viewportHeight, docHeight } = metrics;
+
+        // 1. Ensure we start at the top
+        await this._executeInTab(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        await this.wait(0.2);
+
+        // Screenshot at top (step 0)
+        if (onStepCallback && typeof chrome !== 'undefined' && chrome.tabs?.captureVisibleTab) {
+          try {
+            const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+            if (dataUrl) {
+              const raw = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+              await onStepCallback({ step: 0, percentage: 0, screenshot: raw, isTop: true, atBottom: false });
+            }
+          } catch {}
+        }
+
+        // 2. Loop scrolling down step-by-step
+        const stepSize = Math.max(300, Math.round(viewportHeight * 0.8));
+        const maxSteps = Math.min(8, Math.ceil(docHeight / stepSize));
+        let stepCount = 0;
+
+        for (let i = 1; i <= maxSteps; i++) {
+          const scrollRes = await this._executeInTab((px) => {
+            window.scrollBy({ top: px, behavior: 'smooth' });
+            const curY = window.scrollY || window.pageYOffset || 0;
+            const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+            const dh = Math.max(
+              document.body ? document.body.scrollHeight : 0,
+              document.documentElement ? document.documentElement.scrollHeight : 0
+            );
+            const atBottom = curY + vh >= dh - 30;
+            const pct = Math.min(100, Math.round((curY / Math.max(1, dh - vh)) * 100));
+            return { curY, atBottom, pct };
+          }, [stepSize]);
+
+          stepCount++;
+          // Wait for smooth scroll settling and trigger any lazy-loaded content
+          await this.wait(0.35);
+
+          // Screenshot on every scroll step ("setiap kali scroll = screenshot")
+          if (onStepCallback && typeof chrome !== 'undefined' && chrome.tabs?.captureVisibleTab) {
+            try {
+              const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+              if (dataUrl) {
+                const raw = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+                await onStepCallback({
+                  step: i,
+                  totalSteps: maxSteps,
+                  percentage: scrollRes?.pct || Math.round((i / maxSteps) * 100),
+                  screenshot: raw,
+                  atBottom: scrollRes?.atBottom || false,
+                });
+              }
+            } catch {}
+          }
+
+          if (scrollRes?.atBottom) {
+            break;
+          }
+        }
+
+        // 3. Smoothly scroll back to top of page as requested
+        await this._executeInTab(() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        await this.wait(0.4);
+
+        return { success: true, steps: stepCount, docHeight, isScrollable: true };
+      } catch (err) {
+        console.warn('[BrowserSession] autoScrollScanPage warning:', err);
+        return { success: false, error: err.message };
+      }
+    }
+
     async sendKeys(keys) {
       return this._executeInTab((keyStr) => {
         const active = document.activeElement || document.body;
