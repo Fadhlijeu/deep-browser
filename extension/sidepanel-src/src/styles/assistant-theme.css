@@ -133,24 +133,6 @@ button, input, select, textarea {
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-subtle);
-  font-size: 10.5px;
-  color: var(--text-secondary);
-  font-weight: 500;
-  white-space: nowrap;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  user-select: none;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
   padding: 3px 8px;
   border-radius: var(--radius-full);
@@ -3769,4 +3751,18 @@ h1, h2 {
   max-width: 260px;
   margin: 0;
   line-height: 1.4;
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY: RESPECT USER PREFERS-REDUCED-MOTION
+   ═════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
