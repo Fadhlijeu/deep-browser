@@ -1275,6 +1275,15 @@ export class SidepanelStateManager {
     if (type === 'TASK_COMPLETED' || type === 'DONE') {
       lastMsg.text = payload.result || evt.message || lastMsg.text || 'Tugas browser selesai dieksekusi dan terverifikasi.';
       this.state.runState = 'done';
+      this.activeAgent = null;
+    }
+
+    // 9b. Cancellation
+    if (type === 'TASK_CANCELLED' || type === 'CANCELLED') {
+      lastMsg.text = lastMsg.text || payload.message || evt.message || 'Tugas dibatalkan oleh pengguna.';
+      lastMsg.hitl = undefined;
+      this.state.runState = 'idle';
+      this.activeAgent = null;
     }
 
     // 10. Failure / Error
@@ -1282,6 +1291,7 @@ export class SidepanelStateManager {
       lastMsg.isError = true;
       lastMsg.text = payload.error || evt.message || 'Eksekusi gagal.';
       this.state.runState = 'error';
+      this.activeAgent = null;
     }
 
     // 11. HITL Gate / Interactive Widget

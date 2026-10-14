@@ -31,6 +31,19 @@
       this.baseUrl = config.baseUrl || '';
       this.ollamaHost = config.ollamaHost || 'http://localhost:11434';
       this.temperature = config.temperature ?? 0.1;
+      this.currentAbortController = null;
+    }
+
+    /**
+     * Aborts any currently active HTTP fetch request immediately.
+     */
+    abort() {
+      if (this.currentAbortController) {
+        try {
+          this.currentAbortController.abort();
+        } catch (_) {}
+        this.currentAbortController = null;
+      }
     }
 
     /**
@@ -140,23 +153,42 @@ Respond strictly with a JSON object:
     /**
      * Resilient fetch with retry for transient network hiccups or socket drops.
      */
-    async _fetchWithRetry(url, options, maxRetries = 2) {
+    async _fetchWithRetry(url, options = {}, maxRetries = 2) {
       let lastErr;
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          const res = await fetch(url, options);
-          return res;
-        } catch (err) {
-          lastErr = err;
-          if (attempt < maxRetries && err.name !== 'AbortError') {
-            console.warn(`[LLMClient] Network fetch attempt ${attempt} failed (${err.message}). Retrying in 1.2s...`);
-            await new Promise((r) => setTimeout(r, 1200));
-            continue;
+      const abortCtrl = new AbortController();
+      this.currentAbortController = abortCtrl;
+      const signal = options.signal || abortCtrl.signal;
+      const fetchOpts = { ...options, signal };
+
+      try {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            if (signal.aborted) {
+              const abortErr = new Error('Operasi AI dibatalkan oleh pengguna.');
+              abortErr.name = 'AbortError';
+              throw abortErr;
+            }
+            const res = await fetch(url, fetchOpts);
+            return res;
+          } catch (err) {
+            lastErr = err;
+            if (err.name === 'AbortError' || signal.aborted) {
+              throw err;
+            }
+            if (attempt < maxRetries) {
+              console.warn(`[LLMClient] Network fetch attempt ${attempt} failed (${err.message}). Retrying in 1.2s...`);
+              await new Promise((r) => setTimeout(r, 1200));
+              continue;
+            }
+            throw err;
           }
-          throw err;
+        }
+        throw lastErr;
+      } finally {
+        if (this.currentAbortController === abortCtrl) {
+          this.currentAbortController = null;
         }
       }
-      throw lastErr;
     }
 
     // ─── Gemini Provider ───────────────────────────────────────────────────────

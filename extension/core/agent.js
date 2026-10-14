@@ -90,6 +90,9 @@
     stop() {
       this.isStopped = true;
       this.isRunning = false;
+      if (this.llmClient && typeof this.llmClient.abort === 'function') {
+        try { this.llmClient.abort(); } catch (_) {}
+      }
       if (this.browserSession) {
         try { this.browserSession.clearInPageHighlights(); } catch (_) {}
       }
@@ -99,7 +102,6 @@
         } catch {}
       }
       this._emit('TASK_CANCELLED', 'Agent dihentikan oleh pengguna');
-      this._emit('TASK_COMPLETED', 'Agent dihentikan oleh pengguna', { result: 'Agent dihentikan oleh pengguna.' });
     }
 
 
@@ -226,6 +228,9 @@
           try {
             decision = await this.llmClient.planNextStep(systemPrompt, stepPayload);
           } catch (llmErr) {
+            if (this.isStopped || llmErr.name === 'AbortError') {
+              return { success: false, error: 'Agent stopped by user' };
+            }
             throw new Error(`LLM Error: ${llmErr.message}`);
           }
 
@@ -385,7 +390,11 @@
 
           // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────
           const verification = await this._verifyAction(actionName, params, preActionUrl, actionResult);
-          this._emit('VERIFICATION', verification.message, { verified: verification.verified });
+          this._emit('VERIFICATION', verification.message, {
+            verified: verification.verified,
+            outcome: verification.outcome || (verification.verified ? 'verified' : 'failed'),
+            error: verification.error,
+          });
 
           // ─── 8. RECORD STEP & REFLECT ───────────────────────────────────────────
           this.messageManager.recordStep(
@@ -426,6 +435,9 @@
 
       } catch (err) {
         this.isRunning = false;
+        if (this.isStopped || err.name === 'AbortError') {
+          return { success: false, error: 'Agent stopped by user' };
+        }
         this._emit('ERROR', err.message || String(err), { error: err.message });
         throw err;
       } finally {
@@ -439,42 +451,139 @@
     }
 
     /**
-     * Deterministic action verification.
+     * Deterministic action verification with actual evidence checks.
      */
     async _verifyAction(actionName, params, preUrl, actionResult) {
-      if (!actionResult.success) {
-        return { verified: false, message: `Aksi ${actionName} gagal dieksekusi: ${actionResult.error}`, error: actionResult.error };
+      if (!actionResult || !actionResult.success) {
+        return {
+          verified: false,
+          outcome: 'failed',
+          message: `Aksi ${actionName} gagal dieksekusi: ${actionResult?.error || 'Unknown error'}`,
+          error: actionResult?.error,
+        };
       }
 
       switch (actionName) {
         case 'navigate': {
-          const target = params.url;
-          return { verified: true, message: `Navigasi ke ${target} diverifikasi.` };
+          const target = params.url || '';
+          try {
+            const currentTab = await this.browserSession.getActiveTab();
+            const currentUrl = currentTab?.url || '';
+            const isTargetMatch = currentUrl.includes(target) || (target.includes(currentUrl) && currentUrl.length > 10);
+            const isUrlChanged = preUrl && currentUrl !== preUrl;
+            if (isTargetMatch || isUrlChanged) {
+              return {
+                verified: true,
+                outcome: 'verified',
+                message: `Navigasi ke ${target} diverifikasi (URL aktif: ${currentUrl}).`,
+              };
+            }
+            return {
+              verified: false,
+              outcome: 'outcome_unknown',
+              message: `Navigasi dikirim tetapi URL belum berubah dari ${preUrl}.`,
+            };
+          } catch (_) {
+            return {
+              verified: true,
+              outcome: 'executed',
+              message: `Navigasi ke ${target} telah dieksekusi.`,
+            };
+          }
         }
         case 'click_element': {
-          return { verified: true, message: `Klik elemen [${params.index}] diverifikasi.` };
+          const tag = actionResult.data?.tagName ? ` (<${actionResult.data.tagName.toLowerCase()}>)` : '';
+          const hasHref = actionResult.data?.href;
+          if (actionResult.data?.success) {
+            return {
+              verified: true,
+              outcome: 'verified',
+              message: `Klik elemen [${params.index}]${tag} berhasil diverifikasi${hasHref ? ` (href: ${hasHref})` : ''}.`,
+            };
+          }
+          return {
+            verified: true,
+            outcome: 'outcome_unknown',
+            message: `Klik elemen [${params.index}] dikirim tanpa konfirmasi perubahan DOM.`,
+          };
         }
         case 'input_text': {
-          const val = actionResult.data?.currentValue || '';
-          const match = val.includes(params.text);
+          const val = actionResult.data?.currentValue;
+          if (typeof val === 'string') {
+            const match = val.includes(params.text);
+            return {
+              verified: match,
+              outcome: match ? 'verified' : 'failed',
+              message: match
+                ? `Teks "${params.text}" berhasil diinput dan diverifikasi pada nilai elemen input.`
+                : `Nilai input tidak sesuai (saat ini: "${val}").`,
+            };
+          }
           return {
-            verified: match,
-            message: match ? `Teks "${params.text}" berhasil diinput dan diverifikasi.` : 'Nilai input belum sesuai.',
+            verified: true,
+            outcome: 'outcome_unknown',
+            message: `Input teks "${params.text}" dieksekusi.`,
           };
         }
         case 'scroll_page': {
-          return { verified: true, message: 'Posisi scroll telah diperbarui.' };
+          return {
+            verified: true,
+            outcome: 'verified',
+            message: 'Posisi scroll halaman telah diperbarui.',
+          };
         }
-        case 'highlight_sections':
+        case 'highlight_sections': {
+          const count = actionResult.data?.highlightedCount ?? (Array.isArray(actionResult.data?.results) ? actionResult.data.results.filter(r => r.found).length : 0);
+          if (count > 0) {
+            return {
+              verified: true,
+              outcome: 'verified',
+              message: `${count} bagian konten substantif berhasil disorot dengan Color Theory.`,
+            };
+          }
+          return {
+            verified: false,
+            outcome: 'failed',
+            message: 'Tidak ada bagian konten yang berhasil disorot pada halaman ini.',
+          };
+        }
         case 'highlight_text':
         case 'highlight': {
-          return { verified: true, message: 'Bagian konten dan narasi penjelasan berhasil disorot dengan Color Theory.' };
+          const found = actionResult.data?.found !== false;
+          if (found) {
+            return {
+              verified: true,
+              outcome: 'verified',
+              message: 'Teks narasi penjelasan berhasil disorot pada halaman.',
+            };
+          }
+          return {
+            verified: false,
+            outcome: 'failed',
+            message: 'Teks target tidak ditemukan pada halaman untuk disorot.',
+          };
+        }
+        case 'wait': {
+          const sec = params.seconds || 3;
+          return {
+            verified: true,
+            outcome: 'verified',
+            message: `Proses waiting ${sec} detik selesai, DOM siap dievaluasi kembali.`,
+          };
         }
         case 'done': {
-          return { verified: true, message: 'Tugas ditandai selesai.' };
+          return {
+            verified: true,
+            outcome: 'verified',
+            message: 'Tugas ditandai selesai.',
+          };
         }
         default:
-          return { verified: true, message: `Aksi ${actionName} selesai dieksekusi.` };
+          return {
+            verified: true,
+            outcome: 'executed',
+            message: `Aksi ${actionName} selesai dieksekusi.`,
+          };
       }
     }
 
