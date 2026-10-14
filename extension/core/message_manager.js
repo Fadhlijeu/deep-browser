@@ -120,30 +120,33 @@ At each step, you receive:
    - A search result snippet or table preview is NOT the final answer.
    - Click into the target entity's detail page before extracting complete information or taking the final screenshot.
 
-6. **TEXT & MULTI-TOPIC HIGHLIGHTING (\`highlight_sections\` / \`highlight_text\`) — ONE SINGLE ACTION**:
-   - When asked to highlight concepts, definitions ("definisi"), functions ("fungsi"), benefits ("manfaat"), models ("model-model text-out"), or multiple topics:
-   - **CRITICAL DIRECTIVE: NEVER EXECUTE 1 LABEL PER STEP! NEVER SCROLL AND HIGHLIGHT ONE-BY-ONE ACROSS 8 SLOW STEPS!**
-   - **YOU MUST CALL \`highlight_sections\` IN A SINGLE ACTION TO HIGHLIGHT ALL REQUESTED CONCEPTS/MODELS SIMULTANEOUSLY!**
-     Example: When user asks to highlight 'definisi, fungsi, dan manfaat' or 'model-model text-out':
+6. **TEXT & MULTI-TOPIC HIGHLIGHTING (\`highlight_sections\`) — MANDATORY TOOL CALL FIRST**:
+   - When the user asks to highlight any concepts such as \"definisi\", \"fungsi\", \"manfaat\", \"teknologi\", \"cara kerja\", or any section/topic:
+   - **⛔ ABSOLUTELY FORBIDDEN: Do NOT call \`done\` with a text summary as your response to a highlight request!**
+     - ❌ WRONG: Outputting "Berikut adalah rangkuman..." and calling done without actually highlighting the page.
+     - ✅ CORRECT: Call \`highlight_sections\` FIRST. Then call \`done\` with a brief confirmation of what was highlighted.
+   - **YOU MUST CALL \`highlight_sections\` IN ONE SINGLE ACTION with ALL requested topics at once:**
      \`\`\`json
      {
        "action_name": "highlight_sections",
        "parameters": {
          "sections": [
-           { "topic": "text-out models", "color": "cyan" }
+           { "topic": "definisi", "color": "cyan" },
+           { "topic": "manfaat",  "color": "amber" },
+           { "topic": "teknologi", "color": "emerald" }
          ]
        }
      }
      \`\`\`
-     The in-browser DOM engine scans the entire webpage (including tables, rows \`<tr>\`, cells \`<td>\`, and headings), locates matching sections and rows, attaches semantic topic pill badges (\`[TEXT-OUT MODELS]\`), and illuminates them all in 1 single step!
-   - **STRICT ANTI-HALLUCINATION RULE: NEVER CLAIM IN TEXT THAT YOU HIGHLIGHTED SOMETHING WITHOUT CALLING THE TOOL!**
-     - You MUST dispatch \`highlight_sections\` or \`highlight_text\` to actually illuminate the page before calling \`done\`.
-   - **CRITICAL ANTI-SLOP RULE: NEVER HIGHLIGHT JUST A BARE HEADING OR TITLE LABEL!**
-     - ❌ STRICTLY FORBIDDEN: Never just highlight a 2-word title like "Manfaat AI".
-     - ✅ MANDATORY: The highlight MUST include the actual SUBSTANTIVE EXPLANATION, NARRATIVE PARAGRAPH, or TABLE ROWS explaining the concept/model.
-   - **SYNCHRONIZE DOM AND SCREENSHOT**:
-     - Do not rely solely on what is visible in the initial screenshot viewport. If a table has more models/rows below (\`has_more_content_below: YES\`), scroll down to perceive the entire list or let \`highlight_sections\` match the full page DOM.
-   - Once \`highlight_sections\` executes, call \`done\` summarizing all highlighted models/sections in clean Markdown!
+   - **HOW THE ENGINE WORKS (do NOT manually scroll to find content before highlighting):**
+     - The \`highlight_sections\` engine automatically scans the **ENTIRE page DOM** from top to bottom (not just the viewport).
+     - For each topic it: (1) finds the matching heading, (2) attaches a colored label badge to the heading, (3) highlights **ALL paragraphs, list items, and blocks** below that heading until the next heading.
+     - This means numbered lists like "1. Mesin Reaktif", "2. Memori Terbatas" are all highlighted including their explanation paragraphs — in one call.
+     - You do NOT need to scroll first. You do NOT need to take a screenshot first. Just call \`highlight_sections\` directly.
+   - **STRICT ORDER: highlight_sections → then done (confirmation only).**
+   - After \`highlight_sections\` executes, call \`done\` with a brief 1-sentence confirmation like: "Berhasil menyorot 3 bagian: Definisi, Manfaat, dan Teknologi AI."
+
+
 
 7. **INTERACTIVE CLARIFICATION VIA WIDGETS (\`ask_user\`)**:
    - If a search query yields multiple ambiguous matches or requires user preference/confirmation:

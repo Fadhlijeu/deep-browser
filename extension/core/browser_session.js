@@ -1008,59 +1008,60 @@
                                 (window.location.protocol === 'file:' && window.location.pathname.toLowerCase().endsWith('.pdf')) ||
                                 document.contentType === 'application/pdf';
             if (isNativePdf) {
-              return {
-                success: false,
-                isPdf: true,
-                error: 'Dokumen dibuka di Penampil PDF bawaan browser (PDFium plugin).'
-              };
+              return { success: false, isPdf: true, error: 'Dokumen dibuka di Penampil PDF bawaan browser (PDFium plugin).' };
             }
 
-            // Ensure animated CSS keyframes & styles are injected
+            // ── Inject CSS styles ──────────────────────────────────────────────
             let styleEl = document.getElementById('__deep_browser_highlight_style__');
             if (!styleEl) {
               styleEl = document.createElement('style');
               styleEl.id = '__deep_browser_highlight_style__';
               styleEl.textContent = `
                 @keyframes __db_hl_sweep__ {
-                  0% { background-size: 0% 100%; border-color: transparent; }
-                  100% { background-size: 100% 100%; border-color: var(--db-hl-border); }
+                  0%   { background-size: 0% 100%; }
+                  100% { background-size: 100% 100%; }
                 }
                 @keyframes __db_hl_glow__ {
-                  0% { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
-                  60% { box-shadow: var(--db-hl-shadow); }
+                  0%   { box-shadow: 0 0 0 rgba(0,0,0,0); }
+                  60%  { box-shadow: var(--db-hl-shadow); }
                   100% { box-shadow: var(--db-hl-shadow); }
                 }
                 @keyframes __db_hl_label_fade__ {
-                  0% { opacity: 0; transform: translateY(-2px) scale(0.92); }
+                  0%   { opacity: 0; transform: translateY(-4px) scale(0.9); }
                   100% { opacity: 1; transform: translateY(0) scale(1); }
                 }
-                .__deep_browser_text_highlight__ {
-                  position: relative;
-                  display: inline;
-                  color: inherit;
-                  font-weight: inherit;
-                  padding: 2px 6px;
-                  margin: 0 1px;
+                .__deep_browser_section_badge__ {
+                  display: inline-block;
+                  font-size: 10px;
+                  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  letter-spacing: 0.6px;
+                  padding: 2px 7px;
+                  margin-right: 8px;
                   border-radius: 4px;
-                  border: 1px solid var(--db-hl-border);
-                  border-left: 3px solid var(--db-hl-border);
-                  background-image: linear-gradient(90deg, var(--db-hl-bg-start) 0%, var(--db-hl-bg-mid) 70%, var(--db-hl-bg-end) 100%);
+                  background: var(--db-hl-border);
+                  color: #fff;
+                  vertical-align: middle;
+                  animation: __db_hl_label_fade__ 0.35s ease forwards;
+                  pointer-events: none;
+                  position: relative;
+                  top: -1px;
+                }
+                .__deep_browser_text_highlight__ {
+                  display: block !important;
+                  padding: 6px 12px 6px 14px !important;
+                  margin: 4px 0 !important;
+                  border-radius: 6px !important;
+                  border-left: 4px solid var(--db-hl-border) !important;
+                  background-image: linear-gradient(90deg, var(--db-hl-bg-start) 0%, var(--db-hl-bg-mid) 60%, var(--db-hl-bg-end) 100%);
                   background-repeat: no-repeat;
                   background-position: left center;
                   background-size: 0% 100%;
-                  box-decoration-break: clone;
-                  -webkit-box-decoration-break: clone;
-                  animation: __db_hl_sweep__ 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards,
-                             __db_hl_glow__ 1.2s ease forwards;
-                  transition: all 0.3s ease;
+                  animation: __db_hl_sweep__ 0.9s cubic-bezier(0.16,1,0.3,1) forwards,
+                             __db_hl_glow__ 1.3s ease forwards;
+                  color: inherit;
                   line-height: inherit;
-                }
-                .__deep_browser_narrative_context__ {
-                  display: block !important;
-                  margin-top: 6px !important;
-                  padding: 6px 10px !important;
-                  border-radius: 6px !important;
-                  line-height: 1.6 !important;
                 }
                 .__deep_browser_highlight_label__ {
                   display: inline-block;
@@ -1073,7 +1074,7 @@
                   margin-right: 6px;
                   border-radius: 3px;
                   background: var(--db-hl-border);
-                  color: #ffffff;
+                  color: #fff;
                   vertical-align: middle;
                   animation: __db_hl_label_fade__ 0.4s ease forwards;
                   pointer-events: none;
@@ -1083,259 +1084,249 @@
             }
 
             const colorMap = {
-              cyan: {
-                bgStart: 'rgba(34, 211, 238, 0.48)',
-                bgMid: 'rgba(6, 182, 212, 0.38)',
-                bgEnd: 'rgba(8, 145, 178, 0.28)',
-                border: '#06b6d4',
-                shadow: '0 0 12px rgba(6, 182, 212, 0.5)',
-              },
-              amber: {
-                bgStart: 'rgba(251, 191, 36, 0.48)',
-                bgMid: 'rgba(245, 158, 11, 0.38)',
-                bgEnd: 'rgba(217, 119, 6, 0.28)',
-                border: '#f59e0b',
-                shadow: '0 0 12px rgba(245, 158, 11, 0.5)',
-              },
-              emerald: {
-                bgStart: 'rgba(52, 211, 153, 0.48)',
-                bgMid: 'rgba(16, 185, 129, 0.38)',
-                bgEnd: 'rgba(5, 150, 105, 0.28)',
-                border: '#10b981',
-                shadow: '0 0 12px rgba(16, 185, 129, 0.5)',
-              },
-              violet: {
-                bgStart: 'rgba(192, 132, 252, 0.48)',
-                bgMid: 'rgba(168, 85, 247, 0.38)',
-                bgEnd: 'rgba(147, 51, 234, 0.28)',
-                border: '#a855f7',
-                shadow: '0 0 12px rgba(168, 85, 247, 0.5)',
-              },
-              rose: {
-                bgStart: 'rgba(251, 113, 133, 0.48)',
-                bgMid: 'rgba(244, 63, 94, 0.38)',
-                bgEnd: 'rgba(225, 29, 72, 0.28)',
-                border: '#f43f5e',
-                shadow: '0 0 12px rgba(244, 63, 94, 0.5)',
-              },
+              cyan:    { bgStart:'rgba(34,211,238,0.35)',  bgMid:'rgba(6,182,212,0.22)',   bgEnd:'rgba(8,145,178,0.10)',  border:'#06b6d4', shadow:'0 0 14px rgba(6,182,212,0.4)'  },
+              amber:   { bgStart:'rgba(251,191,36,0.40)',  bgMid:'rgba(245,158,11,0.28)',  bgEnd:'rgba(217,119,6,0.14)',  border:'#f59e0b', shadow:'0 0 14px rgba(245,158,11,0.4)' },
+              emerald: { bgStart:'rgba(52,211,153,0.38)',  bgMid:'rgba(16,185,129,0.25)',  bgEnd:'rgba(5,150,105,0.12)',  border:'#10b981', shadow:'0 0 14px rgba(16,185,129,0.4)' },
+              violet:  { bgStart:'rgba(192,132,252,0.38)', bgMid:'rgba(168,85,247,0.25)',  bgEnd:'rgba(147,51,234,0.12)', border:'#a855f7', shadow:'0 0 14px rgba(168,85,247,0.4)' },
+              rose:    { bgStart:'rgba(251,113,133,0.38)', bgMid:'rgba(244,63,94,0.25)',   bgEnd:'rgba(225,29,72,0.12)',  border:'#f43f5e', shadow:'0 0 14px rgba(244,63,94,0.4)'  },
+              sky:     { bgStart:'rgba(56,189,248,0.38)',  bgMid:'rgba(14,165,233,0.25)',  bgEnd:'rgba(2,132,199,0.12)',  border:'#0ea5e9', shadow:'0 0 14px rgba(14,165,233,0.4)' },
             };
-
-            const defaultThemeList = ['cyan', 'amber', 'emerald', 'violet', 'rose'];
+            const defaultThemeList = ['cyan', 'amber', 'emerald', 'violet', 'rose', 'sky'];
 
             if (clearOld) {
-              document.querySelectorAll('.__deep_browser_text_highlight__').forEach((el) => {
-                const parent = el.parentNode;
-                if (parent) {
-                  parent.replaceChild(document.createTextNode(el.textContent), el);
-                  parent.normalize();
-                }
+              document.querySelectorAll('.__deep_browser_text_highlight__').forEach(el => {
+                const p = el.parentNode;
+                if (p) { p.replaceChild(document.createTextNode(el.textContent), el); p.normalize(); }
               });
+              document.querySelectorAll('.__deep_browser_section_badge__').forEach(el => el.remove());
+            }
+
+            const normalize = str => (str || '')
+              .toLowerCase()
+              .replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
+              .replace(/[\u2013\u2014]/g, '-').replace(/\u00a0/g, ' ')
+              .replace(/\s+/g, ' ').trim();
+
+            const topicAliases = {
+              definisi:     ['definisi', 'pengertian', 'apa itu', 'merupakan', 'adalah', 'arti', 'definition', 'what is'],
+              pengertian:   ['pengertian', 'definisi', 'apa itu', 'merupakan', 'adalah', 'arti'],
+              fungsi:       ['fungsi', 'cara kerja', 'bagaimana', 'sistem kerja', 'tujuan', 'peran', 'kegunaan', 'function'],
+              'cara kerja': ['cara kerja', 'bagaimana', 'fungsi', 'mekanisme', 'sistem'],
+              manfaat:      ['manfaat', 'keuntungan', 'kelebihan', 'faedah', 'benefit', 'kenapa', 'penting'],
+              kesimpulan:   ['kesimpulan', 'ringkasan', 'penutup', 'rangkuman', 'conclusion', 'summary'],
+              contoh:       ['contoh', 'penerapan', 'implementasi', 'aplikasi', 'kasus', 'example'],
+              teknologi:    ['teknologi', 'jenis', 'macam', 'tipe', 'kategori', 'type', 'kinds'],
+              sejarah:      ['sejarah', 'history', 'asal usul', 'latar belakang', 'perkembangan'],
+              kekurangan:   ['kekurangan', 'kelemahan', 'risiko', 'disadvantage'],
+            };
+
+            function getKeywords(topicStr, queryStr) {
+              const normTopic = normalize(topicStr);
+              const kws = new Set([normTopic]);
+              if (queryStr) kws.add(normalize(queryStr));
+              for (const [key, aliases] of Object.entries(topicAliases)) {
+                if (normTopic.includes(key) || (queryStr && normalize(queryStr).includes(key))) {
+                  aliases.forEach(a => kws.add(a));
+                }
+              }
+              return [...kws];
+            }
+
+            function applyTheme(el, theme) {
+              el.style.setProperty('--db-hl-bg-start', theme.bgStart);
+              el.style.setProperty('--db-hl-bg-mid',   theme.bgMid);
+              el.style.setProperty('--db-hl-bg-end',   theme.bgEnd);
+              el.style.setProperty('--db-hl-border',   theme.border);
+              el.style.setProperty('--db-hl-shadow',   theme.shadow);
+            }
+
+            // Attach floating badge to heading (does NOT wrap heading text)
+            function attachHeadingBadge(heading, theme, label) {
+              if (heading.querySelector('.__deep_browser_section_badge__')) return;
+              const badge = document.createElement('span');
+              badge.className = '__deep_browser_section_badge__';
+              applyTheme(badge, theme);
+              badge.textContent = (label || '').toUpperCase();
+              heading.insertBefore(badge, heading.firstChild);
+            }
+
+            // Apply block highlight mark to a content element.
+            // NEVER wraps headings — headings only get floating badges.
+            function applyBlockHighlight(el, theme, labelText) {
+              if (!el) return null;
+              if (el.querySelector('.__deep_browser_text_highlight__')) return null;
+              if (/^h[1-6]$/i.test(el.tagName)) return null; // headings: badges only
+              const text = (el.innerText || el.textContent || '').trim();
+              if (text.length < 5) return null;
+
+              const mark = document.createElement('mark');
+              mark.className = '__deep_browser_text_highlight__';
+              applyTheme(mark, theme);
+
+              if (labelText) {
+                const badge = document.createElement('span');
+                badge.className = '__deep_browser_highlight_label__';
+                badge.textContent = labelText.toUpperCase();
+                mark.appendChild(badge);
+              }
+
+              while (el.firstChild) mark.appendChild(el.firstChild);
+              el.appendChild(mark);
+              return mark;
+            }
+
+            /**
+             * Highlight ALL sibling content blocks after a heading,
+             * stopping at the next heading of same or higher level.
+             * Returns array of mark elements applied.
+             */
+            function highlightContentAfterHeading(heading, theme) {
+              const headingLevel = parseInt((heading.tagName || 'H3').replace(/[Hh]/, ''), 10) || 3;
+              const marks = [];
+              const SKIP_TAGS = new Set(['script', 'style', 'img', 'picture', 'video', 'svg', 'noscript', 'iframe', 'header', 'footer', 'nav', 'aside']);
+
+              // Walk up to find a container that has a next sibling
+              let container = heading;
+              while (container && container !== document.body && !container.nextElementSibling) {
+                container = container.parentElement;
+              }
+              let sibling = container ? container.nextElementSibling : null;
+              let hops = 0;
+
+              while (sibling && hops < 80) {
+                hops++;
+                const tag = (sibling.tagName || '').toLowerCase();
+
+                // Stop at a heading of same or higher level
+                const sibLevel = parseInt(tag.replace('h', ''), 10);
+                if (!isNaN(sibLevel) && sibLevel >= 1 && sibLevel <= 6 && sibLevel <= headingLevel) break;
+
+                if (SKIP_TAGS.has(tag)) { sibling = sibling.nextElementSibling; continue; }
+
+                const text = (sibling.innerText || sibling.textContent || '').trim();
+                if (text.length < 5) { sibling = sibling.nextElementSibling; continue; }
+
+                if (tag === 'ul' || tag === 'ol') {
+                  sibling.querySelectorAll('li').forEach(li => {
+                    if ((li.innerText || li.textContent || '').trim().length > 4) {
+                      const m = applyBlockHighlight(li, theme, null);
+                      if (m) marks.push(m);
+                    }
+                  });
+                } else if (tag === 'table' || tag === 'tbody') {
+                  sibling.querySelectorAll('tr').forEach(row => {
+                    const m = applyBlockHighlight(row, theme, null);
+                    if (m) marks.push(m);
+                  });
+                } else if (['p', 'li', 'blockquote', 'pre', 'tr', 'dt', 'dd'].includes(tag)) {
+                  const m = applyBlockHighlight(sibling, theme, null);
+                  if (m) marks.push(m);
+                } else {
+                  const inner = sibling.querySelectorAll('p, li, blockquote, tr');
+                  if (inner.length > 0) {
+                    inner.forEach(b => {
+                      const m = applyBlockHighlight(b, theme, null);
+                      if (m) marks.push(m);
+                    });
+                  } else {
+                    const m = applyBlockHighlight(sibling, theme, null);
+                    if (m) marks.push(m);
+                  }
+                }
+                sibling = sibling.nextElementSibling;
+              }
+              return marks;
             }
 
             const sectionsList = (Array.isArray(rawSections) ? rawSections : [rawSections])
               .map((item, idx) => {
-                if (typeof item === 'string') {
-                  return {
-                    topic: item,
-                    query: item,
-                    text: '',
-                    color: defaultThemeList[idx % defaultThemeList.length],
-                  };
-                }
+                if (typeof item === 'string') return { topic: item, query: item, text: '', color: defaultThemeList[idx % defaultThemeList.length] };
                 return {
                   topic: item.topic || item.name || item.title || `Topik ${idx + 1}`,
-                  query: item.query || item.topic || '',
-                  text: item.text || '',
-                  color: item.color || defaultThemeList[idx % defaultThemeList.length],
+                  query: item.query  || item.topic || '',
+                  text:  item.text   || '',
+                  color: item.color  || defaultThemeList[idx % defaultThemeList.length],
                 };
               });
-
-            const normalize = (str) => {
-              return (str || '')
-                .toLowerCase()
-                .replace(/[\u2018\u2019]/g, "'")
-                .replace(/[\u201c\u201d]/g, '"')
-                .replace(/[\u2013\u2014]/g, '-')
-                .replace(/\u00a0/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-            };
-
-            const topicAliases = {
-              definisi: ['definisi', 'pengertian', 'apa itu', 'merupakan', 'adalah', 'arti', 'definition', 'what is'],
-              pengertian: ['pengertian', 'definisi', 'apa itu', 'merupakan', 'adalah', 'arti'],
-              fungsi: ['fungsi', 'cara kerja', 'bagaimana cara kerja', 'sistem kerja', 'tujuan', 'peran', 'kegunaan', 'function', 'how it works'],
-              'cara kerja': ['cara kerja', 'bagaimana cara kerja', 'fungsi', 'mekanisme', 'sistem'],
-              manfaat: ['manfaat', 'keuntungan', 'kelebihan', 'faedah', 'kegunaan', 'benefit', 'advantages'],
-              kesimpulan: ['kesimpulan', 'ringkasan', 'penutup', 'rangkuman', 'conclusion', 'summary'],
-              contoh: ['contoh', 'penerapan', 'implementasi', 'aplikasi', 'kasus', 'example'],
-            };
-
-            function getKeywordsForTopic(topicStr, queryStr) {
-              const normTopic = normalize(topicStr);
-              const keywords = [normTopic];
-              if (queryStr) {
-                const normQ = normalize(queryStr);
-                if (!keywords.includes(normQ)) keywords.push(normQ);
-              }
-              for (const [key, aliases] of Object.entries(topicAliases)) {
-                if (normTopic.includes(key) || (queryStr && normalize(queryStr).includes(key))) {
-                  aliases.forEach(a => { if (!keywords.includes(a)) keywords.push(a); });
-                }
-              }
-              return keywords;
-            }
-
-            function applyHighlightToElement(el, theme, topicLabel, isNarrative = false) {
-              if (!el || el.querySelector('.__deep_browser_text_highlight__')) return null;
-
-              const mark = document.createElement('mark');
-              mark.className = '__deep_browser_text_highlight__' + (isNarrative ? ' __deep_browser_narrative_context__' : '');
-              mark.style.setProperty('--db-hl-bg-start', theme.bgStart);
-              mark.style.setProperty('--db-hl-bg-mid', theme.bgMid);
-              mark.style.setProperty('--db-hl-bg-end', theme.bgEnd);
-              mark.style.setProperty('--db-hl-border', theme.border);
-              mark.style.setProperty('--db-hl-shadow', theme.shadow);
-
-              if (topicLabel && !isNarrative) {
-                const badge = document.createElement('span');
-                badge.className = '__deep_browser_highlight_label__';
-                badge.textContent = topicLabel.toUpperCase();
-                mark.appendChild(badge);
-              }
-
-              while (el.firstChild) {
-                mark.appendChild(el.firstChild);
-              }
-              el.appendChild(mark);
-              return mark;
-            }
 
             const results = [];
             let firstMark = null;
 
             for (const sec of sectionsList) {
-              const theme = colorMap[sec.color] || colorMap.amber;
-              const keywords = getKeywordsForTopic(sec.topic, sec.query);
-              let matchedMark = null;
-              let matchedTextSnippet = '';
+              const theme    = colorMap[sec.color] || colorMap.amber;
+              const keywords = getKeywords(sec.topic, sec.query);
+              let matched    = false;
+              let snippets   = [];
 
-              // ── Strategy A: Explicit Text Match (if text is given and not empty) ──────
+              // Strategy A: Explicit text match
               if (sec.text && sec.text.trim().length > 5) {
-                const searchNorm = normalize(sec.text);
-                const candidateBlocks = document.querySelectorAll('p, li, blockquote, h1, h2, h3, h4, tr, [role="row"], td, [role="cell"], [role="article"]');
-                for (const block of candidateBlocks) {
-                  const blockNorm = normalize(block.textContent);
-                  if (blockNorm.includes(searchNorm) || blockNorm.includes(searchNorm.slice(0, 30))) {
-                    const targetBlock = block.closest('tr') || block.closest('li') || block;
-                    matchedMark = applyHighlightToElement(targetBlock, theme, sec.topic, false);
-                    matchedTextSnippet = (targetBlock.innerText || targetBlock.textContent || '').slice(0, 100);
+                const needle = normalize(sec.text).slice(0, 50);
+                for (const block of document.querySelectorAll('p, li, blockquote, td')) {
+                  if (normalize(block.textContent).includes(needle)) {
+                    const target = block.closest('tr') || block.closest('li') || block;
+                    const m = applyBlockHighlight(target, theme, sec.topic);
+                    if (m) { if (!firstMark) firstMark = m; matched = true; snippets.push((target.innerText || '').slice(0, 80)); }
                     break;
                   }
                 }
               }
 
-              // ── Strategy B: Heading + Substantive Narrative Match ─────────────────────
-              if (!matchedMark) {
-                const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
-                for (const h of headings) {
-                  if (h.querySelector('.__deep_browser_text_highlight__')) continue;
+              // Strategy B: Heading badge + highlight ALL content below it
+              if (!matched) {
+                for (const h of document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]')) {
                   const hNorm = normalize(h.textContent);
-                  const matchesTopic = keywords.some(kw => hNorm.includes(kw));
-
-                  if (matchesTopic) {
-                    matchedMark = applyHighlightToElement(h, theme, sec.topic, false);
-                    matchedTextSnippet = (h.innerText || h.textContent || '').slice(0, 60);
-
-                    // Climb wrapper containers to find following substantive narrative blocks
-                    let currentContainer = h;
-                    while (currentContainer && currentContainer !== document.body && !currentContainer.nextElementSibling) {
-                      currentContainer = currentContainer.parentElement;
-                    }
-                    let sibling = currentContainer ? currentContainer.nextElementSibling : null;
-                    let narrativeHops = 0;
-                    let highlightedNarratives = 0;
-
-                    while (sibling && narrativeHops < 8 && highlightedNarratives < 2) {
-                      const sTag = (sibling.tagName || '').toLowerCase();
-                      if (/^h[1-4]$/i.test(sTag)) break; // stop at next major heading
-
-                      let narrativeTargets = [];
-                      if (['p', 'ul', 'ol', 'blockquote', 'table', 'tbody', 'tr'].includes(sTag)) {
-                        narrativeTargets.push(sibling);
-                      } else if (sibling.querySelectorAll) {
-                        const innerP = sibling.querySelectorAll('p, ul, ol, blockquote, tr, [role="row"], table');
-                        if (innerP.length > 0) {
-                          narrativeTargets.push(...Array.from(innerP));
-                        } else if (sibling.textContent.trim().length > 30) {
-                          narrativeTargets.push(sibling);
-                        }
-                      }
-
-                      for (const nTarget of narrativeTargets) {
-                        const nText = (nTarget.innerText || nTarget.textContent || '').trim();
-                        if (nText.length > 10 && !nTarget.querySelector('.__deep_browser_text_highlight__')) {
-                          applyHighlightToElement(nTarget, theme, null, true);
-                          highlightedNarratives++;
-                          if (!matchedTextSnippet || matchedTextSnippet.length < 30) {
-                            matchedTextSnippet += ': ' + nText.slice(0, 80);
-                          }
-                          if (highlightedNarratives >= 2) break;
-                        }
-                      }
-                      sibling = sibling.nextElementSibling;
-                      narrativeHops++;
-                    }
-                    break;
+                  if (!keywords.some(kw => hNorm.includes(kw))) continue;
+                  attachHeadingBadge(h, theme, sec.topic);
+                  const marks = highlightContentAfterHeading(h, theme);
+                  if (marks.length > 0) {
+                    if (!firstMark) firstMark = marks[0];
+                    marks.forEach(m => snippets.push((m.textContent || '').slice(0, 60).trim()));
+                  } else {
+                    if (!firstMark) firstMark = h;
+                    snippets.push((h.innerText || '').slice(0, 60));
                   }
+                  matched = true;
+                  break;
                 }
               }
 
-              // ── Strategy C: Paragraph / Table Row / List Item Keyword Match ─────────
-              if (!matchedMark) {
-                const textBlocks = document.querySelectorAll('p, li, blockquote, tr, [role="row"], td, [role="cell"]');
-                for (const tb of textBlocks) {
+              // Strategy C: Direct paragraph/list keyword match
+              if (!matched) {
+                for (const tb of document.querySelectorAll('p, li, blockquote, tr, td')) {
                   if (tb.querySelector('.__deep_browser_text_highlight__')) continue;
                   const tbNorm = normalize(tb.textContent);
-                  const matchesTopic = keywords.some(kw => tbNorm.startsWith(kw) || tbNorm.includes(' ' + kw + ' ') || tbNorm.includes(kw + ':') || tbNorm.includes(kw + ' -') || tbNorm.includes(kw));
-                  if (matchesTopic && tbNorm.length > 10) {
-                    const targetBlock = tb.closest('tr') || tb.closest('li') || tb;
-                    matchedMark = applyHighlightToElement(targetBlock, theme, sec.topic, false);
-                    matchedTextSnippet = (targetBlock.innerText || targetBlock.textContent || '').slice(0, 100);
+                  if (tbNorm.length < 10) continue;
+                  if (keywords.some(kw => tbNorm.includes(kw))) {
+                    const target = tb.closest('tr') || tb.closest('li') || tb;
+                    const m = applyBlockHighlight(target, theme, sec.topic);
+                    if (m) { if (!firstMark) firstMark = m; matched = true; snippets.push((target.innerText || '').slice(0, 80)); break; }
+                  }
+                }
+              }
+
+              // Strategy D: Numbered list title scan (e.g. "1. Mesin Reaktif")
+              if (!matched) {
+                for (const b of document.querySelectorAll('p, li, h3, h4, h5, dt')) {
+                  const bNorm = normalize(b.textContent);
+                  if (/^\d+[\.\)]\s/.test(bNorm) && keywords.some(kw => bNorm.includes(kw))) {
+                    const m = applyBlockHighlight(b, theme, sec.topic);
+                    if (m) { if (!firstMark) firstMark = m; matched = true; snippets.push(bNorm.slice(0, 60)); }
+                    const next = b.nextElementSibling;
+                    if (next && ['p','div','blockquote'].includes((next.tagName||'').toLowerCase())) applyBlockHighlight(next, theme, null);
                     break;
                   }
                 }
               }
 
-              if (matchedMark) {
-                if (!firstMark) firstMark = matchedMark;
-                results.push({
-                  topic: sec.topic,
-                  status: 'highlighted',
-                  color: sec.color,
-                  snippet: matchedTextSnippet,
-                });
-              } else {
-                results.push({
-                  topic: sec.topic,
-                  status: 'not_found',
-                  color: sec.color,
-                });
-              }
+              results.push({ topic: sec.topic, status: matched ? 'highlighted' : 'not_found', color: sec.color, snippet: snippets.slice(0,3).join(' | ') });
             }
 
-            // Smooth scroll to the first matched section
             if (shouldScroll && firstMark) {
               firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
 
             const highlightedCount = results.filter(r => r.status === 'highlighted').length;
-            return {
-              success: highlightedCount > 0,
-              totalSections: sectionsList.length,
-              highlightedCount,
-              sections: results,
-            };
+            return { success: highlightedCount > 0, totalSections: sectionsList.length, highlightedCount, sections: results };
           },
           args: [sections, scrollToFirst, clearPrevious],
         });
