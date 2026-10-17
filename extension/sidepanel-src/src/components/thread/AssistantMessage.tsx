@@ -10,8 +10,12 @@ import {
   CheckCheck,
   RefreshCw,
   Activity,
-  Brain,
   ChevronRight,
+  Terminal,
+  Maximize2,
+  X,
+  Camera,
+  Layers,
   Compass,
   Search,
   MousePointer,
@@ -19,7 +23,6 @@ import {
   FileText,
   ArrowDown,
   Eye,
-  Terminal,
 } from 'lucide-react';
 import { ChatMessage, ToolStep, ActivityItem } from '../../types';
 import { HitlApprovalCard } from './HitlApprovalCard';
@@ -35,65 +38,326 @@ interface AssistantMessageProps {
   onToggleInspector?: () => void;
 }
 
-// 1. Tool Call Eventlog Item in Chat Stream
-const ToolCallItem: React.FC<{ step: ToolStep }> = ({ step }) => {
+// ─── Screenshot Data Extractor ───────────────────────────────────────────────
+const getScreenshotUrl = (step: ToolStep): string | null => {
+  const sc =
+    step.result?.screenshot ||
+    step.result?.dataUrl ||
+    step.result?.screenshotDataUrl ||
+    (step.args as any)?.screenshot;
+  if (!sc || typeof sc !== 'string' || sc === 'Captured') return null;
+  if (sc.startsWith('data:image')) return sc;
+  if (sc.startsWith('http://') || sc.startsWith('https://') || sc.startsWith('blob:')) return sc;
+  return `data:image/png;base64,${sc}`;
+};
+
+// ─── Fullscreen Screenshot Lightbox Modal ────────────────────────────────────
+const ScreenshotModal: React.FC<{
+  imageUrl: string;
+  title: string;
+  onClose: () => void;
+}> = ({ imageUrl, title, onClose }) => {
+  return (
+    <div className="screenshot-modal-overlay" onClick={onClose}>
+      <div className="screenshot-modal-head" onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Camera size={14} color="var(--accent)" />
+          <strong>{title || 'Tangkapan Layar Browser'}</strong>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <a
+            href={imageUrl}
+            download={`screenshot_${Date.now()}.png`}
+            className="btn small"
+            style={{ color: '#fff', borderColor: '#444', background: '#222' }}
+          >
+            <Download size={12} /> Unduh Gambar
+          </a>
+          <button
+            type="button"
+            className="btn small"
+            onClick={onClose}
+            style={{ color: '#fff', borderColor: '#444', background: '#222' }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+      <div className="screenshot-modal-body" onClick={(e) => e.stopPropagation()}>
+        <img src={imageUrl} alt={title || 'Viewport capture'} />
+      </div>
+    </div>
+  );
+};
+
+// ─── Single Sleek Tool Call Item ─────────────────────────────────────────────
+const ToolCallItem: React.FC<{
+  step: ToolStep;
+  onViewScreenshot: (url: string, title: string) => void;
+}> = ({ step, onViewScreenshot }) => {
   const [open, setOpen] = useState(false);
+  const scUrl = getScreenshotUrl(step);
+  const hasDetail = Boolean(step.args || step.result || step.error || step.verification || scUrl);
 
   const getToolIcon = (name: string, iconStr?: string) => {
     const n = (name || iconStr || '').toLowerCase();
-    if (n.includes('nav') || n.includes('buka') || n.includes('url')) return <Compass size={12} />;
-    if (n.includes('search') || n.includes('cari')) return <Search size={12} />;
-    if (n.includes('click') || n.includes('klik') || n.includes('touch')) return <MousePointer size={12} />;
-    if (n.includes('type') || n.includes('input') || n.includes('ketik')) return <Edit3 size={12} />;
-    if (n.includes('extract') || n.includes('ekstrak') || n.includes('pdf')) return <FileText size={12} />;
-    if (n.includes('scroll')) return <ArrowDown size={12} />;
-    if (n.includes('obs') || n.includes('baca') || n.includes('lihat')) return <Eye size={12} />;
-    return <Terminal size={12} />;
+    if (scUrl || n.includes('layar') || n.includes('screenshot')) return <Camera size={11} />;
+    if (n.includes('nav') || n.includes('buka') || n.includes('url')) return <Compass size={11} />;
+    if (n.includes('search') || n.includes('cari')) return <Search size={11} />;
+    if (n.includes('click') || n.includes('klik') || n.includes('touch')) return <MousePointer size={11} />;
+    if (n.includes('type') || n.includes('input') || n.includes('ketik')) return <Edit3 size={11} />;
+    if (n.includes('extract') || n.includes('ekstrak') || n.includes('pdf')) return <FileText size={11} />;
+    if (n.includes('scroll')) return <ArrowDown size={11} />;
+    if (n.includes('obs') || n.includes('baca') || n.includes('lihat')) return <Eye size={11} />;
+    return <Terminal size={11} />;
   };
 
-  const hasDetail = Boolean(step.args || step.result || step.error || step.verification);
-
   return (
-    <div className="chat-tool-eventlog">
-      <div className="chat-tool-head" onClick={() => hasDetail && setOpen(!open)}>
-        <span className="chat-tool-icon">{getToolIcon(step.name, step.icon)}</span>
-        <span className="chat-tool-name" title={step.name}>{step.name}</span>
-        {step.duration && <span className="chat-tool-duration">{step.duration}</span>}
-        <span className={`status ${step.status === 'succeeded' ? 'success' : step.status === 'failed' ? 'failed' : 'running'}`}>
-          {step.status === 'succeeded' ? 'succeeded' : step.status === 'failed' ? 'failed' : 'running'}
+    <div style={{ margin: '3px 0' }}>
+      <div
+        className="chat-tool-pill"
+        onClick={() => hasDetail && setOpen(!open)}
+        title={step.name}
+      >
+        <span className="tool-prompt-icon">&gt;_</span>
+        <span style={{ display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
+          {getToolIcon(step.name, step.icon)}
         </span>
-        {hasDetail && (
-          <ChevronRight size={11} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--muted)' }} />
-        )}
+        <span className="tool-title">{step.name}</span>
+        <div className="tool-meta">
+          {step.duration && <span>{step.duration}</span>}
+          <span className={`status ${step.status === 'succeeded' ? 'success' : step.status === 'failed' ? 'failed' : 'running'}`}>
+            {step.status === 'succeeded' ? 'succeeded' : step.status === 'failed' ? 'failed' : 'running'}
+          </span>
+          {hasDetail && (
+            <ChevronRight
+              size={11}
+              style={{
+                transform: open ? 'rotate(90deg)' : 'none',
+                transition: 'transform 0.15s',
+                color: 'var(--muted)',
+              }}
+            />
+          )}
+        </div>
       </div>
+
       {open && hasDetail && (
-        <pre className="chat-tool-detail mono">
-          {JSON.stringify(step.args || step.result || { error: step.error, verification: step.verification }, null, 2)}
-        </pre>
+        <div
+          style={{
+            margin: '2px 0 6px 14px',
+            padding: '8px',
+            border: '1px solid var(--line)',
+            borderRadius: '6px',
+            background: 'var(--paper)',
+          }}
+        >
+          {scUrl && (
+            <div style={{ marginBottom: '8px' }}>
+              <div
+                className="chat-screenshot-thumb-wrap"
+                onClick={() => onViewScreenshot(scUrl, step.name)}
+                style={{ borderRadius: '6px', maxHeight: '160px' }}
+              >
+                <img src={scUrl} alt={step.name} className="chat-screenshot-thumb" />
+                <span className="chat-screenshot-badge">
+                  <Maximize2 size={10} /> Klik untuk perbesar
+                </span>
+              </div>
+            </div>
+          )}
+
+          {(step.args || step.result || step.error || step.verification) && (
+            <pre className="chat-tool-detail mono">
+              {JSON.stringify(
+                {
+                  args: step.args,
+                  result: typeof step.result === 'object' && step.result?.screenshot ? { ...step.result, screenshot: '[Base64 Viewport Image]' } : step.result,
+                  verification: step.verification,
+                  error: step.error,
+                },
+                null,
+                2
+              )}
+            </pre>
+          )}
+        </div>
       )}
     </div>
   );
 };
 
-// 2. AI Reasoning Eventlog Block (Unshow)
-const ReasoningBlock: React.FC<{ thought: string; isStreaming?: boolean }> = ({ thought, isStreaming }) => {
+// ─── Consecutive Screenshots Gallery ─────────────────────────────────────────
+const ScreenshotScanGallery: React.FC<{
+  steps: ToolStep[];
+  onViewScreenshot: (url: string, title: string) => void;
+}> = ({ steps, onViewScreenshot }) => {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="chat-screenshot-card">
+      <div
+        className="chat-tool-group-header"
+        onClick={() => setOpen(!open)}
+        title="Buka / tutup galeri hasil pemindaian layar"
+      >
+        <div className="chat-tool-group-title">
+          <Camera size={13} color="var(--accent)" />
+          <span>Pemindaian Layar ({steps.length} Tangkapan Viewport)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '9.5px', color: 'var(--muted)' }}>
+            {open ? 'Tutup galeri' : `Buka (${steps.length})`}
+          </span>
+          <ChevronRight
+            size={11}
+            style={{
+              transform: open ? 'rotate(90deg)' : 'none',
+              transition: 'transform 0.15s',
+              color: 'var(--muted)',
+            }}
+          />
+        </div>
+      </div>
+
+      {open && (
+        <div style={{ padding: '8px 10px', background: 'var(--panel)' }}>
+          <div className="screenshot-gallery-row">
+            {steps.map((st, idx) => {
+              const url = getScreenshotUrl(st);
+              const scrollPct = st.result?.scroll_percentage ?? Math.round((idx / Math.max(1, steps.length - 1)) * 100);
+              return (
+                <div
+                  key={st.id || idx}
+                  className="screenshot-gallery-item"
+                  onClick={() => url && onViewScreenshot(url, `${st.name} (${scrollPct}%)`)}
+                  title="Klik untuk melihat resolusi penuh"
+                >
+                  {url ? (
+                    <img src={url} alt={`Scan ${scrollPct}%`} />
+                  ) : (
+                    <div style={{ height: '90px', display: 'grid', placeItems: 'center', background: '#222', color: '#888', fontSize: '10px' }}>
+                      Memproses...
+                    </div>
+                  )}
+                  <div className="label">{scrollPct}% scrolled</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Group of Consecutive Tools with Open/Close Toggle ──────────────────────
+const ToolStepsGroup: React.FC<{
+  steps: ToolStep[];
+  onViewScreenshot: (url: string, title: string) => void;
+}> = ({ steps, onViewScreenshot }) => {
+  // If all are screenshots, render the visual gallery
+  const allScreenshots = steps.every((s) => Boolean(getScreenshotUrl(s)) || s.name.toLowerCase().includes('tangkapan layar'));
+  if (allScreenshots && steps.length >= 2) {
+    return <ScreenshotScanGallery steps={steps} onViewScreenshot={onViewScreenshot} />;
+  }
+
+  // If only 1 step, render single pill directly
+  if (steps.length === 1) {
+    return <ToolCallItem step={steps[0]} onViewScreenshot={onViewScreenshot} />;
+  }
+
+  // Multi-step collapsible container
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="chat-reasoning-eventlog">
-      <div className="chat-reasoning-head" onClick={() => setOpen(!open)}>
-        <div className="chat-reasoning-title">
-          <Brain size={13} color="var(--accent)" />
-          <span>AI Reasoning</span>
-          {isStreaming && <span className="status running" style={{ padding: '1px 5px', fontSize: '8px' }}>thinking...</span>}
+    <div className="chat-tool-group">
+      <div
+        className="chat-tool-group-header"
+        onClick={() => setOpen(!open)}
+        title="Buka / tutup daftar aksi browser"
+      >
+        <div className="chat-tool-group-title">
+          <span className="tool-prompt-icon">&gt;_</span>
+          <span>{steps.length} aksi browser dieksekusi</span>
         </div>
-        <span className="chat-reasoning-sub">
-          {open ? 'Sembunyikan' : 'Lihat pemikiran'}
-        </span>
-        <ChevronRight size={12} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--muted)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '9.5px', color: 'var(--muted)' }}>
+            {open ? 'Tutup daftar' : `Buka (${steps.length} aksi)`}
+          </span>
+          <ChevronRight
+            size={11}
+            style={{
+              transform: open ? 'rotate(90deg)' : 'none',
+              transition: 'transform 0.15s',
+              color: 'var(--muted)',
+            }}
+          />
+        </div>
       </div>
+
       {open && (
-        <div className="chat-reasoning-body">
+        <div className="chat-tool-group-body">
+          {steps.map((st) => (
+            <ToolCallItem
+              key={st.id}
+              step={st}
+              onViewScreenshot={onViewScreenshot}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── AI Reasoning Eventlog (Unshow) - Matches Image 1 & 2 "Worked for ... ∨" ──
+const ReasoningBlock: React.FC<{
+  thought: string;
+  isStreaming?: boolean;
+}> = ({ thought, isStreaming }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ margin: '3px 0 6px' }}>
+      <button
+        type="button"
+        className="chat-thought-toggle"
+        onClick={() => setOpen(!open)}
+        title={open ? 'Sembunyikan pemikiran' : 'Lihat pemikiran AI'}
+      >
+        <span className="thought-dot" />
+        <span>{isStreaming ? 'Thinking process...' : 'Thought for reasoning process'}</span>
+        <ChevronRight
+          size={11}
+          style={{
+            transform: open ? 'rotate(90deg)' : 'none',
+            transition: 'transform 0.15s',
+            color: 'var(--muted)',
+            marginLeft: '2px',
+          }}
+        />
+      </button>
+
+      {open && (
+        <div className="chat-thought-content">
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '6px',
+              fontSize: '10px',
+              color: 'var(--muted)',
+            }}
+          >
+            <strong>PROSES PENALARAN AI (UNSHOW)</strong>
+            <span
+              style={{ cursor: 'pointer', textDecoration: 'underline' }}
+              onClick={() => setOpen(false)}
+            >
+              Tutup pemikiran
+            </span>
+          </div>
           <MarkdownRenderer content={thought} />
         </div>
       )}
@@ -101,6 +365,55 @@ const ReasoningBlock: React.FC<{ thought: string; isStreaming?: boolean }> = ({ 
   );
 };
 
+// ─── Grouping Helper for Activities ──────────────────────────────────────────
+interface ActivityGroup {
+  type: 'narrative' | 'reasoning' | 'tools';
+  narrativeText?: string;
+  thoughtText?: string;
+  steps?: ToolStep[];
+  id: string;
+}
+
+const groupActivities = (activities: ActivityItem[]): ActivityGroup[] => {
+  const groups: ActivityGroup[] = [];
+  let currentToolSteps: ToolStep[] = [];
+
+  const flushTools = () => {
+    if (currentToolSteps.length > 0) {
+      groups.push({
+        type: 'tools',
+        steps: [...currentToolSteps],
+        id: 'grp_tools_' + currentToolSteps[0].id,
+      });
+      currentToolSteps = [];
+    }
+  };
+
+  for (const act of activities) {
+    if (act.type === 'step' && act.step) {
+      currentToolSteps.push(act.step);
+    } else {
+      flushTools();
+      if (act.type === 'narrative' && act.text) {
+        groups.push({
+          type: 'narrative',
+          narrativeText: act.text,
+          id: act.id,
+        });
+      } else if (act.type === 'reasoning' && act.thought) {
+        groups.push({
+          type: 'reasoning',
+          thoughtText: act.thought,
+          id: act.id,
+        });
+      }
+    }
+  }
+  flushTools();
+  return groups;
+};
+
+// ─── Main AssistantMessage Component ─────────────────────────────────────────
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   message,
   isCurrentMessage = false,
@@ -110,7 +423,6 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 }) => {
   const isRunning = isCurrentMessage && runState === 'running';
 
-  // Fallback text if there are no activities and message text is empty
   const rawFallback = message.text || (isRunning ? 'Memproses navigasi dan automasi browser...' : 'Halo! Ada yang bisa saya bantu dengan browser Anda hari ini?');
 
   const { displayedText, isTyping } = useTypewriter(
@@ -123,6 +435,8 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 
   const [copied, setCopied] = useState(false);
   const [skillSaved, setSkillSaved] = useState(false);
+  const [modalImage, setModalImage] = useState<string | null>(null);
+  const [modalTitle, setModalTitle] = useState<string>('');
 
   const copyText = () => {
     navigator.clipboard?.writeText?.(message.text || rawFallback);
@@ -151,11 +465,21 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const steps = message.steps || [];
   const activities: ActivityItem[] = message.activities || [];
   const hasActivities = activities.length > 0;
+  const grouped = hasActivities ? groupActivities(activities) : [];
   const totalStepsCount = steps.length || activities.filter((a) => a.type === 'step').length;
   const timeStr = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
     <article className="message assistant" data-message-id={message.id}>
+      {/* Lightbox Modal for Screenshots */}
+      {modalImage && (
+        <ScreenshotModal
+          imageUrl={modalImage}
+          title={modalTitle}
+          onClose={() => setModalImage(null)}
+        />
+      )}
+
       {/* Avatar */}
       <div className="message-avatar">
         <Sparkles size={15} />
@@ -187,38 +511,56 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
             </div>
           )}
 
-          {/* 1. Dynamic Activities Stream (Show narrative, Unshow reasoning, Tool calls eventlog) */}
+          {/* Top reasoning if present on message and not yet in activities */}
+          {!hasActivities && message.thought && (
+            <ReasoningBlock thought={message.thought} isStreaming={isRunning} />
+          )}
+
+          {/* 1. Dynamic Activities Stream: Grouped tools, reasoning toggles, and show narrative */}
           {hasActivities ? (
-            activities.map((act) => {
-              if (act.type === 'narrative' && act.text) {
+            grouped.map((grp) => {
+              if (grp.type === 'narrative' && grp.narrativeText) {
                 return (
-                  <div key={act.id} className="chat-show-narrative">
-                    <MarkdownRenderer content={act.text} />
+                  <div key={grp.id} className="chat-show-narrative">
+                    <MarkdownRenderer content={grp.narrativeText} />
                   </div>
                 );
               }
-              if (act.type === 'reasoning' && act.thought) {
+              if (grp.type === 'reasoning' && grp.thoughtText) {
                 return (
-                  <ReasoningBlock key={act.id} thought={act.thought} isStreaming={isRunning} />
+                  <ReasoningBlock
+                    key={grp.id}
+                    thought={grp.thoughtText}
+                    isStreaming={isRunning}
+                  />
                 );
               }
-              if (act.type === 'step' && act.step) {
+              if (grp.type === 'tools' && grp.steps && grp.steps.length > 0) {
                 return (
-                  <ToolCallItem key={act.id} step={act.step} />
+                  <ToolStepsGroup
+                    key={grp.id}
+                    steps={grp.steps}
+                    onViewScreenshot={(url, title) => {
+                      setModalImage(url);
+                      setModalTitle(title);
+                    }}
+                  />
                 );
               }
               return null;
             })
           ) : (
             <>
-              {/* Fallback for legacy messages: reasoning block if thought exists */}
-              {message.thought && (
-                <ReasoningBlock thought={message.thought} isStreaming={isRunning} />
+              {/* Fallback for legacy messages with raw steps */}
+              {steps.length > 0 && (
+                <ToolStepsGroup
+                  steps={steps}
+                  onViewScreenshot={(url, title) => {
+                    setModalImage(url);
+                    setModalTitle(title);
+                  }}
+                />
               )}
-              {/* Fallback for legacy messages: tool calls if steps exist */}
-              {steps.map((st) => (
-                <ToolCallItem key={st.id} step={st} />
-              ))}
             </>
           )}
 

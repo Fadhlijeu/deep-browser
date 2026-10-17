@@ -3168,68 +3168,532 @@ tbody tr:hover {
   margin: 0;
 }
 
-/* AI Reasoning Eventlog (Unshow) */
-.chat-reasoning-eventlog {
-  margin: 6px 0;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 0 7px 7px 0;
-  background: var(--paper);
-  overflow: hidden;
-}
-
-[data-theme="dark"] .chat-reasoning-eventlog {
-  background: var(--panel);
-  border-color: var(--line);
-  border-left-color: var(--accent);
-}
-
-.chat-reasoning-head {
-  display: flex;
+/* AI Reasoning (Unshow) - Matches Image 1 & 2 "Worked for ... ∨" */
+.chat-thought-toggle {
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #88867d;
+  background: transparent;
+  border: 0;
+  padding: 3px 0;
   cursor: pointer;
+  margin: 4px 0 6px;
+  transition: color 0.15s;
+  font-family: inherit;
   user-select: none;
 }
 
-.chat-reasoning-head:hover {
-  background: var(--panel);
+.chat-thought-toggle:hover {
+  color: var(--ink);
 }
 
-.chat-reasoning-title {
-  font-size: 11px;
-  font-weight: 700;
+.chat-thought-toggle .thought-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+.chat-thought-content {
+  margin: 2px 0 10px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--line-strong);
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 0 6px 6px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+  max-height: 280px;
+  overflow-y: auto;
+  animation: pageIn 0.18s ease both;
+}
+
+[data-theme="dark"] .chat-thought-content {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Chat Show Narrative */
+.chat-show-narrative {
+  margin: 6px 0 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
   color: var(--ink);
+}
+
+/* Sleek Single-Line Tool Pills (Matches Image 1 & 2 ">_ Built responsive app ∨") */
+.chat-tool-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  color: var(--ink);
+  cursor: pointer;
+  margin: 4px 0;
+  transition: all 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chat-tool-pill:hover {
+  background: #f7f5ef;
+  border-color: var(--line-strong);
+}
+
+.chat-tool-pill .tool-prompt-icon {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--accent);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.chat-tool-pill .tool-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+
+.chat-tool-pill .tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 9.5px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* Tool Group Accordion (Open/Close container for batches of actions) */
+.chat-tool-group {
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.015);
+  overflow: hidden;
+}
+
+.chat-tool-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink);
+  background: var(--paper);
+  transition: background 0.15s;
+}
+
+.chat-tool-group-header:hover {
+  background: #f7f5ef;
+}
+
+.chat-tool-group-title {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.chat-reasoning-sub {
-  font-size: 9px;
-  color: var(--muted);
-  margin-left: auto;
-  margin-right: 4px;
+.chat-tool-group-title .tool-prompt-icon {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
 }
 
-.chat-reasoning-body {
-  padding: 8px 12px 10px;
+.chat-tool-group-body {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   border-top: 1px solid var(--line);
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--muted);
-  background: var(--panel);
-  max-height: 220px;
-  overflow-y: auto;
-  white-space: pre-wrap;
+  background: var(--bg);
 }
 
-/* Chat Show Narrative */
-.chat-show-narrative {
-  margin: 4px 0 6px;
-  font-size: 12px;
-  line-height: 1.65;
+/* Screenshot Preview & Gallery */
+.chat-screenshot-card {
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.chat-screenshot-thumb-wrap {
+  position: relative;
+  max-height: 220px;
+  overflow: hidden;
+  background: #111;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-screenshot-thumb {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.chat-screenshot-thumb-wrap:hover .chat-screenshot-thumb {
+  opacity: 0.92;
+  transform: scale(1.01);
+}
+
+.chat-screenshot-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(4px);
+}
+
+.chat-screenshot-meta {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+
+.screenshot-gallery-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 2px;
+  scrollbar-width: thin;
+}
+
+.screenshot-gallery-item {
+  flex: 0 0 140px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--paper);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.screenshot-gallery-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.screenshot-gallery-item img {
+  width: 140px;
+  height: 90px;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+}
+
+.screenshot-gallery-item .label {
+  padding: 3px 6px;
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--muted);
+  text-align: center;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+
+/* Fullscreen Screenshot Modal */
+.screenshot-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(18, 20, 17, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  animation: fadeIn 0.18s ease;
+}
+
+.screenshot-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.screenshot-modal-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.screenshot-modal-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  border-radius: 8px;
+}
+
+.screenshot-modal-body img {
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  background: #fff;
+}
+
+/* ─── Welcome Poster & Geometric Booklet Artwork ("Buku") ────────────────── */
+.welcome {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 24px 20px 24px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  animation: pageIn 0.35s ease both;
+}
+
+.poster {
+  min-height: 220px;
+  border: 1px solid #dbd4c7;
+  background: #eae5da;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 0 0 22px;
+}
+
+.poster:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(#7a786b13 1px, transparent 1px), linear-gradient(90deg, #7a786b13 1px, transparent 1px);
+  background-size: 27px 27px;
+  mask-image: linear-gradient(90deg, black, transparent 85%);
+  pointer-events: none;
+}
+
+.poster:after {
+  content: "";
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border: 1px solid #b8b0a3;
+  border-radius: 50%;
+  right: 6%;
+  top: 50%;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 22px #eae5da, 0 0 0 23px #b8b0a3, 0 0 0 50px #eae5da, 0 0 0 51px #b8b0a3;
+  pointer-events: none;
+}
+
+/* Rotated Booklet / Field Notes Book Artwork ("Buku") */
+.poster-art {
+  position: absolute;
+  right: 12%;
+  top: 50%;
+  transform: translateY(-50%) rotate(-12deg);
+  width: 126px;
+  height: 164px;
+  border: 1.5px solid var(--accent);
+  background: #f4eee3;
+  z-index: 2;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 8px 11px 0 rgba(184, 78, 53, 0.12);
+  border-radius: 4px;
+}
+
+.poster-art .bar {
+  height: 6px;
+  background: #ccc5b8;
+  border-radius: 2px;
+}
+
+.poster-art .bar:first-child {
+  width: 38%;
+  background: var(--accent);
+}
+
+.poster-art .art-line {
+  height: 1px;
+  background: #d8d0c3;
+  margin: 3px 0;
+}
+
+.poster-art .mini-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 7.5px;
+  color: #6d6a61;
+}
+
+.poster-art .mini-node i {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.poster-kicker {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 9px;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+  font-weight: 750;
+  color: #615f55;
+}
+
+.poster-kicker .poster-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.poster-title {
+  font: clamp(34px, 5.8vw, 56px)/0.92 "Times New Roman", Georgia, serif;
+  letter-spacing: -2px;
+  position: relative;
+  z-index: 3;
+  max-width: 480px;
+  margin: 20px 0 10px;
   color: var(--ink);
+}
+
+.poster-title em {
+  font-weight: 400;
+  color: var(--accent);
+  font-style: italic;
+}
+
+.poster-foot {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.poster-foot p {
+  font-size: 11px;
+  line-height: 1.55;
+  color: #67665e;
+  max-width: 300px;
+  margin: 0;
+}
+
+.welcome-greeting {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.welcome-greeting h2 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+
+.welcome-greeting p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.suggestion {
+  display: flex;
+  align-items: flex-start;
+  text-align: left;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  transition: border 0.18s, transform 0.18s, background 0.18s;
+  cursor: pointer;
+}
+
+.suggestion:hover {
+  border-color: #c9a397;
+  background: #fffaf6;
+  transform: translateY(-1px);
+}
+
+.suggestion .s-icon {
+  height: 28px;
+  width: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: #f3e9e1;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.suggestion strong {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 3px;
+  color: var(--ink);
+}
+
+.suggestion span {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.45;
+  display: block;
 }
 
