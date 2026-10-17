@@ -115,8 +115,17 @@ const ToolCallItem: React.FC<{
   return (
     <div style={{ margin: '3px 0' }}>
       <div
-        className="chat-tool-pill"
+        className={`chat-tool-pill ${step.status === 'running' ? 'is-running' : step.status === 'failed' ? 'is-failed' : 'is-success'}`}
         onClick={() => hasDetail && setOpen(!open)}
+        onKeyDown={(event) => {
+          if (hasDetail && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            setOpen((value) => !value);
+          }
+        }}
+        role={hasDetail ? 'button' : undefined}
+        tabIndex={hasDetail ? 0 : undefined}
+        aria-expanded={hasDetail ? open : undefined}
         title={step.name}
       >
         <span className="tool-prompt-icon">&gt;_</span>
@@ -272,9 +281,11 @@ const ToolStepsGroup: React.FC<{
 
   return (
     <div className="chat-tool-group">
-      <div
+      <button
+        type="button"
         className="chat-tool-group-header"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
         title="Buka / tutup daftar aksi browser"
       >
         <div className="chat-tool-group-title">
@@ -294,7 +305,7 @@ const ToolStepsGroup: React.FC<{
             }}
           />
         </div>
-      </div>
+      </button>
 
       {open && (
         <div className="chat-tool-group-body">
@@ -317,51 +328,55 @@ const ReasoningBlock: React.FC<{
   isStreaming?: boolean;
 }> = ({ thought, isStreaming }) => {
   const [open, setOpen] = useState(false);
+  const thoughtText = (thought || '').trim();
+  const lineCount = thoughtText ? thoughtText.split(/\\r?\\n/).filter(Boolean).length : 0;
 
   return (
-    <div style={{ margin: '3px 0 6px' }}>
+    <section className={`chat-reasoning-card ${isStreaming ? 'is-thinking' : 'is-ready'} ${open ? 'is-expanded' : ''}`}>
       <button
         type="button"
-        className="chat-thought-toggle"
-        onClick={() => setOpen(!open)}
-        title={open ? 'Sembunyikan pemikiran' : 'Lihat pemikiran AI'}
+        className="chat-reasoning-trigger"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        title={open ? 'Ciutkan detail proses' : 'Lihat detail proses'}
       >
-        <span className="thought-dot" />
-        <span>{isStreaming ? 'Thinking process...' : 'Thought for reasoning process'}</span>
-        <ChevronRight
-          size={11}
-          style={{
-            transform: open ? 'rotate(90deg)' : 'none',
-            transition: 'transform 0.15s',
-            color: 'var(--muted)',
-            marginLeft: '2px',
-          }}
-        />
+        <span className="chat-reasoning-icon" aria-hidden="true">
+          <Sparkles size={15} />
+        </span>
+        <span className="chat-reasoning-copy">
+          <span className="chat-reasoning-title">
+            {isStreaming ? 'Sedang menganalisis' : 'Ringkasan proses'}
+          </span>
+          <span className="chat-reasoning-subtitle">
+            {isStreaming ? 'Menyusun langkah berikutnya' : 'Konteks dan aktivitas agen'}
+            {lineCount > 0 ? ` · ${lineCount} baris` : ''}
+          </span>
+        </span>
+        <span className={`chat-reasoning-state ${isStreaming ? 'running' : 'complete'}`}>
+          <span className="chat-reasoning-state-dot" />
+          {isStreaming ? 'Berjalan' : 'Tersedia'}
+        </span>
+        <ChevronRight className="chat-reasoning-chevron" size={15} />
       </button>
 
       {open && (
-        <div className="chat-thought-content">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginBottom: '6px',
-              fontSize: '10px',
-              color: 'var(--muted)',
-            }}
-          >
-            <strong>PROSES PENALARAN AI (UNSHOW)</strong>
-            <span
-              style={{ cursor: 'pointer', textDecoration: 'underline' }}
-              onClick={() => setOpen(false)}
-            >
-              Tutup pemikiran
-            </span>
+        <div className="chat-reasoning-body">
+          <div className="chat-reasoning-body-head">
+            <span>DETAIL PROSES</span>
+            <span>{lineCount} baris</span>
           </div>
-          <MarkdownRenderer content={thought} />
+          {thoughtText ? (
+            <div className="chat-reasoning-text">
+              <MarkdownRenderer content={thoughtText} />
+            </div>
+          ) : (
+            <p className="chat-reasoning-empty">
+              {isStreaming ? 'Detail proses akan muncul saat tersedia.' : 'Tidak ada detail proses yang direkam untuk aktivitas ini.'}
+            </p>
+          )}
         </div>
       )}
-    </div>
+    </section>
   );
 };
 
