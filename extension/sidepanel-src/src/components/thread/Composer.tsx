@@ -136,15 +136,27 @@ export const Composer: React.FC<ComposerProps> = ({
     }
   };
 
+  // Short names for space efficiency in compact sidepanel
+  const shortModelName = selectedModel.name
+    .replace('Gemini ', '')
+    .replace('Claude ', '')
+    .replace('GPT-', '');
+
+  const shortModeName = selectedMode === 'agent_decide'
+    ? 'Auto'
+    : selectedMode === 'hitl'
+    ? 'Review'
+    : 'Proceed';
+
   return (
     <div className="composer-area">
       <div className="composer-wrap">
         {/* Staged Attachments Row */}
         {stagedFiles.length > 0 && (
-          <div className="toolbar" style={{ marginBottom: '7px' }}>
+          <div className="toolbar" style={{ marginBottom: '5px' }}>
             {stagedFiles.map((file) => (
               <span key={file.id} className="pill" title={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}>
-                <FileText size={11} />
+                <FileText size={10} />
                 <span>{file.name}</span>
                 <button
                   type="button"
@@ -152,7 +164,7 @@ export const Composer: React.FC<ComposerProps> = ({
                   onClick={() => sidepanelStore.removeStagedFile(file.id)}
                   aria-label="Remove attachment"
                 >
-                  <X size={10} />
+                  <X size={9} />
                 </button>
               </span>
             ))}
@@ -168,7 +180,7 @@ export const Composer: React.FC<ComposerProps> = ({
           onChange={handleFileSelect}
         />
 
-        {/* The Main Composer Box */}
+        {/* The Main Compact Composer Box */}
         <div className="composer">
           <textarea
             ref={textareaRef}
@@ -189,8 +201,8 @@ export const Composer: React.FC<ComposerProps> = ({
               onClick={() => fileInputRef.current?.click()}
               title="Attach a file for automated upload"
             >
-              <Paperclip size={13} />
-              <span>Attach</span>
+              <Paperclip size={12} />
+              <span className="composer-btn-text">Attach</span>
             </button>
 
             {/* Model Pill Button */}
@@ -200,9 +212,9 @@ export const Composer: React.FC<ComposerProps> = ({
               onClick={onOpenModels}
               title={`Active Model: ${selectedModel.name}`}
             >
-              <Cpu size={13} />
-              <span>{selectedModel.name}</span>
-              <ChevronDown size={11} />
+              <Cpu size={12} />
+              <span>{shortModelName}</span>
+              <ChevronDown size={9} />
             </button>
 
             {/* Mode Pill Dropdown */}
@@ -213,9 +225,9 @@ export const Composer: React.FC<ComposerProps> = ({
                 onClick={() => setIsModeOpen((prev) => !prev)}
                 title={`Execution Mode: ${currentModeOpt.name}`}
               >
-                <ShieldCheck size={13} />
-                <span>{currentModeOpt.name}</span>
-                <ChevronDown size={11} />
+                <ShieldCheck size={12} />
+                <span>{shortModeName}</span>
+                <ChevronDown size={9} />
               </button>
 
               {isModeOpen && (
@@ -224,17 +236,17 @@ export const Composer: React.FC<ComposerProps> = ({
                     position: 'absolute',
                     bottom: '100%',
                     left: 0,
-                    marginBottom: '8px',
-                    width: '240px',
+                    marginBottom: '6px',
+                    width: '230px',
                     background: 'var(--paper)',
                     border: '1px solid var(--line-strong)',
                     borderRadius: '8px',
                     boxShadow: 'var(--shadow)',
-                    padding: '6px',
+                    padding: '5px',
                     zIndex: 50,
                   }}
                 >
-                  <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', padding: '6px 8px 4px' }}>
+                  <div style={{ fontSize: '8.5px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', padding: '5px 7px 3px' }}>
                     Agent Execution Mode
                   </div>
                   {MODE_OPTIONS.map((m) => {
@@ -250,22 +262,22 @@ export const Composer: React.FC<ComposerProps> = ({
                         style={{
                           width: '100%',
                           textAlign: 'left',
-                          padding: '8px',
-                          borderRadius: '6px',
+                          padding: '6px 8px',
+                          borderRadius: '5px',
                           border: 0,
                           background: isActive ? 'var(--line)' : 'transparent',
                           color: 'var(--ink)',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '7px',
                           cursor: 'pointer',
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '11px', fontWeight: 650 }}>{m.name}</div>
-                          <div style={{ fontSize: '9.5px', color: 'var(--muted)', marginTop: '2px' }}>{m.desc}</div>
+                          <div style={{ fontSize: '10.5px', fontWeight: 650 }}>{m.name}</div>
+                          <div style={{ fontSize: '9px', color: 'var(--muted)', marginTop: '1px' }}>{m.desc}</div>
                         </div>
-                        {isActive && <Check size={13} color="var(--accent)" />}
+                        {isActive && <Check size={12} color="var(--accent)" />}
                       </button>
                     );
                   })}
@@ -276,22 +288,22 @@ export const Composer: React.FC<ComposerProps> = ({
             {/* Session Video Recording Toggle */}
             <button
               type="button"
-              className={`composer-btn ${isRecordingEnabled ? 'active' : ''}`}
+              className={`composer-btn composer-icon-btn ${isRecordingEnabled ? 'active' : ''}`}
               onClick={() => sidepanelStore.toggleRecording()}
               title={isRecordingEnabled ? 'Session recording active (captures tab video)' : 'Enable native video session recording'}
             >
-              <Video size={13} />
-              {isRecordingEnabled && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--red)' }} />}
+              <Video size={12} />
+              {isRecordingEnabled && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--red)' }} />}
             </button>
 
             {/* In-Page Demo HUD Toggle */}
             <button
               type="button"
-              className={`composer-btn ${isHudEnabled ? 'active' : ''}`}
+              className={`composer-btn composer-icon-btn ${isHudEnabled ? 'active' : ''}`}
               onClick={() => sidepanelStore.toggleDemoHud()}
               title={isHudEnabled ? 'In-page floating HUD active' : 'Toggle in-page floating HUD'}
             >
-              <Monitor size={13} />
+              <Monitor size={12} />
             </button>
 
             <span className="composer-spacer" />
@@ -305,7 +317,7 @@ export const Composer: React.FC<ComposerProps> = ({
                 title="Cancel execution"
                 style={{ background: 'var(--accent)' }}
               >
-                <Square size={13} fill="currentColor" />
+                <Square size={11} fill="currentColor" />
               </button>
             ) : (
               <button
@@ -316,7 +328,7 @@ export const Composer: React.FC<ComposerProps> = ({
                 title="Send message"
                 aria-label="Send message"
               >
-                <ArrowUp size={15} />
+                <ArrowUp size={14} />
               </button>
             )}
           </div>

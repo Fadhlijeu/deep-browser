@@ -1046,26 +1046,26 @@ tbody tr:hover {
 .welcome {
   max-width: 840px;
   margin: 0 auto;
-  padding: 28px 24px 26px;
+  padding: 14px 12px 18px;
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   animation: pageIn 0.35s ease both;
 }
 
 .poster {
-  min-height: 230px;
+  min-height: 135px;
   border: 1px solid #dbd4c7;
   background: #eae5da;
-  border-radius: 16px;
+  border-radius: 12px;
   position: relative;
   overflow: hidden;
-  padding: 27px 30px;
+  padding: 16px 18px 14px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  margin: 0 0 25px;
+  margin: 0 0 16px;
 }
 
 [data-theme="dark"] .poster {
@@ -1085,36 +1085,44 @@ tbody tr:hover {
 .poster:after {
   content: "";
   position: absolute;
-  width: 280px;
-  height: 280px;
+  width: 220px;
+  height: 220px;
   border: 1px solid #b8b0a3;
   border-radius: 50%;
-  right: 6%;
+  right: -30px;
   top: 50%;
   transform: translateY(-50%);
-  box-shadow: 0 0 0 22px #eae5da, 0 0 0 23px #b8b0a3, 0 0 0 50px #eae5da, 0 0 0 51px #b8b0a3;
+  box-shadow: 0 0 0 16px #eae5da, 0 0 0 17px #b8b0a3, 0 0 0 38px #eae5da, 0 0 0 39px #b8b0a3;
+  opacity: 0.6;
 }
 
 [data-theme="dark"] .poster:after {
   border-color: #383d47;
-  box-shadow: 0 0 0 22px #1c1f24, 0 0 0 23px #383d47, 0 0 0 50px #1c1f24, 0 0 0 51px #383d47;
+  box-shadow: 0 0 0 16px #1c1f24, 0 0 0 17px #383d47, 0 0 0 38px #1c1f24, 0 0 0 39px #383d47;
 }
 
+/* Hide or scale decorative card in narrow view so it never collides with text */
 .poster-art {
-  position: absolute;
-  right: 14%;
-  top: 50%;
-  transform: translateY(-50%) rotate(-12deg);
-  width: 130px;
-  height: 168px;
-  border: 1px solid #b84e35;
-  background: #f4eee3;
-  z-index: 1;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  box-shadow: 8px 11px 0 rgba(184, 78, 53, 0.12);
+  display: none;
+}
+
+@media (min-width: 580px) {
+  .poster-art {
+    display: flex;
+    position: absolute;
+    right: 8%;
+    top: 50%;
+    transform: translateY(-50%) rotate(-10deg);
+    width: 100px;
+    height: 130px;
+    border: 1px solid #b84e35;
+    background: #f4eee3;
+    z-index: 1;
+    padding: 10px;
+    flex-direction: column;
+    gap: 5px;
+    box-shadow: 6px 8px 0 rgba(184, 78, 53, 0.12);
+  }
 }
 
 [data-theme="dark"] .poster-art {
@@ -1163,10 +1171,10 @@ tbody tr:hover {
   position: relative;
   z-index: 2;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  font-size: 9px;
-  letter-spacing: 1.7px;
+  font-size: 8px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   font-weight: 750;
   color: #615f55;
@@ -1177,21 +1185,21 @@ tbody tr:hover {
 }
 
 .poster-kicker .poster-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--accent);
 }
 
 .poster-title {
   font-family: var(--font-serif);
-  font-size: clamp(37px, 6.3vw, 64px);
-  line-height: 0.91;
-  letter-spacing: -2.1px;
+  font-size: clamp(26px, 6vw, 38px);
+  line-height: 0.95;
+  letter-spacing: -1.2px;
   position: relative;
   z-index: 2;
-  max-width: 520px;
-  margin: 24px 0 10px;
+  max-width: 480px;
+  margin: 10px 0 8px;
   color: var(--ink);
 }
 
@@ -1207,14 +1215,14 @@ tbody tr:hover {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .poster-foot p {
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 10px;
+  line-height: 1.45;
   color: #67665e;
-  max-width: 320px;
+  max-width: 260px;
   margin: 0;
 }
 
@@ -1224,10 +1232,10 @@ tbody tr:hover {
 
 .poster-stamp {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: 8px;
   text-align: right;
   color: #777267;
-  line-height: 1.7;
+  line-height: 1.5;
 }
 
 [data-theme="dark"] .poster-stamp {
@@ -1236,39 +1244,39 @@ tbody tr:hover {
 
 .welcome-greeting {
   text-align: center;
-  margin-bottom: 19px;
+  margin-bottom: 12px;
 }
 
 .welcome-greeting h2 {
   font-family: var(--font-serif);
   font-weight: 400;
-  font-size: 25px;
-  letter-spacing: -0.6px;
-  margin: 0 0 7px;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  margin: 0 0 4px;
   color: var(--ink);
 }
 
 .welcome-greeting p {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .suggestions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-  margin-bottom: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 7px;
+  margin-bottom: 12px;
 }
 
 .suggestion {
   display: flex;
   align-items: flex-start;
   text-align: left;
-  gap: 10px;
-  padding: 13px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--paper);
   transition: border 0.18s, transform 0.18s, background 0.18s;
   color: var(--ink);
@@ -1281,9 +1289,9 @@ tbody tr:hover {
 }
 
 .suggestion .s-icon {
-  height: 28px;
-  width: 28px;
-  border-radius: 7px;
+  height: 24px;
+  width: 24px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   background: var(--accent-soft);
@@ -1292,8 +1300,8 @@ tbody tr:hover {
 }
 
 .suggestion svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .suggestion strong {
@@ -1588,7 +1596,7 @@ tbody tr:hover {
 
 /* Composer */
 .composer-area {
-  padding: 10px 20px 15px;
+  padding: 6px 12px 8px;
   border-top: 1px solid var(--line);
   background: var(--paper);
 }
@@ -1601,19 +1609,19 @@ tbody tr:hover {
 .composer {
   background: var(--paper);
   border: 1px solid #d9d5ca;
-  border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(59, 51, 36, 0.04);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(59, 51, 36, 0.04);
   transition: border 0.2s, box-shadow 0.2s;
 }
 
 [data-theme="dark"] .composer {
   border-color: #383c44;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
 }
 
 .composer:focus-within {
   border-color: #bba59c;
-  box-shadow: 0 0 0 3px rgba(184, 78, 53, 0.08), 0 4px 15px rgba(59, 51, 36, 0.04);
+  box-shadow: 0 0 0 2px rgba(184, 78, 53, 0.08), 0 3px 10px rgba(59, 51, 36, 0.04);
 }
 
 .composer textarea {
@@ -1623,12 +1631,12 @@ tbody tr:hover {
   border: 0;
   outline: 0;
   resize: none;
-  padding: 14px 14px 8px;
-  min-height: 48px;
-  max-height: 160px;
+  padding: 8px 10px 5px;
+  min-height: 36px;
+  max-height: 120px;
   color: var(--ink);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .composer textarea::placeholder {
@@ -1642,23 +1650,30 @@ tbody tr:hover {
 .composer-bottom {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 8px 8px;
-  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 6px 5px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.composer-bottom::-webkit-scrollbar {
+  display: none;
 }
 
 .composer-btn {
-  height: 28px;
-  padding: 0 9px;
+  height: 23px;
+  padding: 0 6px;
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: 5px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 10px;
+  gap: 4px;
+  font-size: 9.5px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .composer-btn:hover {
@@ -1667,8 +1682,8 @@ tbody tr:hover {
 }
 
 .composer-btn svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 
 .composer-btn.model {
@@ -1678,9 +1693,18 @@ tbody tr:hover {
 }
 
 .composer-btn.mode {
-  max-width: 170px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.composer-btn.composer-icon-btn {
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
 }
 
 .composer-btn.active {
@@ -1694,12 +1718,12 @@ tbody tr:hover {
 }
 
 .send-btn {
-  height: 30px;
-  width: 33px;
+  height: 25px;
+  width: 28px;
   border: 0;
   background: var(--ink);
   color: var(--paper);
-  border-radius: 7px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   transition: background 0.18s;
@@ -1711,8 +1735,8 @@ tbody tr:hover {
 }
 
 .send-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
 }
 
 .composer-foot {
@@ -1720,15 +1744,74 @@ tbody tr:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 2px 0;
+  padding: 4px 2px 0;
   color: #98968b;
-  font-size: 9px;
+  font-size: 8.5px;
 }
 
 .composer-foot span {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   align-items: center;
+}
+
+/* List Row & Skills Execution Engine Styles */
+.skill-list-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+  transition: background 0.15s ease;
+}
+
+.list-row:last-child {
+  border-bottom: 0;
+}
+
+.list-row:hover {
+  background: var(--panel);
+}
+
+.list-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+[data-theme="dark"] .list-icon {
+  background: #2b2f38;
+  color: #adb2bd;
+}
+
+.list-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.list-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.skill-action-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+  margin-top: 1px;
 }
 
 .kbd {

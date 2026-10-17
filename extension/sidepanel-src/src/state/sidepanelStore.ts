@@ -1426,6 +1426,86 @@ export class SidepanelStateManager {
     this._runStandaloneAgent(runId, prompt, assistantMsg);
   }
 
+  public async regenerate() {
+    if (this.state.runState === 'running') return;
+    const active = this.getActiveSession();
+    
+    // Find the last user prompt in this session
+    let lastUserPrompt = '';
+    for (let i = active.messages.length - 1; i >= 0; i--) {
+      if (active.messages[i].role === 'user') {
+        lastUserPrompt = active.messages[i].text;
+        break;
+      }
+    }
+    if (!lastUserPrompt) return;
+
+    // Remove the last assistant message if present so we can rebuild fresh
+    if (active.messages.length > 0 && active.messages[active.messages.length - 1].role === 'assistant') {
+      active.messages.pop();
+    }
+
+    const runId = 'run_' + Date.now();
+    this.currentRunId = runId;
+    const model = this.state.models.find((m) => m.id === this.state.selectedModelId) || this.state.models[0];
+
+    const assistantMsg: ChatMessage = {
+      id: runId,
+      role: 'assistant',
+      text: '',
+      timestamp: Date.now(),
+      modelName: model.name,
+      preset: this.state.selectedPreset,
+      steps: [],
+    };
+    active.messages.push(assistantMsg);
+
+    this.state.runState = 'running';
+    this.state.stepCount = 0;
+    this.notify();
+    this.saveStorage();
+
+    // Dispatch to Daemon if connected
+    if (this.state.connectionMode === 'daemon' && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        const activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
+        const resp = await fetch('http://127.0.0.1:7788/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task: lastUserPrompt,
+            owner: 'EXTENSION',
+            browser_mode: 'ATTACHED',
+            tab_id: activeTab?.id,
+            window_id: activeTab?.windowId,
+            url: activeTab?.url,
+            title: activeTab?.title,
+            model_provider: model.provider || 'gemini',
+            model_name: model.id,
+            api_key: this.state.apiKeys[model.provider] || this.state.apiKeys.gemini || '',
+            preset: this.state.selectedPreset,
+            safe_mode: this.state.selectedMode === 'hitl',
+            safe_timeout_seconds: 60.0,
+          }),
+        });
+
+        if (resp.ok) {
+          const resData = await resp.json();
+          if (resData.task_id) {
+            this.currentRunId = resData.task_id;
+            this.connectExtTransport(resData.task_id);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[DeepBrowser] Backend daemon task submission failed, falling back to in-browser agent:', err);
+      }
+    }
+
+    // In-browser agent fallback
+    this._runStandaloneAgent(runId, lastUserPrompt, assistantMsg);
+  }
+
   public cancelRun() {
     if (this.activeAgent) {
       try { this.activeAgent.stop(); } catch (_) {}

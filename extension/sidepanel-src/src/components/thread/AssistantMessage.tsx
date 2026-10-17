@@ -1,5 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Clock, Copy, Check, ChevronRight, Brain, AlertCircle, Video, Download, BookmarkPlus, CheckCheck } from 'lucide-react';
+import {
+  Sparkles,
+  Clock,
+  Copy,
+  Check,
+  ChevronRight,
+  Brain,
+  AlertCircle,
+  Video,
+  Download,
+  BookmarkPlus,
+  CheckCheck,
+  RefreshCw,
+  Activity
+} from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
@@ -28,7 +42,15 @@ const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought, isStreaming = fa
   }, [displayedText]);
 
   return (
-    <div className="info-card" style={{ marginBottom: '8px' }}>
+    <div style={{
+      borderLeft: '2px solid var(--accent)',
+      paddingLeft: '10px',
+      margin: '6px 0 8px',
+      background: 'rgba(184, 78, 53, 0.04)',
+      borderRadius: '0 6px 6px 0',
+      paddingTop: '6px',
+      paddingBottom: '6px'
+    }}>
       <div
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
         onClick={() => setOpen(!open)}
@@ -36,12 +58,12 @@ const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought, isStreaming = fa
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Brain size={13} color="var(--accent)" />
           <span style={{ fontSize: '10.5px', fontWeight: 650, color: 'var(--ink)' }}>Agent Reasoning</span>
-          {isTyping && <span className="status running" style={{ padding: '2px 5px', fontSize: '8px' }}>thinking...</span>}
+          {isTyping && <span className="status running" style={{ padding: '1px 5px', fontSize: '8px' }}>thinking...</span>}
         </div>
-        <ChevronRight size={13} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+        <ChevronRight size={12} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
       </div>
       {open && (
-        <div ref={scrollRef} style={{ fontSize: '11px', lineHeight: 1.6, color: 'var(--muted)', marginTop: '8px', whiteSpace: 'pre-wrap' }}>
+        <div ref={scrollRef} style={{ fontSize: '11px', lineHeight: 1.6, color: 'var(--muted)', marginTop: '6px', whiteSpace: 'pre-wrap' }}>
           {displayedText}
           {isTyping && <span className="typewriter-cursor" />}
         </div>
@@ -54,12 +76,16 @@ interface AssistantMessageProps {
   message: ChatMessage;
   isCurrentMessage?: boolean;
   runState?: string;
+  onRegenerate?: () => void;
+  onToggleInspector?: () => void;
 }
 
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   message,
   isCurrentMessage = false,
   runState = 'idle',
+  onRegenerate,
+  onToggleInspector,
 }) => {
   const isRunning = isCurrentMessage && runState === 'running';
 
@@ -120,11 +146,17 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
           {message.modelName && <span className="pill">{message.modelName}</span>}
         </div>
 
-        {/* Message Content Container */}
+        {/* Message Content Container (Direct, unboxed natural flow) */}
         <div className="message-content">
           {/* Real-time Tool Steps & Reasoning Accordion */}
           {hasActivities && (
-            <div className="info-card" style={{ marginBottom: '10px' }}>
+            <div style={{
+              border: '1px solid var(--line)',
+              borderRadius: '8px',
+              background: 'var(--panel)',
+              padding: '8px 10px',
+              marginBottom: '8px'
+            }}>
               <div
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                 onClick={() => setIsOpen(!isOpen)}
@@ -211,16 +243,30 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
           )}
         </div>
 
-        {/* Action Buttons Below Message */}
+        {/* Action Buttons Below Message (Copy, Regenerate, Trace, Save as Skill) */}
         <div className="message-actions">
           <button onClick={copyText} title="Copy response">
-            {copied ? <Check size={12} color="var(--green)" /> : <Copy size={12} />}
+            {copied ? <Check size={11} color="var(--green)" /> : <Copy size={11} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
 
+          {onRegenerate && !isRunning && (
+            <button onClick={onRegenerate} title="Regenerate this response">
+              <RefreshCw size={11} />
+              <span>Regenerate</span>
+            </button>
+          )}
+
+          {onToggleInspector && (
+            <button onClick={onToggleInspector} title="View execution trace and reasoning steps">
+              <Activity size={11} />
+              <span>Trace</span>
+            </button>
+          )}
+
           {!isRunning && totalStepsCount > 0 && !message.isError && (
             <button onClick={handleSaveSkill} title="Save this verified workflow as a reusable skill">
-              {skillSaved ? <CheckCheck size={12} color="var(--green)" /> : <BookmarkPlus size={12} />}
+              {skillSaved ? <CheckCheck size={11} color="var(--green)" /> : <BookmarkPlus size={11} />}
               <span>{skillSaved ? 'Saved as Skill' : 'Save as Skill'}</span>
             </button>
           )}

@@ -118,7 +118,7 @@ export interface TabItem {
 
 export type RunState = 'idle' | 'running' | 'paused' | 'error' | 'done';
 
-export type ViewType = 'chat' | 'sessions' | 'activity' | 'tools' | 'automations' | 'settings';
+export type ViewType = 'chat' | 'sessions' | 'activity' | 'tools' | 'skills' | 'automations' | 'settings';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting' | 'standalone';
 

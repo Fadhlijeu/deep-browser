@@ -6,7 +6,7 @@ import { CopilotChatView } from './components/thread/CopilotChatView';
 import { SessionsView } from './components/sessions/SessionsView';
 import { ActivityView } from './components/activity/ActivityView';
 import { ToolsView } from './components/tools/ToolsView';
-import { AutomationsView } from './components/automations/AutomationsView';
+import { SkillsView } from './components/skills/SkillsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { CommandPalette } from './components/modals/CommandPalette';
 import { ModelsModal } from './components/modals/ModelsModal';
@@ -59,6 +59,8 @@ export const App: React.FC = () => {
           stepCount={state.stepCount}
           theme={state.theme}
           isDetached={state.isDetached}
+          isInspectorOpen={state.isInspectorOpen}
+          onToggleInspector={() => sidepanelStore.toggleInspector()}
           onToggleTheme={handleToggleTheme}
           onToggleDetach={() => sidepanelStore.toggleDetach()}
           onOpenSearch={() => setIsCommandPaletteOpen(true)}
@@ -123,8 +125,8 @@ export const App: React.FC = () => {
             />
           )}
 
-          {state.currentView === 'automations' && (
-            <AutomationsView
+          {(state.currentView === 'skills' || state.currentView === 'automations') && (
+            <SkillsView
               onRunSkill={(p) => {
                 sidepanelStore.setView('chat');
                 setTimeout(() => sidepanelStore.sendMessage(p), 100);

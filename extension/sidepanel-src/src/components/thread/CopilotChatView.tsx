@@ -7,6 +7,8 @@ import { EmptyState } from './EmptyState';
 import { Composer } from './Composer';
 import { ExecutionInspector } from './ExecutionInspector';
 
+import { sidepanelStore } from '../../state/sidepanelStore';
+
 interface CopilotChatViewProps {
   session: Session;
   runState: RunState;
@@ -44,56 +46,10 @@ export const CopilotChatView: React.FC<CopilotChatViewProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [session.messages, session.messages[session.messages.length - 1]?.steps?.length]);
 
-  const modeDisplay = selectedMode === 'agent_decide'
-    ? 'Agent Decide'
-    : selectedMode === 'hitl'
-    ? 'Request Review'
-    : 'Always Proceed';
-
   return (
     <div className="chat-layout">
       <section className="chat-center">
-        {/* Chat Head */}
-        <div className="chat-head">
-          <div className="chat-head-left">
-            <div className="avatar-ai">
-              <Sparkles size={14} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div className="chat-session-title" title={session.name}>
-                {session.name || 'New conversation'}
-              </div>
-              <div className="chat-head-meta">
-                <span>{selectedModel.name}</span>
-                <span>·</span>
-                <span>{modeDisplay}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="toolbar">
-            <button
-              className={`icon-btn ${isInspectorOpen ? 'active' : ''}`}
-              onClick={onToggleInspector}
-              title="Toggle execution inspector"
-              aria-label="Toggle execution inspector"
-            >
-              <PanelTop size={15} />
-            </button>
-            {onOpenSessionMenu && (
-              <button
-                className="icon-btn"
-                onClick={onOpenSessionMenu}
-                title="Session options"
-                aria-label="Session options"
-              >
-                <MoreHorizontal size={15} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Messages Feed */}
+        {/* Messages Feed (No redundant secondary header, maximum vertical space for chat) */}
         <div className="messages" id="messages">
           {session.messages.length === 0 ? (
             <EmptyState onSelectPrompt={(p) => setComposerPrompt(p)} />
@@ -101,13 +57,19 @@ export const CopilotChatView: React.FC<CopilotChatViewProps> = ({
             <>
               {session.messages.map((m, idx) =>
                 m.role === 'user' ? (
-                  <UserMessage key={m.id} message={m} />
+                  <UserMessage
+                    key={m.id}
+                    message={m}
+                    onEdit={(text) => setComposerPrompt(text)}
+                  />
                 ) : (
                   <AssistantMessage
                     key={m.id}
                     message={m}
                     isCurrentMessage={idx === session.messages.length - 1}
                     runState={runState}
+                    onRegenerate={() => sidepanelStore.regenerate()}
+                    onToggleInspector={onToggleInspector}
                   />
                 )
               )}

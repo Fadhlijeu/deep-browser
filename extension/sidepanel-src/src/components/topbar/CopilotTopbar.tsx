@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, ExternalLink, Sun, Moon, Settings2, Sparkles } from 'lucide-react';
+import { Search, ExternalLink, Sun, Moon, Settings2, Sparkles, PanelTop } from 'lucide-react';
 import { ViewType, ConnectionStatus, RunState } from '../../types';
 
 interface CopilotTopbarProps {
@@ -9,6 +9,8 @@ interface CopilotTopbarProps {
   stepCount: number;
   theme: 'light' | 'dark' | 'system';
   isDetached: boolean;
+  isInspectorOpen?: boolean;
+  onToggleInspector?: () => void;
   onToggleTheme: () => void;
   onToggleDetach: () => void;
   onOpenSearch: () => void;
@@ -20,7 +22,8 @@ const VIEW_TITLES: Record<ViewType, string> = {
   sessions: 'Sessions',
   activity: 'Activity & Runs',
   tools: 'Tools',
-  automations: 'Automations',
+  skills: 'Skills',
+  automations: 'Skills',
   settings: 'Settings',
 };
 
@@ -31,6 +34,8 @@ export const CopilotTopbar: React.FC<CopilotTopbarProps> = ({
   stepCount,
   theme,
   isDetached,
+  isInspectorOpen,
+  onToggleInspector,
   onToggleTheme,
   onToggleDetach,
   onOpenSearch,
@@ -81,6 +86,18 @@ export const CopilotTopbar: React.FC<CopilotTopbarProps> = ({
         >
           {isDark ? <Sun size={15} /> : <Moon size={15} />}
         </button>
+
+        {/* Execution Inspector Toggle (when in Chat) */}
+        {currentView === 'chat' && onToggleInspector && (
+          <button
+            className={`icon-btn ${isInspectorOpen ? 'active' : ''}`}
+            onClick={onToggleInspector}
+            title={isInspectorOpen ? 'Close execution inspector' : 'Open execution trace & inspector'}
+            aria-label="Toggle execution inspector"
+          >
+            <PanelTop size={15} />
+          </button>
+        )}
 
         {/* Detach / Popout Window */}
         <button

@@ -4,7 +4,7 @@ import {
   Layers,
   Activity,
   Blocks,
-  CalendarClock,
+  Workflow,
   Settings2,
   MoreHorizontal,
   Globe
@@ -99,13 +99,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button
-          className={`nav-btn ${currentView === 'automations' ? 'active' : ''}`}
-          onClick={() => onSetView('automations')}
-          title="Automations"
+          className={`nav-btn ${currentView === 'skills' || currentView === 'automations' ? 'active' : ''}`}
+          onClick={() => onSetView('skills')}
+          title="Skills"
         >
-          <CalendarClock />
-          <span className="nav-text">Automations</span>
-          <span className="nav-count">3</span>
+          <Workflow />
+          <span className="nav-text">Skills</span>
+          <span className="nav-count">5</span>
         </button>
 
         <div className="nav-label" style={{ marginTop: '12px' }}>Configure</div>

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Copy, Check, FileText } from 'lucide-react';
+import { Copy, Check, FileText, Pencil } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface UserMessageProps {
   message: ChatMessage;
+  onEdit?: (text: string) => void;
 }
 
-export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
+export const UserMessage: React.FC<UserMessageProps> = ({ message, onEdit }) => {
   const [copied, setCopied] = useState(false);
 
   const copyText = () => {
@@ -44,8 +45,14 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
         </div>
 
         <div className="message-actions">
+          {onEdit && (
+            <button onClick={() => onEdit(message.text)} title="Edit and resend prompt">
+              <Pencil size={11} />
+              <span>Edit &amp; resend</span>
+            </button>
+          )}
           <button onClick={copyText} title="Copy message">
-            {copied ? <Check size={12} color="var(--green)" /> : <Copy size={12} />}
+            {copied ? <Check size={11} color="var(--green)" /> : <Copy size={11} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
         </div>
