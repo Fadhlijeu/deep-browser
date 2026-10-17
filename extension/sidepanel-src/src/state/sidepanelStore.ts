@@ -41,6 +41,8 @@ export interface SidepanelState {
   connectionMode: ConnectionMode;
   sidepanelEnabled: boolean;
   indexLabelingEnabled: boolean;
+  judgeEnabled: boolean;
+  judgeModelId: string;
   isDetached: boolean;
   stepCount: number;
   currentView: 'chat' | 'logs';
@@ -83,6 +85,8 @@ export class SidepanelStateManager {
       connectionMode: 'standalone',
       sidepanelEnabled: true,
       indexLabelingEnabled: true,
+      judgeEnabled: false,
+      judgeModelId: 'auto',
       isDetached,
       stepCount: 0,
       currentView: 'chat',
@@ -123,6 +127,7 @@ export class SidepanelStateManager {
         'core/message_manager.js',
         'core/llm_client.js',
         'core/loop_detector.js',
+        'core/judge.js',
         'core/agent.js',
       ];
 
@@ -164,7 +169,7 @@ export class SidepanelStateManager {
         const stored = await chrome.storage.local.get([
           'sessions', 'activeSessionId', 'selectedModelId', 'selectedMode',
           'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled',
-          'indexLabelingEnabled', 'connectionMode', 'runState', 'stepCount'
+          'indexLabelingEnabled', 'judgeEnabled', 'judgeModelId', 'connectionMode', 'runState', 'stepCount'
         ]);
         if (stored.sessions && stored.sessions.length > 0) {
           this.state.sessions = stored.sessions;
@@ -179,6 +184,8 @@ export class SidepanelStateManager {
         if (stored.models && stored.models.length > 0) this.state.models = stored.models;
         if (typeof stored.sidepanelEnabled === 'boolean') this.state.sidepanelEnabled = stored.sidepanelEnabled;
         if (typeof stored.indexLabelingEnabled === 'boolean') this.state.indexLabelingEnabled = stored.indexLabelingEnabled;
+        if (typeof stored.judgeEnabled === 'boolean') this.state.judgeEnabled = stored.judgeEnabled;
+        if (stored.judgeModelId) this.state.judgeModelId = stored.judgeModelId;
         if (stored.connectionMode) {
           this.state.connectionMode = stored.connectionMode;
           if (stored.connectionMode === 'standalone') {
@@ -213,6 +220,8 @@ export class SidepanelStateManager {
           models: this.state.models,
           sidepanelEnabled: this.state.sidepanelEnabled,
           indexLabelingEnabled: this.state.indexLabelingEnabled,
+          judgeEnabled: this.state.judgeEnabled,
+          judgeModelId: this.state.judgeModelId,
           connectionMode: this.state.connectionMode,
           runState: this.state.runState,
           stepCount: this.state.stepCount,
@@ -254,6 +263,14 @@ export class SidepanelStateManager {
         }
         if (changes.apiKeys) {
           this.state.apiKeys = changes.apiKeys.newValue;
+          changed = true;
+        }
+        if (typeof changes.judgeEnabled?.newValue === 'boolean') {
+          this.state.judgeEnabled = changes.judgeEnabled.newValue;
+          changed = true;
+        }
+        if (changes.judgeModelId?.newValue) {
+          this.state.judgeModelId = changes.judgeModelId.newValue;
           changed = true;
         }
         if (changed) {
@@ -730,6 +747,18 @@ export class SidepanelStateManager {
 
   public setSelectedModel(modelId: string) {
     this.state.selectedModelId = modelId;
+    this.saveStorage();
+    this.notify();
+  }
+
+  public setJudgeEnabled(enabled: boolean) {
+    this.state.judgeEnabled = enabled;
+    this.saveStorage();
+    this.notify();
+  }
+
+  public setJudgeModelId(modelId: string) {
+    this.state.judgeModelId = modelId;
     this.saveStorage();
     this.notify();
   }
@@ -1249,7 +1278,7 @@ export class SidepanelStateManager {
       lastMsg.text = (lastMsg.text ? lastMsg.text + '\n' : '') + payload.text;
     }
 
-    // 8. Visual Artifacts
+    // 5b. Visual Artifacts
     if (type === 'SCREENSHOT_CAPTURED' || type === 'SCREENSHOT') {
       const screenshotData = payload.screenshotDataUrl || payload.screenshot || payload.dataUrl;
       const step: ToolStep = {
@@ -1265,6 +1294,57 @@ export class SidepanelStateManager {
         timestamp: Date.now(),
       };
       recordStep(step);
+    }
+
+    // 5c. AI Judge Events (Independent Evaluation)
+    if (type === 'JUDGE_STARTED') {
+      this.state.stepCount++;
+      const step: ToolStep = {
+        id: 'step_judge_' + Date.now(),
+        name: evt.message || `Evaluasi AI Judge (${payload.model || 'Model'})`,
+        icon: 'gavel',
+        status: 'running',
+        duration: 'evaluasi...',
+        args: { task: payload.task, totalSteps: payload.totalSteps, model: payload.model },
+        result: { status: 'evaluating' },
+        timestamp: Date.now(),
+      };
+      recordStep(step);
+    }
+
+    if (type === 'TRACE_JUDGED') {
+      lastMsg.judgeVerdict = payload;
+      if (lastMsg.steps && lastMsg.steps.length > 0) {
+        const judgeStep = lastMsg.steps.slice().reverse().find((s) => s.icon === 'gavel' || s.name.includes('Judge'));
+        if (judgeStep) {
+          judgeStep.status = payload.verdict ? 'succeeded' : 'failed';
+          judgeStep.duration = 'selesai';
+          judgeStep.result = payload;
+          judgeStep.verification = {
+            verdict: payload.verdict ? 'PASS' : 'FAIL',
+            confidence: payload.confidence,
+            reasoning: payload.reasoning,
+            failureReasons: payload.failureReasons || [],
+          };
+        } else {
+          const step: ToolStep = {
+            id: 'step_judge_done_' + Date.now(),
+            name: `Hasil Evaluasi Judge: ${payload.verdict ? 'BERHASIL (Valid)' : 'TIDAK VALID'}`,
+            icon: 'gavel',
+            status: payload.verdict ? 'succeeded' : 'failed',
+            duration: 'selesai',
+            args: { task: payload.task, model: payload.model },
+            result: payload,
+            verification: {
+              verdict: payload.verdict ? 'PASS' : 'FAIL',
+              confidence: payload.confidence,
+              reasoning: payload.reasoning,
+            },
+            timestamp: Date.now(),
+          };
+          recordStep(step);
+        }
+      }
     }
 
     if (type === 'PDF_SAVED') {
@@ -1387,12 +1467,32 @@ export class SidepanelStateManager {
         },
       }) : null;
 
+      let judgeLlmClient = null;
+      if (this.state.judgeEnabled) {
+        const judgeModelDef = this.state.judgeModelId === 'auto'
+          ? activeModel
+          : (this.state.models.find((m) => m.id === this.state.judgeModelId) || activeModel);
+        const judgeProvider = judgeModelDef.provider;
+        const judgeApiKey = this.state.apiKeys[judgeProvider] || this.state.apiKeys.gemini || '';
+
+        judgeLlmClient = new (window as any).LLMClient({
+          provider: judgeProvider,
+          model: judgeModelDef.modelId || judgeModelDef.id,
+          apiKey: judgeApiKey,
+          baseUrl: judgeModelDef.baseUrl || this.state.apiKeys.custom_openai || '',
+          ollamaHost: this.state.apiKeys.ollama || 'http://localhost:11434',
+          temperature: 0.0,
+        });
+      }
+
       const agent = new (window as any).Agent({
         taskId: runId,
         task: prompt,
         preset: this.state.selectedPreset,
         browserSession,
         llmClient,
+        judgeLlmClient,
+        useJudge: this.state.judgeEnabled,
         interactionManager,
         maxSteps: Infinity,
         mode: this.state.selectedMode,

@@ -3,6 +3,7 @@ import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle } from 'lucid
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
+import { JudgeVerdictCard } from './JudgeVerdictCard';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useTypewriter } from '../../hooks/useTypewriter';
 
@@ -194,6 +195,11 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
         {/* HITL Review Card */}
         {message.hitl && (
           <HitlApprovalCard hitl={message.hitl} />
+        )}
+
+        {/* AI Judge Evaluation Card */}
+        {message.judgeVerdict && (
+          <JudgeVerdictCard verdict={message.judgeVerdict} />
         )}
 
         {/* User-Friendly Response Body */}

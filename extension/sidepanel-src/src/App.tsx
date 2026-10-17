@@ -95,6 +95,8 @@ export const App: React.FC = () => {
         apiKeys={state.apiKeys}
         sidepanelEnabled={state.sidepanelEnabled}
         indexLabelingEnabled={state.indexLabelingEnabled}
+        judgeEnabled={state.judgeEnabled}
+        judgeModelId={state.judgeModelId}
         isDetached={state.isDetached}
         onClose={() => sidepanelStore.setModal('settings', false)}
       />
@@ -103,6 +105,8 @@ export const App: React.FC = () => {
         isOpen={state.modals.models}
         models={state.models}
         selectedModelId={state.selectedModelId}
+        judgeEnabled={state.judgeEnabled}
+        judgeModelId={state.judgeModelId}
         onClose={() => sidepanelStore.setModal('models', false)}
       />
     </div>

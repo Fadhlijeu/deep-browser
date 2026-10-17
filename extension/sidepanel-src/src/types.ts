@@ -60,6 +60,18 @@ export interface ChatMessage {
   isError?: boolean;
   hitl?: HitlInteraction;
   duration?: string;
+  judgeVerdict?: {
+    verdict: boolean;
+    score?: number;
+    confidence?: number;
+    reasoning?: string;
+    failureReasons?: string[];
+    task?: string;
+    finalResult?: string;
+    formattedSteps?: string[];
+    model?: string;
+    groundTruth?: string;
+  };
 }
 
 export interface Session {

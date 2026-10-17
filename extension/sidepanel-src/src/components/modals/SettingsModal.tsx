@@ -12,7 +12,9 @@ import {
   RotateCcw, 
   ExternalLink,
   Save,
-  Eye
+  Eye,
+  Scale,
+  Sparkles
 } from 'lucide-react';
 import { MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
 import { ExecutionMode, ModelDef } from '../../types';
@@ -25,6 +27,8 @@ interface SettingsModalProps {
   apiKeys: Record<string, string>;
   sidepanelEnabled: boolean;
   indexLabelingEnabled: boolean;
+  judgeEnabled?: boolean;
+  judgeModelId?: string;
   isDetached: boolean;
   onClose: () => void;
 }
@@ -46,6 +50,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   apiKeys,
   sidepanelEnabled,
   indexLabelingEnabled,
+  judgeEnabled = false,
+  judgeModelId = 'auto',
   isDetached,
   onClose,
 }) => {
@@ -343,6 +349,106 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* AI Judge Evaluation Configuration */}
+                  <div style={{
+                    marginTop: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-surface)',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Scale size={16} style={{ color: judgeEnabled ? 'var(--accent)' : 'var(--text-tertiary)' }} />
+                        <div>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            AI Judge Evaluation
+                          </div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--text-tertiary)' }}>
+                            Evaluasi mandiri trace, screenshot & hasil akhir sebelum tugas ditutup
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        onClick={() => sidepanelStore.setJudgeEnabled(!judgeEnabled)}
+                        style={{
+                          width: '38px',
+                          height: '22px',
+                          borderRadius: '11px',
+                          background: judgeEnabled ? 'var(--accent)' : 'var(--bg-subtle)',
+                          border: `1px solid ${judgeEnabled ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'background 0.2s ease, border-color 0.2s ease',
+                          flexShrink: 0,
+                        }}
+                        title={judgeEnabled ? 'Nonaktifkan AI Judge' : 'Aktifkan AI Judge'}
+                      >
+                        <div
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            background: '#ffffff',
+                            position: 'absolute',
+                            top: '2px',
+                            left: judgeEnabled ? '19px' : '2px',
+                            transition: 'left 0.2s ease',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {judgeEnabled && (
+                      <div style={{
+                        marginTop: '4px',
+                        paddingTop: '10px',
+                        borderTop: '1px solid var(--border-subtle)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                      }}>
+                        <label style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                          Model AI Judge (Evaluator):
+                        </label>
+                        <select
+                          className="form-select"
+                          value={judgeModelId}
+                          onChange={(e) => sidepanelStore.setJudgeModelId(e.target.value)}
+                        >
+                          <option value="auto">Sama dengan model utama (Otomatis)</option>
+                          {models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.provider})
+                            </option>
+                          ))}
+                        </select>
+
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '6px',
+                          fontSize: '10px',
+                          color: 'var(--text-tertiary)',
+                          background: 'var(--bg-base)',
+                          padding: '7px 9px',
+                          borderRadius: 'var(--radius-sm)',
+                          lineHeight: '1.35',
+                        }}>
+                          <Sparkles size={12} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
+                          <span>
+                            AI Judge mengevaluasi kesesuaian trajektori DOM dan tangkapan layar dengan instruksi awal Anda untuk mencegah halusinasi dan tugas yang belum selesai.
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
