@@ -4108,3 +4108,223 @@ tbody tr:hover {
   .chat-reasoning-card, .chat-reasoning-trigger, .chat-tool-group-header, .chat-tool-pill, .logs-filter-chip { transition: none !important; }
   .chat-reasoning-state.running .chat-reasoning-state-dot, .sleek-pulse-indicator span { animation: none !important; }
 }
+
+
+/* ==========================================================================
+   MINIMAL INLINE TRACE — no nested cards, no visible containers.
+   Activities should feel like native lines in the assistant conversation.
+   ========================================================================== */
+.chat-reasoning-card {
+  margin: 5px 0 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.chat-reasoning-trigger {
+  width: auto !important;
+  max-width: 100%;
+  min-height: 25px !important;
+  display: inline-flex !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  padding: 2px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+.chat-reasoning-trigger:hover { background: transparent !important; color: var(--ink) !important; }
+.chat-reasoning-icon {
+  width: 15px !important;
+  height: 15px !important;
+  flex: 0 0 15px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+}
+.chat-reasoning-icon svg { width: 13px; height: 13px; }
+.chat-reasoning-copy { flex: 0 1 auto !important; flex-direction: row !important; align-items: baseline !important; gap: 7px !important; }
+.chat-reasoning-title { font-size: 11.5px !important; font-weight: 500 !important; letter-spacing: 0 !important; color: var(--muted) !important; }
+.chat-reasoning-subtitle { display: none !important; }
+.chat-reasoning-state {
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font: 10px/1.4 var(--font) !important;
+}
+.chat-reasoning-state-dot { width: 5px !important; height: 5px !important; }
+.chat-reasoning-chevron { width: 12px; height: 12px; color: var(--muted); }
+.chat-reasoning-body {
+  margin: 5px 0 4px 21px !important;
+  padding: 2px 0 4px 11px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--line-strong) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  animation: traceReveal .16s ease both;
+}
+.chat-reasoning-body-head { margin-bottom: 5px !important; font-size: 9px !important; }
+.chat-reasoning-text { font-size: 12px !important; line-height: 1.7 !important; color: var(--muted) !important; }
+.chat-reasoning-text p { margin: 0 0 9px; }
+.chat-reasoning-text p:last-child { margin-bottom: 0; }
+.chat-reasoning-empty { font-size: 11px; color: var(--muted); }
+
+/* Browser actions are compact trace rows, never nested cards. */
+.chat-tool-group {
+  margin: 6px 0 9px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.chat-tool-group-header {
+  width: auto !important;
+  min-height: 26px !important;
+  display: inline-flex !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  padding: 2px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+.chat-tool-group-header:hover { background: transparent !important; color: var(--ink) !important; }
+.chat-tool-group-title { gap: 7px !important; font-size: 11.5px !important; font-weight: 550 !important; color: var(--muted) !important; }
+.chat-tool-group-title .tool-prompt-icon {
+  width: auto !important;
+  height: auto !important;
+  flex: 0 0 auto !important;
+  display: inline !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+  font: 600 11px/1 var(--mono) !important;
+}
+.chat-tool-group-header > div:last-child { font-size: 10px !important; font-weight: 400 !important; color: var(--muted) !important; }
+.chat-tool-group-header > div:last-child svg { width: 12px; height: 12px; }
+.chat-tool-group-body {
+  margin: 3px 0 2px 5px !important;
+  padding: 0 0 0 13px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  border: 0 !important;
+  border-left: 1px solid var(--line-strong) !important;
+  background: transparent !important;
+}
+.chat-tool-group-body > div { margin: 0 !important; }
+.chat-tool-pill {
+  min-height: 32px !important;
+  display: flex !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 5px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: var(--ink) !important;
+}
+.chat-tool-pill:last-child { border-bottom: 0 !important; }
+.chat-tool-pill:hover { border-color: var(--line) !important; background: transparent !important; transform: none !important; }
+.chat-tool-pill:focus-visible { outline-offset: 1px; }
+.chat-tool-pill .tool-prompt-icon {
+  width: 14px !important;
+  height: 14px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+  font-size: 10px !important;
+}
+.chat-tool-pill > span:nth-child(2) {
+  width: 14px !important;
+  height: 14px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+.chat-tool-pill .tool-title { font-size: 11.5px !important; font-weight: 450 !important; }
+.chat-tool-pill .tool-meta { gap: 8px !important; font-size: 10px !important; }
+.chat-tool-pill .status {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font: 10px/1.4 var(--font) !important;
+}
+.chat-tool-pill.is-success .status.success { color: var(--green) !important; background: transparent !important; }
+.chat-tool-pill.is-running .status.running { color: var(--blue) !important; background: transparent !important; }
+.chat-tool-pill.is-failed .status.failed { color: var(--red) !important; background: transparent !important; }
+.chat-tool-detail {
+  margin: 3px 0 8px 22px !important;
+  border: 0 !important;
+  border-left: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Standalone event logs also use a clean, unboxed list. */
+.log-card {
+  margin: 0 !important;
+  padding: 12px 2px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.log-card:hover {
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, var(--panel) 55%, transparent) !important;
+}
+.log-card-header { margin-bottom: 5px !important; }
+.log-type-badge, .log-step-badge {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font-size: 9px !important;
+}
+.log-type-badge { letter-spacing: .04em; }
+.log-timestamp { font-size: 9px !important; }
+.log-copy-single-btn { border-radius: 0 !important; }
+.log-screenshot-wrapper { border-top: 1px solid var(--line); }
+.log-payload-wrapper { border-top: 0 !important; padding-top: 4px !important; }
+.log-payload-content { border: 0 !important; border-left: 1px solid var(--line) !important; border-radius: 0 !important; background: transparent !important; }
+.log-payload-content pre { background: transparent !important; }
+.log-running-card {
+  padding: 8px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--blue) !important;
+}
+@media (max-width: 520px) {
+  .chat-reasoning-copy { flex-wrap: wrap !important; }
+  .chat-reasoning-state { display: none !important; }
+  .chat-tool-group-body { margin-left: 3px !important; padding-left: 10px !important; }
+  .chat-tool-pill .tool-meta { gap: 5px !important; }
+  .log-card { padding: 10px 0 !important; }
+}
