@@ -123,7 +123,7 @@ jobs:
           await demo.locator('.nav-btn[title="Activity & Runs"]').click();
           await frame('04-activity');
           await demo.locator('.nav-btn[title="Chat"]').click();
-          await demo.getByRole('button', { name: 'Search' }).click();
+          await demo.getByRole('button', { name: 'Search', exact: true }).click();
           await frame('05-command-palette');
 
           await browser.close();
