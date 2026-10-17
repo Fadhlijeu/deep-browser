@@ -81,11 +81,6 @@ export const CopilotChatView: React.FC<CopilotChatViewProps> = ({
                     <Sparkles size={15} />
                   </div>
                   <div className="message-main">
-                    <div className="message-meta">
-                      <span>Deep Browser Copilot</span>
-                      <span>·</span>
-                      <span>Active</span>
-                    </div>
                     <div className="typing">
                       <i /><i /><i />
                     </div>

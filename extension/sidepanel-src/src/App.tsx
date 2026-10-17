@@ -100,6 +100,7 @@ export const App: React.FC = () => {
               }}
               onDeleteSession={(id) => sidepanelStore.deleteSession(id)}
               onRenameSession={(id, name) => sidepanelStore.renameSession(id, name)}
+              onAiAutoName={(id) => sidepanelStore.generateAiSessionTitle(id)}
               onTogglePin={(id) => sidepanelStore.togglePinSession(id)}
               onToggleArchive={(id) => sidepanelStore.toggleArchiveSession(id)}
             />

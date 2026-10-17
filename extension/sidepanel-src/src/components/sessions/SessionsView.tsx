@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Pin, MessageSquare, Pencil, Trash2, Archive, Check } from 'lucide-react';
+import { Plus, Search, Pin, MessageSquare, Pencil, Trash2, Archive, Check, Sparkles } from 'lucide-react';
 import { Session } from '../../types';
 
 interface SessionsViewProps {
@@ -9,6 +9,7 @@ interface SessionsViewProps {
   onNewSession: () => void;
   onDeleteSession: (id: string) => void;
   onRenameSession: (id: string, name: string) => void;
+  onAiAutoName?: (id: string) => Promise<string> | void;
   onTogglePin: (id: string) => void;
   onToggleArchive: (id: string) => void;
 }
@@ -20,6 +21,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   onNewSession,
   onDeleteSession,
   onRenameSession,
+  onAiAutoName,
   onTogglePin,
   onToggleArchive,
 }) => {
@@ -27,6 +29,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [namingId, setNamingId] = useState<string | null>(null);
 
   const filteredSessions = sessions
     .filter((s) => {
@@ -175,6 +178,27 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     title={s.pinned ? 'Unpin' : 'Pin to top'}
                   >
                     <Pin size={14} color={s.pinned ? 'var(--accent)' : 'currentColor'} />
+                  </button>
+
+                  <button
+                    className="icon-btn"
+                    onClick={async () => {
+                      if (!onAiAutoName || namingId) return;
+                      setNamingId(s.id);
+                      try {
+                        await onAiAutoName(s.id);
+                      } finally {
+                        setNamingId(null);
+                      }
+                    }}
+                    title="Auto-name session with AI"
+                    disabled={namingId === s.id}
+                  >
+                    <Sparkles
+                      size={14}
+                      color="var(--accent)"
+                      style={namingId === s.id ? { opacity: 0.6 } : undefined}
+                    />
                   </button>
 
                   <button

@@ -715,6 +715,134 @@ Respond strictly with a JSON object:
         rawParsed: obj,
       };
     }
+
+    /**
+     * Generates a short, intelligent 3-5 word session title from a user prompt or conversation context.
+     * @param {string} promptText
+     * @returns {Promise<string>}
+     */
+    async generateTitle(promptText) {
+      if (!promptText || typeof promptText !== 'string' || !promptText.trim()) {
+        return '';
+      }
+
+      const systemInstruction = [
+        'You are a concise session title generator.',
+        'Summarize the user request into a concise 3 to 5 word session title.',
+        'Rules:',
+        '- Return ONLY the title text, nothing else.',
+        '- Do NOT wrap in quotes, markdown, or add trailing punctuation.',
+        '- Match the exact language of the prompt (Indonesian or English).',
+        '- Maximum 36 characters.',
+      ].join('\n');
+
+      const userContent = promptText.trim().slice(0, 1500);
+
+      try {
+        let raw = '';
+        switch (this.provider) {
+          case 'gemini': {
+            if (!this.apiKey) return '';
+            let modelName = this.model;
+            if (modelName.startsWith('gemini/')) modelName = modelName.slice(7);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemInstruction }] },
+                contents: [{ role: 'user', parts: [{ text: userContent }] }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 60 },
+              }),
+            });
+            if (!res.ok) throw new Error(`Gemini status ${res.status}`);
+            const data = await res.json();
+            raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            break;
+          }
+          case 'openai':
+          case 'custom_openai': {
+            const baseUrl = this.baseUrl || 'https://api.openai.com/v1';
+            const url = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+            const headers = { 'Content-Type': 'application/json' };
+            if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                model: this.model || 'gpt-4o-mini',
+                messages: [
+                  { role: 'system', content: systemInstruction },
+                  { role: 'user', content: userContent },
+                ],
+                temperature: 0.2,
+                max_tokens: 60,
+              }),
+            });
+            if (!res.ok) throw new Error(`OpenAI status ${res.status}`);
+            const data = await res.json();
+            raw = data.choices?.[0]?.message?.content || '';
+            break;
+          }
+          case 'anthropic': {
+            if (!this.apiKey) return '';
+            const url = 'https://api.anthropic.com/v1/messages';
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.apiKey,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model: this.model || 'claude-3-5-sonnet-20241022',
+                system: systemInstruction,
+                messages: [{ role: 'user', content: userContent }],
+                max_tokens: 60,
+                temperature: 0.2,
+              }),
+            });
+            if (!res.ok) throw new Error(`Anthropic status ${res.status}`);
+            const data = await res.json();
+            raw = data.content?.[0]?.text || '';
+            break;
+          }
+          case 'ollama': {
+            const url = `${this.ollamaHost.replace(/\/+$/, '')}/api/chat`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: this.model || 'llama3',
+                messages: [
+                  { role: 'system', content: systemInstruction },
+                  { role: 'user', content: userContent },
+                ],
+                stream: false,
+              }),
+            });
+            if (!res.ok) throw new Error(`Ollama status ${res.status}`);
+            const data = await res.json();
+            raw = data.message?.content || '';
+            break;
+          }
+          default:
+            break;
+        }
+
+        let clean = raw.trim()
+          .replace(/^["'`#*]+|["'`#*]+$/g, '')
+          .replace(/^(Judul|Title|Session):\s*/i, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (clean.length > 38) clean = clean.slice(0, 38).trim() + '...';
+        return clean;
+      } catch (err) {
+        console.warn('[LLMClient] Auto-naming failed:', err);
+        return '';
+      }
+    }
   }
 
   global.LLMClient = LLMClient;

@@ -1052,6 +1052,71 @@ export class SidepanelStateManager {
     }
   }
 
+  public cleanHeuristicTitle(prompt: string): string {
+    if (!prompt || !prompt.trim()) return 'Sesi Baru';
+    const cleaned = prompt
+      .replace(/@[a-zA-Z0-9_-]+/g, '')
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/^[-*#>0-9.]+\s*/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return 'Sesi Baru';
+    const words = cleaned.split(' ').slice(0, 5);
+    let title = words.join(' ');
+    if (title.length > 28) {
+      title = title.slice(0, 28).trim() + '...';
+    }
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  }
+
+  public async generateAiSessionTitle(sessionId: string, promptContext?: string): Promise<string> {
+    const session = this.state.sessions.find((x) => String(x.id) === String(sessionId));
+    if (!session) return '';
+
+    let textToSummarize = (promptContext || '').trim();
+    if (!textToSummarize) {
+      const userMsgs = session.messages.filter((m) => m.role === 'user');
+      if (userMsgs.length > 0) {
+        textToSummarize = userMsgs.slice(0, 3).map((m) => m.text).join('\n');
+      }
+    }
+
+    if (!textToSummarize) return '';
+
+    try {
+      await this.ensureCoreRuntimeLoaded();
+      const activeModel = this.state.models.find((m) => m.id === this.state.selectedModelId) || this.state.models[0];
+      const provider = activeModel?.provider || 'gemini';
+      const apiKey = this.state.apiKeys[provider] || this.state.apiKeys.gemini || '';
+
+      const LLMClientClass = (window as any).LLMClient;
+      if (!LLMClientClass) return '';
+
+      const client = new LLMClientClass({
+        provider,
+        model: activeModel?.id || 'gemini-2.0-flash',
+        apiKey,
+        baseUrl: (this.state as any).customBaseUrl || '',
+        ollamaHost: (this.state as any).ollamaHost || 'http://localhost:11434',
+      });
+
+      if (typeof client.generateTitle === 'function') {
+        const aiTitle = await client.generateTitle(textToSummarize);
+        if (aiTitle && aiTitle.trim().length >= 2) {
+          session.name = aiTitle.trim();
+          session.updatedAt = Date.now();
+          this.saveStorage();
+          this.notify();
+          return session.name;
+        }
+      }
+    } catch (err) {
+      console.warn('[DeepBrowser] Error in generateAiSessionTitle:', err);
+    }
+    return '';
+  }
+
   public togglePinSession(sessionId: string) {
     const s = this.state.sessions.find((x) => String(x.id) === String(sessionId));
     if (s) {
@@ -1410,8 +1475,17 @@ export class SidepanelStateManager {
     if (!prompt.trim() || this.state.runState === 'running') return;
 
     const active = this.getActiveSession();
-    if (active.messages.length === 0 && active.name === 'Sesi Baru') {
-      active.name = prompt.slice(0, 24) + (prompt.length > 24 ? '...' : '');
+    const isGenericTitle = !active.name || active.name === 'Sesi Baru' || active.name === 'New session' || active.name.startsWith('Sesi ') || active.name.endsWith('...');
+    const isFirstUserMessage = active.messages.filter((m) => m.role === 'user').length === 0;
+
+    if (isGenericTitle || isFirstUserMessage) {
+      // 1. Instant Heuristic (Zero latency)
+      active.name = this.cleanHeuristicTitle(prompt);
+      this.saveStorage();
+      this.notify();
+
+      // 2. Background AI Smart Title Generator
+      this.generateAiSessionTitle(active.id, prompt).catch(() => {});
     }
 
     // 1. Append user message
