@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Pin, MessageSquare, Pencil, Trash2, Archive, Check, Sparkles } from 'lucide-react';
+import { Plus, Search, Pin, MessageSquare, Pencil, Trash2, Archive, Check, Sparkles, X } from 'lucide-react';
 import { Session } from '../../types';
 
 interface SessionsViewProps {
@@ -130,100 +130,120 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             const timeAgo = friendlyTime(s.updatedAt || s.createdAt);
 
             return (
-              <div key={s.id} className={`session-item ${isCurrent ? 'current' : ''}`}>
-                <div className="session-initial">
-                  {s.pinned ? <Pin size={16} /> : <MessageSquare size={16} />}
-                </div>
-
-                <div className="session-info">
+              <div
+                key={s.id}
+                className={`session-item ${isCurrent ? 'current' : ''}`}
+                onClick={() => onSelectSession(s.id)}
+                title="Click to open session"
+              >
+                {/* Header Row: Title & Badges on Left, Actions on Right */}
+                <div className="session-item-header">
                   {editingId === s.id ? (
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div
+                      style={{ display: 'flex', gap: '5px', alignItems: 'center', width: '100%' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         className="input"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && saveRename(s.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveRename(s.id);
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
                         autoFocus
-                        style={{ padding: '4px 8px', fontSize: '11px', width: '220px' }}
+                        style={{ padding: '3px 7px', fontSize: '11px', flex: 1, minWidth: 0 }}
                       />
-                      <button className="btn small primary" onClick={() => saveRename(s.id)}>
-                        <Check size={12} />
+                      <button className="icon-btn" onClick={() => saveRename(s.id)} title="Save name">
+                        <Check size={13} color="var(--green)" />
+                      </button>
+                      <button className="icon-btn" onClick={() => setEditingId(null)} title="Cancel">
+                        <X size={13} />
                       </button>
                     </div>
                   ) : (
-                    <strong>
-                      {s.name}
-                      {s.pinned && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>· Pinned</span>}
-                      {isCurrent && <span className="mini-badge" style={{ marginLeft: 6 }}>Current</span>}
-                    </strong>
+                    <>
+                      <div className="session-item-title-wrap">
+                        <span className="session-item-icon">
+                          {s.pinned ? <Pin size={13} color="var(--accent)" /> : <MessageSquare size={13} />}
+                        </span>
+                        <span className="session-item-title">{s.name}</span>
+                        {s.pinned && (
+                          <span style={{ color: 'var(--accent)', fontSize: '9.5px', flexShrink: 0 }}>
+                            · Pinned
+                          </span>
+                        )}
+                        {isCurrent && <span className="mini-badge">Current</span>}
+                      </div>
+
+                      <div className="session-item-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="icon-btn"
+                          onClick={async () => {
+                            if (!onAiAutoName || namingId) return;
+                            setNamingId(s.id);
+                            try {
+                              await onAiAutoName(s.id);
+                            } finally {
+                              setNamingId(null);
+                            }
+                          }}
+                          title="Auto-name session with AI"
+                          disabled={namingId === s.id}
+                        >
+                          <Sparkles
+                            size={13}
+                            color="var(--accent)"
+                            style={namingId === s.id ? { opacity: 0.5 } : undefined}
+                          />
+                        </button>
+
+                        <button
+                          className="icon-btn"
+                          onClick={() => onTogglePin(s.id)}
+                          title={s.pinned ? 'Unpin' : 'Pin to top'}
+                        >
+                          <Pin size={13} color={s.pinned ? 'var(--accent)' : 'currentColor'} />
+                        </button>
+
+                        <button
+                          className="icon-btn"
+                          onClick={() => startRename(s)}
+                          title="Rename session"
+                        >
+                          <Pencil size={13} />
+                        </button>
+
+                        <button
+                          className="icon-btn"
+                          onClick={() => onToggleArchive(s.id)}
+                          title={s.archived ? 'Restore' : 'Archive'}
+                        >
+                          <Archive size={13} />
+                        </button>
+
+                        <button
+                          className="icon-btn danger"
+                          onClick={() => onDeleteSession(s.id)}
+                          title="Delete session"
+                        >
+                          <Trash2 size={13} color="var(--red)" />
+                        </button>
+                      </div>
+                    </>
                   )}
-
-                  <p title={lastMsg}>{lastMsg}</p>
-
-                  <div className="session-meta">
-                    <span>{timeAgo}</span>
-                    <span>·</span>
-                    <span>{s.messages.length} messages</span>
-                  </div>
                 </div>
 
-                <button className="btn small" onClick={() => onSelectSession(s.id)}>
-                  Open
-                </button>
+                {/* Message Snippet: 1 clean full-width line */}
+                <p className="session-item-snippet" title={lastMsg}>
+                  {lastMsg}
+                </p>
 
-                <div className="row-actions">
-                  <button
-                    className="icon-btn"
-                    onClick={() => onTogglePin(s.id)}
-                    title={s.pinned ? 'Unpin' : 'Pin to top'}
-                  >
-                    <Pin size={14} color={s.pinned ? 'var(--accent)' : 'currentColor'} />
-                  </button>
-
-                  <button
-                    className="icon-btn"
-                    onClick={async () => {
-                      if (!onAiAutoName || namingId) return;
-                      setNamingId(s.id);
-                      try {
-                        await onAiAutoName(s.id);
-                      } finally {
-                        setNamingId(null);
-                      }
-                    }}
-                    title="Auto-name session with AI"
-                    disabled={namingId === s.id}
-                  >
-                    <Sparkles
-                      size={14}
-                      color="var(--accent)"
-                      style={namingId === s.id ? { opacity: 0.6 } : undefined}
-                    />
-                  </button>
-
-                  <button
-                    className="icon-btn"
-                    onClick={() => startRename(s)}
-                    title="Rename session"
-                  >
-                    <Pencil size={14} />
-                  </button>
-
-                  <button
-                    className="icon-btn"
-                    onClick={() => onToggleArchive(s.id)}
-                    title={s.archived ? 'Restore' : 'Archive'}
-                  >
-                    <Archive size={14} />
-                  </button>
-
-                  <button
-                    className="icon-btn"
-                    onClick={() => onDeleteSession(s.id)}
-                    title="Delete session"
-                  >
-                    <Trash2 size={14} color="var(--red)" />
-                  </button>
+                {/* Meta Footer */}
+                <div className="session-item-meta">
+                  <span>{timeAgo}</span>
+                  <span>·</span>
+                  <span>{s.messages.length} messages</span>
                 </div>
               </div>
             );
