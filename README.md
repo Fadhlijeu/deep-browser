@@ -9,21 +9,27 @@
   <img src="https://img.shields.io/badge/License-MIT-5B8C5A" alt="MIT License">
 </p>
 
-## Agent demo
+## Chatbot demo
 
 <p align="center">
-  <img src="docs/images/agent-demo.gif" alt="Simulated Deep-Browser agent demo showing reasoning, tool calls, verification, and a final summary" width="960">
-  <br>
-  <sub>Simulated showcase only — prompt, reasoning, tool results, and verification data are demo fixtures, not a live browser run.</sub>
+  <img src="docs/images/chatbot-demo.gif" alt="Deep-Browser chatbot interface demo" width="960">
 </p>
 
 ## Interface
 
-| **Dark theme** | **White theme** |
-|:---:|:---:|
-| <img src="docs/images/chatbot-full-dark.png" alt="Deep-Browser full interface in near-black theme" width="100%"> | <img src="docs/images/chatbot-full-light.png" alt="Deep-Browser full interface in white theme" width="100%"> |
+### Dark theme
 
-**Chrome Side Panel · High-resolution capture**
+<p align="center">
+  <img src="docs/images/chatbot-full-dark.png" alt="Deep-Browser full interface in dark theme" width="100%">
+</p>
+
+### White theme
+
+<p align="center">
+  <img src="docs/images/chatbot-full-light.png" alt="Deep-Browser full interface in white theme" width="100%">
+</p>
+
+### Chrome Side Panel · High-resolution capture
 
 <p align="center">
   <img src="docs/images/chatbot-sidepanel-dark.png" alt="Deep-Browser compact Chrome side panel in near-black theme" width="420">
