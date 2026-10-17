@@ -1313,7 +1313,19 @@ export class SidepanelStateManager {
     }
 
     if (type === 'TRACE_JUDGED') {
-      lastMsg.judgeVerdict = payload;
+      const normFailureReasons = Array.isArray(payload.failureReasons)
+        ? payload.failureReasons.filter(Boolean)
+        : (payload.failure_reason ? [payload.failure_reason] : []);
+      const normFormattedSteps = Array.isArray(payload.formattedSteps)
+        ? payload.formattedSteps
+        : (typeof payload.formattedSteps === 'string' ? payload.formattedSteps.split('\n').map((s: string) => s.trim()).filter(Boolean) : []);
+
+      lastMsg.judgeVerdict = {
+        ...payload,
+        failureReasons: normFailureReasons,
+        formattedSteps: normFormattedSteps,
+      };
+
       if (lastMsg.steps && lastMsg.steps.length > 0) {
         const judgeStep = lastMsg.steps.slice().reverse().find((s) => s.icon === 'gavel' || s.name.includes('Judge'));
         if (judgeStep) {
@@ -1324,7 +1336,7 @@ export class SidepanelStateManager {
             verdict: payload.verdict ? 'PASS' : 'FAIL',
             confidence: payload.confidence,
             reasoning: payload.reasoning,
-            failureReasons: payload.failureReasons || [],
+            failureReasons: normFailureReasons,
           };
         } else {
           const step: ToolStep = {
@@ -1339,6 +1351,7 @@ export class SidepanelStateManager {
               verdict: payload.verdict ? 'PASS' : 'FAIL',
               confidence: payload.confidence,
               reasoning: payload.reasoning,
+              failureReasons: normFailureReasons,
             },
             timestamp: Date.now(),
           };

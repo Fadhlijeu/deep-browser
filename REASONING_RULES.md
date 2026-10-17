@@ -193,12 +193,38 @@ Agent runtime wajib memvalidasi dan memulihkan format JSON dari LLM:
 
 ---
 
+## 8. Penalaran Evaluator Otonom (Autonomous Trace Judge Reasoning)
+
+Untuk memastikan evaluasi trajektori (*trace evaluation*) oleh AI Judge berjalan adil, objektif, dan bebas halusinasi:
+
+### 1. Prinsip Pemenuhan Tujuan Utama (*Core Objective Fulfillment*)
+* Judge mengevaluasi apakah hasil akhir (*finalResult*) dan trajektori langkah telah memenuhi niat sejati pengguna.
+* Untuk instruksi majemuk berstruktur `"buka [Portal X] lalu cari [Entitas Y] dan ambil informasinya"`:
+  - Jika agen telah membuka/menavigasi ke situs X, mencari entitas Y, masuk ke rekaman detail profil, dan menyajikan atribut informasi lengkap dalam jawaban akhir, maka evaluasi **WAJIB DINYATAKAN VALID & BERHASIL (`verdict: true`)**.
+  - Dilarang membatalkan kelulusan hanya karena agen melakukan beberapa langkah penjelajahan wajar (misal: melewati mesin pencari untuk menemukan URL resmi atau melakukan scroll).
+
+### 2. Realitas Viewport vs. Bukti Nyata DOM (*DOM Ground Truth*)
+* Tangkapan layar (*screenshot*) yang diterima Judge **hanya mencerminkan viewport aktif pada detik terakhir penyelesaian**, bukan keseluruhan isi halaman.
+* Data atau teks yang telah diekstraksi dan disajikan secara terstruktur pada jawaban akhir agen adalah bukti nyata hasil pembacaan DOM interaktif.
+* **DILARANG** mengklaim bahwa data belum diambil hanya karena scrollbar atau screenshot terakhir berada di ujung halaman, selama data faktual telah tersaji utuh di jawaban akhir.
+
+### 3. Invarian Kegagalan & Alasan Kegagalan
+* Nilai `verdict: false` HANYA diberikan jika:
+  a) Agen berhenti prematur tanpa pernah menemukan entitas atau membuka halaman target.
+  b) Jawaban akhir kosong, berisi teks generik ("Task completed") tanpa data yang diminta, atau terbukti halusinasi fiktif.
+  c) Terhalang oleh Captcha / Cloudflare tak tertembus (`reached_captcha: true`).
+  d) Portal target mati total / 404 tanpa alternatif (`impossible_task: true`).
+* Jika `verdict: true`, nilai `failure_reason` **WAJIB bernilai `null`**.
+
+---
+
 ## Ringkasan Standar Operasional
 
 | Kondisi | Respon Reasoning yang Benar | Respon yang Salah |
 | :--- | :--- | :--- |
 | User meminta "buka X lalu cari Y" | Cari portal X di Google, KLIK masuk ke situs resmi X, baru gunakan kolom pencarian internal di dalam situs X untuk mencari Y. | Menggabungkan queri menjadi "Y X" di Google tanpa pernah membuka portal X. |
 | User meminta "semua repo / katalog" | Cek tab Repositories, cek total counter, scroll bertahap hingga Pixels Below = 0, lalu tampilkan seluruh 16–17 repo dalam tabel/daftar bernomor 1 s/d N. | Menyebutkan 6–10 item lalu menulis "Serta repository lainnya..." atau "...17 lainnya...". |
+| Data entitas telah diekstraksi lengkap di respon akhir | AI Judge menyatakan `verdict: true` dan `failure_reason: null`. | Judge menyatakan tidak valid dengan dalih screenshot terakhir tidak menampilkan seluruh teks atau mengabaikan jawaban akhir. |
 | Teks highlight melintasi tag inline (`<a>`, `<span>`) | Deteksi teks di tingkat blok paragraf dan sorot kata/frasa target secara mulus. | Menghentikan aksi dengan alasan teks tidak ditemukan. |
 | Output LLM memiliki kurung kurawal ganda (`} }`) | Parser mengekstrak JSON seimbang (*balanced braces*) dan menjalankan aksi yang dimaksud. | Membuang string mentah JSON ke chat pengguna sebagai hasil akhir. |
 | Screenshot memperlihatkan teks terpotong di tepi bawah | Jalankan `scroll_page` ke bawah sebelum membaca atau mengambil screenshot final. | Mengabaikan potongan teks dan langsung menyimpulkan data selesai. |

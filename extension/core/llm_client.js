@@ -689,6 +689,15 @@ Respond strictly with a JSON object:
       const plan_update = Array.isArray(obj.plan_update) ? obj.plan_update.map(String) : (Array.isArray(obj.plan) ? obj.plan.map(String) : null);
       const current_plan_item = typeof obj.current_plan_item === 'number' ? obj.current_plan_item : (typeof obj.current_step === 'number' ? obj.current_step : null);
 
+      // Preserve evaluation / verdict fields (for Trace Judge and Evaluation Systems)
+      const verdict = typeof obj.verdict === 'boolean' ? obj.verdict : (typeof parameters.verdict === 'boolean' ? parameters.verdict : undefined);
+      const evalReasoning = obj.reasoning || (typeof parameters.reasoning === 'string' ? parameters.reasoning : undefined);
+      const failure_reason = obj.failure_reason !== undefined ? obj.failure_reason : (parameters.failure_reason !== undefined ? parameters.failure_reason : null);
+      const impossible_task = typeof obj.impossible_task === 'boolean' ? obj.impossible_task : (typeof parameters.impossible_task === 'boolean' ? parameters.impossible_task : false);
+      const reached_captcha = typeof obj.reached_captcha === 'boolean' ? obj.reached_captcha : (typeof parameters.reached_captcha === 'boolean' ? parameters.reached_captcha : false);
+      const score = typeof obj.score === 'number' ? obj.score : (typeof parameters.score === 'number' ? parameters.score : undefined);
+      const confidence = typeof obj.confidence === 'number' ? obj.confidence : (typeof parameters.confidence === 'number' ? parameters.confidence : undefined);
+
       return {
         thinking: String(thinking),
         action_name,
@@ -696,6 +705,14 @@ Respond strictly with a JSON object:
         actions,
         plan_update,
         current_plan_item,
+        verdict,
+        reasoning: evalReasoning,
+        failure_reason,
+        impossible_task,
+        reached_captcha,
+        score,
+        confidence,
+        rawParsed: obj,
       };
     }
   }

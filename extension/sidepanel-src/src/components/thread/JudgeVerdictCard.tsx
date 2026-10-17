@@ -24,6 +24,19 @@ export const JudgeVerdictCard: React.FC<JudgeVerdictProps> = ({ verdict }) => {
     ? `${Math.round(verdict.confidence * 100)}%`
     : (verdict.score !== undefined ? `${Math.round(verdict.score * 100)}%` : null);
 
+  // Normalize failure reasons safely (supports string[], string, or failure_reason)
+  const rawFailureReasons = verdict.failureReasons || (verdict as any).failure_reason;
+  const failureReasonsList: string[] = Array.isArray(rawFailureReasons)
+    ? rawFailureReasons.filter(Boolean).map(String)
+    : (rawFailureReasons ? [String(rawFailureReasons)] : []);
+
+  // Normalize formatted steps safely (supports string[], multiline string, or empty)
+  const formattedStepsList: string[] = Array.isArray(verdict.formattedSteps)
+    ? verdict.formattedSteps.filter(Boolean).map(String)
+    : (typeof verdict.formattedSteps === 'string'
+      ? (verdict.formattedSteps as string).split('\n').map((s) => s.trim()).filter(Boolean)
+      : []);
+
   return (
     <div
       style={{
@@ -114,14 +127,14 @@ export const JudgeVerdictCard: React.FC<JudgeVerdictProps> = ({ verdict }) => {
           )}
 
           {/* Failure Reasons if any */}
-          {verdict.failureReasons && verdict.failureReasons.length > 0 && (
+          {failureReasonsList.length > 0 && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: '#f87171', marginBottom: '3px' }}>
                 <AlertCircle size={11} />
                 <span>Penyebab Ketidaksesuaian:</span>
               </div>
               <ul style={{ margin: 0, paddingLeft: '16px', color: 'var(--text-secondary)', fontSize: '10px', lineHeight: '1.4' }}>
-                {verdict.failureReasons.map((reason, idx) => (
+                {failureReasonsList.map((reason, idx) => (
                   <li key={idx}>{reason}</li>
                 ))}
               </ul>
@@ -129,10 +142,10 @@ export const JudgeVerdictCard: React.FC<JudgeVerdictProps> = ({ verdict }) => {
           )}
 
           {/* Evaluated Steps Trajectory Summary */}
-          {verdict.formattedSteps && verdict.formattedSteps.length > 0 && (
+          {formattedStepsList.length > 0 && (
             <div>
               <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '3px' }}>
-                Trajektori Langkah yang Dievaluasi ({verdict.formattedSteps.length} langkah):
+                Trajektori Langkah yang Dievaluasi ({formattedStepsList.length} langkah):
               </div>
               <div
                 style={{
@@ -150,7 +163,7 @@ export const JudgeVerdictCard: React.FC<JudgeVerdictProps> = ({ verdict }) => {
                   gap: '3px',
                 }}
               >
-                {verdict.formattedSteps.map((st, i) => (
+                {formattedStepsList.map((st, i) => (
                   <div key={i} style={{ whiteSpace: 'pre-wrap' }}>
                     {st}
                   </div>

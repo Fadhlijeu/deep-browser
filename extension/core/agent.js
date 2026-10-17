@@ -379,7 +379,7 @@
       });
 
       const lastHistoryItem = this.messageManager.history[this.messageManager.history.length - 1];
-      const finalResult = lastHistoryItem?.action?.parameters?.text || lastHistoryItem?.result?.message || 'Task completed.';
+      const finalResult = options.finalResult || lastHistoryItem?.action?.parameters?.text || lastHistoryItem?.action?.parameters?.answer || lastHistoryItem?.result?.data?.text || lastHistoryItem?.result?.message || 'Task completed.';
       let screenshotBase64 = null;
       try {
         const state = await this.browserSession.getState(false);
@@ -921,17 +921,22 @@
               this.step,
               decision.thinking,
               { name: actionName, parameters: params },
-              { success: verification.verified && actionResult.success, error: actionResult.error || verification.error }
+              {
+                success: verification.verified && actionResult.success,
+                error: actionResult.error || verification.error,
+                data: actionResult.data,
+                message: actionResult.message,
+              }
             );
 
             // ─── 9. COMPLETION CHECK ────────────────────────────────────────────────
             if (actionName === 'done' || actionResult.data?.is_done) {
-              const finalAnswer = actionResult.data?.text || params.text || 'Tugas selesai.';
+              const finalAnswer = actionResult.data?.text || params.text || params.answer || params.result || 'Tugas selesai.';
               let judgement = null;
 
               if (this.useJudge) {
                 try {
-                  judgement = await this.judgeTrace({ groundTruth: this.groundTruth });
+                  judgement = await this.judgeTrace({ groundTruth: this.groundTruth, finalResult: finalAnswer });
                 } catch (jErr) {
                   console.warn('[Agent] Judge evaluation error:', jErr);
                 }
