@@ -999,6 +999,7 @@ export class SidepanelStateManager {
   }
 
   public reconnect() {
+    this.initTabsListener();
     if (this.ws) {
       try { this.ws.close(); } catch (_) {}
       this.ws = null;

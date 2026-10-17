@@ -2,6 +2,8 @@ import React from 'react';
 import { Search, ExternalLink, Sun, Moon, Settings2, Sparkles, PanelTop } from 'lucide-react';
 import { ViewType, ConnectionStatus, RunState } from '../../types';
 
+import { sidepanelStore } from '../../state/sidepanelStore';
+
 interface CopilotTopbarProps {
   currentView: ViewType;
   connectionStatus: ConnectionStatus;
@@ -46,25 +48,33 @@ export const CopilotTopbar: React.FC<CopilotTopbarProps> = ({
   return (
     <header className="topbar">
       <div className="crumbs">
-        <span>{currentView === 'settings' ? 'Configure' : 'Workspace'}</span>
-        <span className="crumb-sep">/</span>
         <strong>{VIEW_TITLES[currentView] || 'Chat'}</strong>
       </div>
 
       <div className="top-actions">
-        {/* Real Status Badge (NO MORE "SIMULATED ENVIRONMENT" dummy string!) */}
+        {/* Dynamic Connection Status: Online, Offline, Reconnect */}
         {runState === 'running' ? (
           <span className="sim-label running" title="Agent executing browser actions">
             <span className="dot" /> STEP {stepCount || 1} RUNNING
           </span>
-        ) : connectionStatus === 'connected' ? (
-          <span className="sim-label daemon" title="Connected to background agent daemon">
-            <span className="dot" /> DAEMON LIVE
+        ) : connectionStatus === 'connected' || connectionStatus === 'standalone' ? (
+          <span className="sim-label online" title="Status: Online (Browser CDP Runtime Terhubung)">
+            <span className="dot" style={{ background: 'var(--green)' }} /> Online
+          </span>
+        ) : connectionStatus === 'reconnecting' ? (
+          <span className="sim-label reconnecting" title="Status: Menghubungkan ulang...">
+            <span className="dot" style={{ background: 'var(--amber)' }} /> Reconnect...
           </span>
         ) : (
-          <span className="sim-label" title="Direct CDP attached to active browser window">
-            <span className="dot" /> EDGE ATTACHED
-          </span>
+          <button
+            type="button"
+            className="sim-label offline"
+            onClick={() => sidepanelStore.reconnect()}
+            title="Status: Offline. Klik untuk Reconnect"
+            style={{ cursor: 'pointer', border: '1px solid #e8c4bd', background: 'var(--red-soft)', color: 'var(--red)' }}
+          >
+            <span className="dot" style={{ background: 'var(--red)' }} /> Offline · Reconnect
+          </button>
         )}
 
         {/* Quick Search */}

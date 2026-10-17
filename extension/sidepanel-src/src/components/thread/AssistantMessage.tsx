@@ -40,11 +40,13 @@ interface AssistantMessageProps {
 
 // ─── Screenshot Data Extractor ───────────────────────────────────────────────
 const getScreenshotUrl = (step: ToolStep): string | null => {
+  const res = step.result as any;
+  const args = step.args as any;
   const sc =
-    step.result?.screenshot ||
-    step.result?.dataUrl ||
-    step.result?.screenshotDataUrl ||
-    (step.args as any)?.screenshot;
+    res?.screenshot ||
+    res?.dataUrl ||
+    res?.screenshotDataUrl ||
+    args?.screenshot;
   if (!sc || typeof sc !== 'string' || sc === 'Captured') return null;
   if (sc.startsWith('data:image')) return sc;
   if (sc.startsWith('http://') || sc.startsWith('https://') || sc.startsWith('blob:')) return sc;
@@ -172,7 +174,7 @@ const ToolCallItem: React.FC<{
               {JSON.stringify(
                 {
                   args: step.args,
-                  result: typeof step.result === 'object' && step.result?.screenshot ? { ...step.result, screenshot: '[Base64 Viewport Image]' } : step.result,
+                  result: typeof step.result === 'object' && (step.result as any)?.screenshot ? { ...(step.result as any), screenshot: '[Base64 Viewport Image]' } : step.result,
                   verification: step.verification,
                   error: step.error,
                 },
@@ -225,7 +227,7 @@ const ScreenshotScanGallery: React.FC<{
           <div className="screenshot-gallery-row">
             {steps.map((st, idx) => {
               const url = getScreenshotUrl(st);
-              const scrollPct = st.result?.scroll_percentage ?? Math.round((idx / Math.max(1, steps.length - 1)) * 100);
+              const scrollPct = (st.result as any)?.scroll_percentage ?? Math.round((idx / Math.max(1, steps.length - 1)) * 100);
               return (
                 <div
                   key={st.id || idx}

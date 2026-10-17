@@ -17,8 +17,8 @@ export interface ToolStep {
   icon: string;
   duration?: string;
   status: 'running' | 'succeeded' | 'failed';
-  args?: Record<string, unknown>;
-  result?: unknown;
+  args?: any;
+  result?: any;
   verification?: Record<string, unknown> | null;
   error?: string;
   timestamp: number;
