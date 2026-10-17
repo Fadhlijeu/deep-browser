@@ -23,6 +23,7 @@ interface ComposerProps {
   onSend: (text: string) => void;
   onCancel: () => void;
   onOpenModels: () => void;
+  onOpenMode?: () => void;
   onOpenSettings: () => void;
   initialPrompt?: string;
 }
@@ -34,6 +35,7 @@ export const Composer: React.FC<ComposerProps> = ({
   onSend,
   onCancel,
   onOpenModels,
+  onOpenMode,
   initialPrompt = '',
 }) => {
   const [text, setText] = useState(initialPrompt);
@@ -76,23 +78,7 @@ export const Composer: React.FC<ComposerProps> = ({
     }
   };
 
-  // Execution mode dropdown state
-  const [isModeOpen, setIsModeOpen] = useState(false);
-  const modeMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
-        setIsModeOpen(false);
-      }
-    };
-    if (isModeOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isModeOpen]);
 
   const currentModeOpt = MODE_OPTIONS.find((m) => m.id === selectedMode) || MODE_OPTIONS[0];
 
@@ -217,73 +203,17 @@ export const Composer: React.FC<ComposerProps> = ({
               <ChevronDown size={9} />
             </button>
 
-            {/* Mode Pill Dropdown */}
-            <div style={{ position: 'relative' }} ref={modeMenuRef}>
-              <button
-                type="button"
-                className="composer-btn mode"
-                onClick={() => setIsModeOpen((prev) => !prev)}
-                title={`Execution Mode: ${currentModeOpt.name}`}
-              >
-                <ShieldCheck size={12} />
-                <span>{shortModeName}</span>
-                <ChevronDown size={9} />
-              </button>
-
-              {isModeOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '100%',
-                    left: 0,
-                    marginBottom: '6px',
-                    width: '230px',
-                    background: 'var(--paper)',
-                    border: '1px solid var(--line-strong)',
-                    borderRadius: '8px',
-                    boxShadow: 'var(--shadow)',
-                    padding: '5px',
-                    zIndex: 50,
-                  }}
-                >
-                  <div style={{ fontSize: '8.5px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', padding: '5px 7px 3px' }}>
-                    Agent Execution Mode
-                  </div>
-                  {MODE_OPTIONS.map((m) => {
-                    const isActive = selectedMode === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          sidepanelStore.setMode(m.id);
-                          setIsModeOpen(false);
-                        }}
-                        style={{
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '6px 8px',
-                          borderRadius: '5px',
-                          border: 0,
-                          background: isActive ? 'var(--line)' : 'transparent',
-                          color: 'var(--ink)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '7px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '10.5px', fontWeight: 650 }}>{m.name}</div>
-                          <div style={{ fontSize: '9px', color: 'var(--muted)', marginTop: '1px' }}>{m.desc}</div>
-                        </div>
-                        {isActive && <Check size={12} color="var(--accent)" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {/* Mode Pill Button (Opens Mode Modal matching prototype) */}
+            <button
+              type="button"
+              className="composer-btn mode"
+              onClick={() => (onOpenMode ? onOpenMode() : sidepanelStore.setModal('mode', true))}
+              title={`Execution Mode: ${currentModeOpt.name}`}
+            >
+              <ShieldCheck size={12} />
+              <span>{shortModeName}</span>
+              <ChevronDown size={9} />
+            </button>
 
             {/* Session Video Recording Toggle */}
             <button

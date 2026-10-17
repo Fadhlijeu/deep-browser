@@ -210,6 +210,7 @@ export interface SidepanelState {
     apikeys: boolean;
     settings: boolean;
     models: boolean;
+    mode: boolean;
   };
 }
 
@@ -254,7 +255,7 @@ export class SidepanelStateManager {
       isHudEnabled: false,
       theme: 'light',
       isInspectorOpen: false,
-      modals: { drawer: false, apikeys: false, settings: false, models: false },
+      modals: { drawer: false, apikeys: false, settings: false, models: false, mode: false },
     };
 
     this.loadFromStorage();
@@ -1861,7 +1862,8 @@ export class SidepanelStateManager {
 
     // 9. Completion
     if (type === 'TASK_COMPLETED' || type === 'DONE') {
-      lastMsg.text = payload.result || evt.message || lastMsg.text || 'Tugas browser selesai dieksekusi dan terverifikasi.';
+      const finalResult = payload.result || evt.message || lastMsg.text || lastMsg.thought || 'Tugas browser selesai dieksekusi dan terverifikasi.';
+      lastMsg.text = finalResult;
       this.state.runState = 'done';
       this.activeAgent = null;
     }

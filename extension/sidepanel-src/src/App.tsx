@@ -10,6 +10,7 @@ import { SkillsView } from './components/skills/SkillsView';
 import { SettingsView } from './components/settings/SettingsView';
 import { CommandPalette } from './components/modals/CommandPalette';
 import { ModelsModal } from './components/modals/ModelsModal';
+import { ModeModal } from './components/modals/ModeModal';
 import { ApiKeysModal } from './components/modals/ApiKeysModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 
@@ -177,6 +178,16 @@ export const App: React.FC = () => {
         judgeEnabled={state.judgeEnabled}
         judgeModelId={state.judgeModelId}
         onClose={() => sidepanelStore.setModal('models', false)}
+      />
+
+      <ModeModal
+        isOpen={state.modals.mode}
+        selectedMode={state.selectedMode}
+        onSelectMode={(m) => {
+          sidepanelStore.setMode(m);
+          sidepanelStore.setModal('mode', false);
+        }}
+        onClose={() => sidepanelStore.setModal('mode', false)}
       />
 
       <ApiKeysModal

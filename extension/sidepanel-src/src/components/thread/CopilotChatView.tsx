@@ -110,6 +110,7 @@ export const CopilotChatView: React.FC<CopilotChatViewProps> = ({
           onSend={onSendMessage}
           onCancel={onCancelRun}
           onOpenModels={onOpenModels}
+          onOpenMode={() => sidepanelStore.setModal('mode', true)}
           onOpenSettings={onOpenSettings}
           initialPrompt={composerPrompt}
         />

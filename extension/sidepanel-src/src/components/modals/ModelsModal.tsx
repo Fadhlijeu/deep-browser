@@ -1,7 +1,7 @@
-import { Scale, Bot, Check, X, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, X, CheckCircle, AlertTriangle, Scale } from 'lucide-react';
 import { ModelDef } from '../../types';
-import { PROVIDER_LABELS, sidepanelStore } from '../../state/sidepanelStore';
-import { ProviderLogo } from '../common/ProviderLogo';
+import { sidepanelStore } from '../../state/sidepanelStore';
 
 interface ModelsModalProps {
   isOpen: boolean;
@@ -12,6 +12,22 @@ interface ModelsModalProps {
   onClose: () => void;
 }
 
+const PROVIDER_NAMES: Record<string, string> = {
+  gemini: 'Google Gemini',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic Claude',
+  custom_openai: 'OpenAI-Compatible',
+  ollama: 'Local Ollama',
+};
+
+const PROVIDER_SHORTS: Record<string, string> = {
+  gemini: 'G',
+  openai: 'OAI',
+  anthropic: 'ANT',
+  custom_openai: 'OC',
+  ollama: 'OL',
+};
+
 export const ModelsModal: React.FC<ModelsModalProps> = ({
   isOpen,
   models,
@@ -20,24 +36,9 @@ export const ModelsModal: React.FC<ModelsModalProps> = ({
   judgeModelId = 'auto',
   onClose,
 }) => {
+  const [search, setSearch] = useState('');
+
   if (!isOpen) return null;
-
-  // Group and sort models by provider, then A to Z
-  const groupedModels = models.reduce((acc, m) => {
-    if (!acc[m.provider]) acc[m.provider] = [];
-    acc[m.provider].push(m);
-    return acc;
-  }, {} as Record<string, ModelDef[]>);
-
-  const providerKeys = ['gemini', 'openai', 'anthropic', 'custom_openai', 'ollama'].filter(
-    (p) => groupedModels[p] && groupedModels[p].length > 0
-  );
-  Object.keys(groupedModels).forEach((p) => {
-    if (!providerKeys.includes(p)) providerKeys.push(p);
-  });
-  providerKeys.forEach((p) => {
-    groupedModels[p].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-  });
 
   const handleSelectModel = (modelId: string) => {
     sidepanelStore.setSelectedModel(modelId);
@@ -51,267 +52,202 @@ export const ModelsModal: React.FC<ModelsModalProps> = ({
     sidepanelStore.setJudgeModelId(e.target.value);
   };
 
+  // Filter models based on search query
+  const q = search.trim().toLowerCase();
+  const filteredModels = models.filter((m) => {
+    if (!q) return true;
+    const providerName = PROVIDER_NAMES[m.provider] || m.provider;
+    return (
+      m.name.toLowerCase().includes(q) ||
+      m.id.toLowerCase().includes(q) ||
+      m.provider.toLowerCase().includes(q) ||
+      providerName.toLowerCase().includes(q)
+    );
+  });
+
+  // Group models by provider
+  const groupedModels = filteredModels.reduce((acc, m) => {
+    if (!acc[m.provider]) acc[m.provider] = [];
+    acc[m.provider].push(m);
+    return acc;
+  }, {} as Record<string, ModelDef[]>);
+
+  const providerOrder = ['gemini', 'openai', 'anthropic', 'custom_openai', 'ollama'];
+  const providerKeys = providerOrder.filter((p) => groupedModels[p] && groupedModels[p].length > 0);
+  Object.keys(groupedModels).forEach((p) => {
+    if (!providerKeys.includes(p)) providerKeys.push(p);
+  });
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: '440px', width: '92%' }} onClick={(e) => e.stopPropagation()}>
-        {/* Modal Header */}
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-            <Bot size={16} style={{ color: 'var(--accent)' }} />
-            <span className="modal-title">Pilih Model AI</span>
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        className="modal wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modelModalTitle"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Head */}
+        <div className="modal-head">
+          <div>
+            <div className="modal-title" id="modelModalTitle">Choose a model</div>
+            <div className="modal-sub">
+              Available AI models grouped by provider for browser execution &amp; reasoning.
+            </div>
           </div>
-          <button className="icon-btn" onClick={onClose} title="Tutup">
+          <button className="close-btn" onClick={onClose} aria-label="Close">
             <X size={15} />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="modal-body" style={{ maxHeight: '460px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          
-          {/* Section 1: Main Agent Model */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Pilih Model Utama Agen
-              </span>
-              <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                {models.length} model terdaftar
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {providerKeys.map((provider) => {
-                const pModels = groupedModels[provider];
-                const providerLabel = PROVIDER_LABELS[provider] || provider.toUpperCase();
-                return (
-                  <div key={provider} className="provider-model-group">
-                    <div className="provider-group-header">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <ProviderLogo provider={provider as any} size={13} />
-                        <span className="provider-group-title">{providerLabel}</span>
-                      </div>
-                      <span className="provider-group-count">{pModels.length} model</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {pModels.map((m) => {
-                        const isSelected = selectedModelId === m.id;
-                        return (
-                          <div
-                            key={m.id}
-                            onClick={() => handleSelectModel(m.id)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '8px 10px',
-                              borderRadius: 'var(--radius-sm)',
-                              background: isSelected ? 'rgba(59, 130, 246, 0.12)' : 'var(--bg-card)',
-                              border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.45)' : 'var(--border-subtle)'}`,
-                              cursor: 'pointer',
-                              transition: 'all 0.12s ease',
-                              gap: '8px',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0 }}>
-                              <div style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: 'var(--radius-xs)',
-                                background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-subtle)',
-                                border: '1px solid var(--border-subtle)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0
-                              }}>
-                                <ProviderLogo provider={m.provider} size={15} />
-                              </div>
-                              <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span style={{ fontWeight: 600, fontSize: '12px', color: isSelected ? '#ffffff' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }} title={m.name}>
-                                    {m.name}
-                                  </span>
-                                  <span style={{
-                                    fontSize: '9px',
-                                    fontFamily: 'var(--font-mono)',
-                                    color: 'var(--text-tertiary)',
-                                    textTransform: 'uppercase',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    padding: '1px 4px',
-                                    borderRadius: '3px'
-                                  }}>
-                                    {m.provider}
-                                  </span>
-                                </div>
-                                {(m.rpm || m.tpm || m.rpd) && (
-                                  <div className="model-quota-row" style={{ marginTop: '2px' }}>
-                                    {m.rpm && (
-                                      <span className="model-quota-chip">
-                                        <span className="chip-label">RPM</span>
-                                        <span className="chip-val">{m.rpm}</span>
-                                      </span>
-                                    )}
-                                    {m.tpm && (
-                                      <span className="model-quota-chip">
-                                        <span className="chip-label">TPM</span>
-                                        <span className="chip-val">{m.tpm}</span>
-                                      </span>
-                                    )}
-                                    {m.rpd && (
-                                      <span className="model-quota-chip">
-                                        <span className="chip-label">RPD</span>
-                                        <span className="chip-val">{m.rpd}</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            {isSelected && (
-                              <div style={{
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: '50%',
-                                background: 'rgba(59, 130, 246, 0.2)',
-                                border: '1px solid rgba(59, 130, 246, 0.5)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0
-                              }}>
-                                <Check size={12} strokeWidth={2.8} style={{ color: '#60a5fa' }} />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Body */}
+        <div className="modal-body">
+          {/* Search Box */}
+          <div className="searchbox" style={{ maxWidth: 'none', marginBottom: '14px' }}>
+            <Search size={14} />
+            <input
+              className="input"
+              id="modelSearchInput"
+              placeholder="Search models or provider…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
           </div>
 
-          {/* Section 2: AI Judge Configuration */}
-          <div style={{
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--bg-surface)',
-            padding: '10px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-          }}>
-            {/* Judge Header & Toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                <Scale size={15} style={{ color: judgeEnabled ? 'var(--accent)' : 'var(--text-tertiary)' }} />
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    AI Judge Evaluation
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                    Evaluasi mandiri trace & bukti di akhir eksekusi
-                  </div>
-                </div>
+          {/* Model List */}
+          {providerKeys.length === 0 ? (
+            <div className="blank">
+              <div className="blank-icon">
+                <Search size={18} />
               </div>
+              <strong>No models found</strong>
+              <p>Try searching with another model name or provider.</p>
+            </div>
+          ) : (
+            providerKeys.map((provider) => {
+              const pModels = groupedModels[provider];
+              const providerLabel = PROVIDER_NAMES[provider] || provider.toUpperCase();
+              return (
+                <div key={provider}>
+                  <div className="model-group-title">{providerLabel}</div>
+                  {pModels.map((m) => {
+                    const isSelected = selectedModelId === m.id;
+                    const shortLogo = PROVIDER_SHORTS[m.provider] || m.provider.slice(0, 3).toUpperCase();
+                    const isFast = m.name.toLowerCase().includes('flash') || m.name.toLowerCase().includes('mini');
 
-              {/* Custom Toggle Switch */}
-              <div
-                onClick={handleToggleJudge}
-                style={{
-                  width: '36px',
-                  height: '20px',
-                  borderRadius: '10px',
-                  background: judgeEnabled ? 'var(--accent)' : 'var(--bg-subtle)',
-                  border: `1px solid ${judgeEnabled ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                  position: 'relative',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s ease, border-color 0.2s ease',
-                  flexShrink: 0,
-                }}
-                title={judgeEnabled ? 'Nonaktifkan AI Judge' : 'Aktifkan AI Judge'}
-              >
-                <div
-                  style={{
-                    width: '14px',
-                    height: '14px',
-                    borderRadius: '50%',
-                    background: '#ffffff',
-                    position: 'absolute',
-                    top: '2px',
-                    left: judgeEnabled ? '18px' : '2px',
-                    transition: 'left 0.2s ease',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                  }}
-                />
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={`model-card ${isSelected ? 'selected' : ''}`}
+                        onClick={() => handleSelectModel(m.id)}
+                      >
+                        <div className="model-logo">{shortLogo}</div>
+                        <div className="model-meta">
+                          <div className="model-title">
+                            <span>{m.name}</span>
+                            <span className="status success">Available</span>
+                          </div>
+                          <div className="model-id">{m.id} · {providerLabel}</div>
+                          <div className="capabilities">
+                            <span className="pill">Vision</span>
+                            <span className="pill">CDP Tooling</span>
+                            <span className="pill">{isFast ? 'Fast' : 'High Reasoning'}</span>
+                            {m.rpm && <span className="pill">RPM {m.rpm}</span>}
+                            {m.tpm && <span className="pill">TPM {m.tpm}</span>}
+                            {m.rpd && <span className="pill">RPD {m.rpd}</span>}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <span className="model-check">
+                            <CheckCircle size={15} />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })
+          )}
+
+          {/* AI Judge Evaluation Section */}
+          <div style={{ marginTop: '18px', borderTop: '1px solid var(--line)', paddingTop: '14px' }}>
+            <div className="model-group-title">AI JUDGE EVALUATION (OPTIONAL)</div>
+            <div
+              style={{
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid var(--line)',
+                background: 'var(--panel)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Scale size={13} style={{ color: 'var(--accent)' }} />
+                  <strong style={{ fontSize: '11.5px', color: 'var(--ink)' }}>
+                    Independent AI Judge Grading
+                  </strong>
+                </div>
+                <span style={{ fontSize: '10px', color: 'var(--muted)', display: 'block', marginTop: '3px', lineHeight: 1.45 }}>
+                  Run a secondary LLM to independently grade action execution validity, preventing hallucinated success.
+                </span>
               </div>
+              <button
+                type="button"
+                className={`toggle ${judgeEnabled ? 'active' : ''}`}
+                onClick={handleToggleJudge}
+                style={{ background: judgeEnabled ? 'var(--accent)' : undefined }}
+                title="Toggle AI Judge"
+              >
+                <span style={{ transform: judgeEnabled ? 'translateX(15px)' : 'none' }} />
+              </button>
             </div>
 
-            {/* When Judge is Enabled: Selector & Notes */}
             {judgeEnabled && (
-              <div style={{
-                marginTop: '4px',
-                paddingTop: '8px',
-                borderTop: '1px solid var(--border-subtle)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-              }}>
-                <label style={{ fontSize: '10.5px', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                  Model AI Judge (Evaluator):
-                </label>
+              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>Judge Model:</span>
                 <select
+                  className="select"
                   value={judgeModelId}
                   onChange={handleChangeJudgeModel}
-                  style={{
-                    background: 'var(--bg-base)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '6px 8px',
-                    fontSize: '11px',
-                    outline: 'none',
-                    cursor: 'pointer',
-                  }}
+                  style={{ fontSize: '11px', padding: '6px 10px' }}
                 >
-                  <option value="auto">Sama dengan model utama (Otomatis)</option>
+                  <option value="auto">Auto (Match Primary Model)</option>
                   {models.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name} ({m.provider})
                     </option>
                   ))}
                 </select>
-
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '5px',
-                  fontSize: '9.5px',
-                  color: 'var(--text-tertiary)',
-                  background: 'var(--bg-base)',
-                  padding: '5px 7px',
-                  borderRadius: 'var(--radius-sm)',
-                  lineHeight: '1.3',
-                }}>
-                  <Sparkles size={11} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
-                  <span>
-                    Judge akan memverifikasi hasil browser, DOM mutasi, dan screenshot terhadap tujuan pengguna sebelum sesi ditutup.
-                  </span>
-                </div>
               </div>
             )}
           </div>
+
+          {/* Callout matching prototype */}
+          <div className="callout" style={{ marginTop: '14px' }}>
+            <AlertTriangle size={15} />
+            <span>
+              Switching models updates local execution routing. Offline local models (Ollama) and cloud models (Gemini, OpenAI, Claude) operate seamlessly with verified CDP tool calls.
+            </span>
+          </div>
         </div>
 
-        {/* Modal Footer */}
-        <div className="modal-footer">
-          <button className="btn-primary" onClick={onClose} style={{ minWidth: '80px' }}>
-            Selesai
-          </button>
+        {/* Foot */}
+        <div className="modal-foot">
+          <span className="muted tiny">Supports Google Gemini, OpenAI, Claude, and Local Ollama.</span>
+          <div className="modal-foot-right">
+            <button type="button" className="btn" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
