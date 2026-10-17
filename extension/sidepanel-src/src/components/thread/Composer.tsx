@@ -269,10 +269,6 @@ export const Composer: React.FC<ComposerProps> = ({
           <span>
             <span className="kbd">↵</span> to send · <span className="kbd">Shift ↵</span> new line
           </span>
-          <span>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8b9a7d', display: 'inline-block' }} />
-            Direct CDP &amp; Browser-Use
-          </span>
         </div>
       </div>
     </div>

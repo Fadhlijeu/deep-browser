@@ -522,24 +522,83 @@ export class SidepanelStateManager {
     }
   }
 
-  public toggleIndexLabeling(enabled?: boolean) {
+  public async toggleIndexLabeling(enabled?: boolean) {
     const nextVal = enabled !== undefined ? enabled : !this.state.indexLabelingEnabled;
     this.state.indexLabelingEnabled = nextVal;
     if (this.activeAgent?.browserSession?.setHighlightsEnabled) {
       this.activeAgent.browserSession.setHighlightsEnabled(nextVal);
     }
-    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting) {
-      chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]: any[]) => {
-        if (tab?.id && !nextVal) {
-          chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: () => {
-              const overlay = document.getElementById('__deep_browser_highlight_overlay__');
-              if (overlay) overlay.remove();
-            },
-          }).catch(() => {});
+    if (typeof chrome !== 'undefined' && chrome.scripting) {
+      try {
+        const tab = await this.getTargetActiveTab();
+        if (tab?.id && !tab.url?.startsWith('chrome://') && !tab.url?.startsWith('edge://') && !tab.url?.startsWith('about:') && !tab.url?.startsWith('chrome-extension://')) {
+          if (!nextVal) {
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: () => {
+                const overlay = document.getElementById('__deep_browser_highlight_overlay__');
+                if (overlay) overlay.remove();
+                if ((window as any).__deep_browser_cleanup_overlay) {
+                  (window as any).__deep_browser_cleanup_overlay();
+                }
+              },
+            }).catch(() => {});
+          } else {
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: () => {
+                const OVERLAY_ID = '__deep_browser_highlight_overlay__';
+                if ((window as any).__deep_browser_cleanup_overlay) {
+                  (window as any).__deep_browser_cleanup_overlay();
+                }
+
+                function renderHighlights() {
+                  let existing = document.getElementById(OVERLAY_ID);
+                  if (existing) existing.remove();
+
+                  const container = document.createElement('div');
+                  container.id = OVERLAY_ID;
+                  container.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483640;overflow:hidden;';
+
+                  const candidates = Array.from(document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [tabindex]:not([tabindex="-1"])'));
+                  let idx = 1;
+                  candidates.slice(0, 100).forEach((el) => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > window.innerHeight) return;
+                    const style = window.getComputedStyle(el);
+                    if (style.visibility === 'hidden' || style.display === 'none' || parseFloat(style.opacity) < 0.1) return;
+
+                    const tag = el.tagName.toLowerCase();
+                    const color = tag === 'button' ? '#ef4444' : tag === 'input' ? '#06b6d4' : tag === 'a' ? '#10b981' : '#8b5cf6';
+
+                    const box = document.createElement('div');
+                    box.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;border:1.5px solid ${color};border-radius:3px;pointer-events:none;box-sizing:border-box;z-index:2147483645;`;
+                    container.appendChild(box);
+
+                    const badge = document.createElement('div');
+                    badge.textContent = String(idx++);
+                    badge.style.cssText = `position:fixed;left:${Math.max(0, rect.left - 2)}px;top:${Math.max(0, rect.top - 14)}px;background:${color};color:#ffffff;font-family:monospace;font-size:10px;font-weight:700;line-height:1;padding:2px 4px;border-radius:3px;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,0.35);z-index:2147483646;`;
+                    container.appendChild(badge);
+                  });
+
+                  (document.body || document.documentElement).appendChild(container);
+                }
+
+                renderHighlights();
+                const onScrollOrResize = () => requestAnimationFrame(renderHighlights);
+                window.addEventListener('scroll', onScrollOrResize, { passive: true });
+                window.addEventListener('resize', onScrollOrResize, { passive: true });
+                (window as any).__deep_browser_cleanup_overlay = () => {
+                  window.removeEventListener('scroll', onScrollOrResize);
+                  window.removeEventListener('resize', onScrollOrResize);
+                  const el = document.getElementById(OVERLAY_ID);
+                  if (el) el.remove();
+                };
+              },
+            }).catch(() => {});
+          }
         }
-      }).catch(() => {});
+      } catch (_) {}
     }
     this.notify();
     this.saveStorage();
@@ -1664,7 +1723,19 @@ export class SidepanelStateManager {
       }
     }
 
-    // 2. Observations & Page Perception
+    // 1b. Show Narrative emission (visible progress info directly for the user)
+    if (type === 'NARRATIVE' || type === 'SHOW') {
+      const narrativeText = payload.text || evt.message || '';
+      if (narrativeText) {
+        if (!lastMsg.activities) lastMsg.activities = [];
+        lastMsg.activities.push({
+          id: 'act_narr_' + Date.now() + Math.random().toString(36).slice(2, 5),
+          type: 'narrative',
+          text: narrativeText,
+          timestamp: Date.now(),
+        });
+      }
+    }
     if (type === 'OBSERVATION') {
       this.state.stepCount++;
       const step: ToolStep = {

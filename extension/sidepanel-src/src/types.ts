@@ -45,10 +45,11 @@ export interface HitlInteraction {
 
 export interface ActivityItem {
   id: string;
-  type: 'step' | 'reasoning';
+  type: 'step' | 'reasoning' | 'narrative';
   timestamp: number;
   step?: ToolStep;
   thought?: string;
+  text?: string;
 }
 
 export interface StagedFile {

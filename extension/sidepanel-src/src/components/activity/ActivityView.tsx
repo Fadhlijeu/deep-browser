@@ -195,57 +195,6 @@ export const ActivityView: React.FC<ActivityViewProps> = ({
               </div>
             )}
           </section>
-
-          <section>
-            <div className="surface">
-              <div className="surface-head">
-                <div>
-                  <div className="surface-title">Execution lifecycle</div>
-                  <div className="surface-note">Deep-Browser autonomous pipeline</div>
-                </div>
-                <span className="pill">Active</span>
-              </div>
-              <div style={{ padding: '17px' }}>
-                <div className="timeline">
-                  <div className="timeline-item">
-                    <div className="timeline-dot success" />
-                    <div>
-                      <div className="timeline-label">Task dispatched</div>
-                      <div className="timeline-desc">User prompt received and decomposed by LLM client.</div>
-                    </div>
-                  </div>
-                  <div className="timeline-item">
-                    <div className="timeline-dot success" />
-                    <div>
-                      <div className="timeline-label">CDP DOM Tree Synthesized</div>
-                      <div className="timeline-desc">Calculates clickable bounding boxes &amp; index markers.</div>
-                    </div>
-                  </div>
-                  <div className="timeline-item">
-                    <div className="timeline-dot running" />
-                    <div>
-                      <div className="timeline-label">Verified Action Execution</div>
-                      <div className="timeline-desc">Actions dispatched with mutation evidence check.</div>
-                    </div>
-                  </div>
-                  <div className="timeline-item">
-                    <div className="timeline-dot" />
-                    <div>
-                      <div className="timeline-label">State Complete &amp; Judge</div>
-                      <div className="timeline-desc">Final output returned with ground-truth validation.</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="callout" style={{ marginTop: '12px' }}>
-              <AlertTriangle size={15} />
-              <span>
-                <strong>Outcome unknown is never assumed success.</strong> Deep-Browser checks real DOM mutation evidence before marking any action as succeeded.
-              </span>
-            </div>
-          </section>
         </div>
       )}
 

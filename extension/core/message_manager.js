@@ -228,7 +228,8 @@ ${toolsDoc}
 You MUST always output a SINGLE valid JSON object with the following schema:
 \`\`\`json
 {
-  "thinking": "Deep step-by-step reasoning: 1. Current state analysis. 2. Target element selection and why. 3. Expected outcome.",
+  "message": "Optional user-facing visible narrative/note informing user what you are doing (SHOW). E.g. 'Coba saya akan olah terlebih dahulu...', 'Membuka portal resmi...', etc.",
+  "thinking": "Deep internal reasoning, state analysis, and next action plan (UNSHOW).",
   "plan_update": ["1. Optional roadmap", "2. List of steps"],
   "current_plan_item": 0,
   "action_name": "<action name, e.g. click_element | input_text | navigate | scroll_page | highlight_sections | ask_user | done>",

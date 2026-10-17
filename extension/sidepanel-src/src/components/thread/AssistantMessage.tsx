@@ -9,9 +9,19 @@ import {
   BookmarkPlus,
   CheckCheck,
   RefreshCw,
-  Activity
+  Activity,
+  Brain,
+  ChevronRight,
+  Compass,
+  Search,
+  MousePointer,
+  Edit3,
+  FileText,
+  ArrowDown,
+  Eye,
+  Terminal,
 } from 'lucide-react';
-import { ChatMessage } from '../../types';
+import { ChatMessage, ToolStep, ActivityItem } from '../../types';
 import { HitlApprovalCard } from './HitlApprovalCard';
 import { JudgeVerdictCard } from './JudgeVerdictCard';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -25,6 +35,72 @@ interface AssistantMessageProps {
   onToggleInspector?: () => void;
 }
 
+// 1. Tool Call Eventlog Item in Chat Stream
+const ToolCallItem: React.FC<{ step: ToolStep }> = ({ step }) => {
+  const [open, setOpen] = useState(false);
+
+  const getToolIcon = (name: string, iconStr?: string) => {
+    const n = (name || iconStr || '').toLowerCase();
+    if (n.includes('nav') || n.includes('buka') || n.includes('url')) return <Compass size={12} />;
+    if (n.includes('search') || n.includes('cari')) return <Search size={12} />;
+    if (n.includes('click') || n.includes('klik') || n.includes('touch')) return <MousePointer size={12} />;
+    if (n.includes('type') || n.includes('input') || n.includes('ketik')) return <Edit3 size={12} />;
+    if (n.includes('extract') || n.includes('ekstrak') || n.includes('pdf')) return <FileText size={12} />;
+    if (n.includes('scroll')) return <ArrowDown size={12} />;
+    if (n.includes('obs') || n.includes('baca') || n.includes('lihat')) return <Eye size={12} />;
+    return <Terminal size={12} />;
+  };
+
+  const hasDetail = Boolean(step.args || step.result || step.error || step.verification);
+
+  return (
+    <div className="chat-tool-eventlog">
+      <div className="chat-tool-head" onClick={() => hasDetail && setOpen(!open)}>
+        <span className="chat-tool-icon">{getToolIcon(step.name, step.icon)}</span>
+        <span className="chat-tool-name" title={step.name}>{step.name}</span>
+        {step.duration && <span className="chat-tool-duration">{step.duration}</span>}
+        <span className={`status ${step.status === 'succeeded' ? 'success' : step.status === 'failed' ? 'failed' : 'running'}`}>
+          {step.status === 'succeeded' ? 'succeeded' : step.status === 'failed' ? 'failed' : 'running'}
+        </span>
+        {hasDetail && (
+          <ChevronRight size={11} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--muted)' }} />
+        )}
+      </div>
+      {open && hasDetail && (
+        <pre className="chat-tool-detail mono">
+          {JSON.stringify(step.args || step.result || { error: step.error, verification: step.verification }, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+};
+
+// 2. AI Reasoning Eventlog Block (Unshow)
+const ReasoningBlock: React.FC<{ thought: string; isStreaming?: boolean }> = ({ thought, isStreaming }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="chat-reasoning-eventlog">
+      <div className="chat-reasoning-head" onClick={() => setOpen(!open)}>
+        <div className="chat-reasoning-title">
+          <Brain size={13} color="var(--accent)" />
+          <span>AI Reasoning</span>
+          {isStreaming && <span className="status running" style={{ padding: '1px 5px', fontSize: '8px' }}>thinking...</span>}
+        </div>
+        <span className="chat-reasoning-sub">
+          {open ? 'Sembunyikan' : 'Lihat pemikiran'}
+        </span>
+        <ChevronRight size={12} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', color: 'var(--muted)' }} />
+      </div>
+      {open && (
+        <div className="chat-reasoning-body">
+          <MarkdownRenderer content={thought} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   message,
   isCurrentMessage = false,
@@ -34,11 +110,11 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 }) => {
   const isRunning = isCurrentMessage && runState === 'running';
 
-  // Determine text to show: real text > reasoning thought > fallback
-  const rawContent = message.text || message.thought || (isRunning ? 'Memproses navigasi dan automasi browser...' : 'Halo! Ada yang bisa saya bantu dengan browser Anda hari ini?');
+  // Fallback text if there are no activities and message text is empty
+  const rawFallback = message.text || (isRunning ? 'Memproses navigasi dan automasi browser...' : 'Halo! Ada yang bisa saya bantu dengan browser Anda hari ini?');
 
   const { displayedText, isTyping } = useTypewriter(
-    rawContent,
+    rawFallback,
     {
       isStreaming: isRunning,
       immediate: !isCurrentMessage,
@@ -49,7 +125,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const [skillSaved, setSkillSaved] = useState(false);
 
   const copyText = () => {
-    navigator.clipboard?.writeText?.(message.text || rawContent);
+    navigator.clipboard?.writeText?.(message.text || rawFallback);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -59,9 +135,9 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
       const skillMgr = (window as any).SkillManager;
       if (skillMgr && skillMgr.recordRunToSkill) {
         await skillMgr.recordRunToSkill({
-          title: (message.text || rawContent).slice(0, 32) || 'Workflow Skill',
+          title: (message.text || rawFallback).slice(0, 32) || 'Workflow Skill',
           description: `Extracted workflow from run ${message.id}`,
-          task: message.text || rawContent,
+          task: message.text || rawFallback,
           history: message.steps || [],
         });
         setSkillSaved(true);
@@ -73,7 +149,8 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   };
 
   const steps = message.steps || [];
-  const activities = message.activities || [];
+  const activities: ActivityItem[] = message.activities || [];
+  const hasActivities = activities.length > 0;
   const totalStepsCount = steps.length || activities.filter((a) => a.type === 'step').length;
   const timeStr = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -93,7 +170,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
           {message.modelName && <span className="pill">{message.modelName}</span>}
         </div>
 
-        {/* Message Content: Clean borderless canvas text matching prototype */}
+        {/* Message Content: Clean stream alternating Show, Unshow, Toolcalls, and UI Widgets */}
         <div className="message-content">
           {message.isError && (
             <div
@@ -106,23 +183,65 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
               }}
             >
               <AlertCircle size={14} />
-              <span>{message.error || message.text || 'Gagal memproses permintaan.'}</span>
+              <span>{message.text || 'Gagal memproses permintaan.'}</span>
             </div>
           )}
 
-          {/* HITL Review Inline Card */}
+          {/* 1. Dynamic Activities Stream (Show narrative, Unshow reasoning, Tool calls eventlog) */}
+          {hasActivities ? (
+            activities.map((act) => {
+              if (act.type === 'narrative' && act.text) {
+                return (
+                  <div key={act.id} className="chat-show-narrative">
+                    <MarkdownRenderer content={act.text} />
+                  </div>
+                );
+              }
+              if (act.type === 'reasoning' && act.thought) {
+                return (
+                  <ReasoningBlock key={act.id} thought={act.thought} isStreaming={isRunning} />
+                );
+              }
+              if (act.type === 'step' && act.step) {
+                return (
+                  <ToolCallItem key={act.id} step={act.step} />
+                );
+              }
+              return null;
+            })
+          ) : (
+            <>
+              {/* Fallback for legacy messages: reasoning block if thought exists */}
+              {message.thought && (
+                <ReasoningBlock thought={message.thought} isStreaming={isRunning} />
+              )}
+              {/* Fallback for legacy messages: tool calls if steps exist */}
+              {steps.map((st) => (
+                <ToolCallItem key={st.id} step={st} />
+              ))}
+            </>
+          )}
+
+          {/* 2. Interactive UI Widget (HITL: AskForm, choices, approvals) */}
           {message.hitl && <HitlApprovalCard hitl={message.hitl} />}
 
-          {/* AI Judge Evaluation Card */}
+          {/* 3. AI Judge Evaluation Card (if audited) */}
           {message.judgeVerdict && <JudgeVerdictCard verdict={message.judgeVerdict} />}
 
-          {/* Pure Markdown Body */}
-          <div style={{ marginTop: '2px' }}>
-            <MarkdownRenderer content={displayedText} />
-            {isTyping && <span className="typewriter-cursor" />}
-          </div>
+          {/* 4. Final Text / Response (Show) */}
+          {message.text ? (
+            <div className="chat-show-narrative" style={{ marginTop: hasActivities ? '8px' : '2px' }}>
+              <MarkdownRenderer content={message.text} />
+              {isTyping && <span className="typewriter-cursor" />}
+            </div>
+          ) : !hasActivities ? (
+            <div className="chat-show-narrative" style={{ marginTop: '2px' }}>
+              <MarkdownRenderer content={displayedText} />
+              {isTyping && <span className="typewriter-cursor" />}
+            </div>
+          ) : null}
 
-          {/* Video Session Playback Card */}
+          {/* 5. Video Session Playback Card */}
           {message.recordedVideo && (
             <div className="info-card" style={{ marginTop: '10px', padding: '10px' }}>
               <div

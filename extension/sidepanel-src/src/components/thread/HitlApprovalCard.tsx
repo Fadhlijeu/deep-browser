@@ -1,4 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  HelpCircle,
+  ListChecks,
+  ShieldAlert,
+  Edit3,
+  Hash,
+  Hourglass,
+  Check,
+  X,
+  Send,
+  ChevronRight,
+} from 'lucide-react';
 import { HitlInteraction } from '../../types';
 import { sidepanelStore } from '../../state/sidepanelStore';
 
@@ -9,16 +21,11 @@ interface HitlApprovalCardProps {
 export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
   const type = hitl.type || (hitl.options && hitl.options.length > 0 ? 'choice' : 'approval');
 
-  // Text input state
   const [textVal, setTextVal] = useState<string>(String(hitl.defaultValue || ''));
-  // Number input state
   const [numVal, setNumVal] = useState<number>(typeof hitl.defaultValue === 'number' ? hitl.defaultValue : 1);
-  // Multi-choice state
   const [selectedChoices, setSelectedChoices] = useState<string[]>([]);
-  // Edit mode for approval
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editFeedback, setEditFeedback] = useState<string>('');
-
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -83,70 +90,16 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
     sidepanelStore.respondHitl(hitl.id, true);
   };
 
-  // Keyboard shortcut listener
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isInputFocused = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
-
-      if (e.key === 'Escape') {
-        if (type === 'confirm') {
-          e.preventDefault();
-          sidepanelStore.respondHitl(hitl.id, false);
-        } else if (isEditing) {
-          setIsEditing(false);
-        }
-        return;
-      }
-
-      if (isInputFocused) return;
-
-      if (type === 'confirm') {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          handleApprove();
-        }
-      } else if (type === 'approval') {
-        if (e.key.toLowerCase() === 'a' || e.key === 'Enter') {
-          e.preventDefault();
-          handleApprove();
-        } else if (e.key.toLowerCase() === 'r') {
-          e.preventDefault();
-          handleReject();
-        } else if (e.key.toLowerCase() === 'e') {
-          e.preventDefault();
-          setIsEditing(true);
-        }
-      } else if (type === 'choice' && hitl.options) {
-        const num = parseInt(e.key, 10);
-        if (!isNaN(num) && num >= 1 && num <= hitl.options.length) {
-          const opt = hitl.options[num - 1];
-          if (opt) {
-            e.preventDefault();
-            handleChoice(opt.id);
-          }
-        }
-      } else if (type === 'waiting') {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          handleWaitingResume();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hitl, type, isEditing, editFeedback, textVal, numVal]);
-
   const getHeaderIcon = () => {
     switch (type) {
-      case 'choice': return 'help';
-      case 'multi_choice': return 'checklist';
-      case 'confirm': return 'help_center';
-      case 'text_input': return 'edit_note';
-      case 'number_input': return 'pin';
-      case 'waiting': return 'hourglass_top';
+      case 'choice': return <HelpCircle size={15} />;
+      case 'multi_choice': return <ListChecks size={15} />;
+      case 'confirm': return <HelpCircle size={15} />;
+      case 'text_input': return <Edit3 size={15} />;
+      case 'number_input': return <Hash size={15} />;
+      case 'waiting': return <Hourglass size={15} />;
       case 'approval':
-      default: return 'shield';
+      default: return <ShieldAlert size={15} />;
     }
   };
 
@@ -159,7 +112,7 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
       case 'number_input': return 'Masukkan Nilai Numerik';
       case 'waiting': return 'Menunggu Tindakan Manual';
       case 'approval':
-      default: return 'Human-in-the-Loop Review';
+      default: return 'Review Konfirmasi Diperlukan';
     }
   };
 
@@ -168,9 +121,9 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
       {/* Header */}
       <div className="hitl-header">
         <div className="hitl-header-badge">
-          <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{getHeaderIcon()}</span>
+          {getHeaderIcon()}
           <span>{getHeaderTitle()}</span>
-          {type === 'waiting' && <span className="hitl-pulse-dot" />}
+          {type === 'waiting' && <span className="status running" style={{ padding: '1px 5px', fontSize: '8px' }}>Menunggu</span>}
         </div>
         <span className="hitl-type-tag">{type}</span>
       </div>
@@ -188,16 +141,17 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
           {hitl.options.map((opt, idx) => (
             <button
               key={opt.id}
+              type="button"
               className="hitl-choice-btn"
               onClick={() => handleChoice(opt.id)}
-              title={`Tekan tombol ${idx + 1}`}
+              disabled={isSubmitting}
             >
               <span className="hitl-choice-key">{idx + 1}</span>
               <div className="hitl-choice-content">
                 <div className="hitl-choice-label">{opt.label}</div>
                 {opt.description && <div className="hitl-choice-sub">{opt.description}</div>}
               </div>
-              <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--text-tertiary)' }}>chevron_right</span>
+              <ChevronRight size={14} color="var(--muted)" />
             </button>
           ))}
         </div>
@@ -209,25 +163,39 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
           {hitl.options.map((opt) => {
             const checked = selectedChoices.includes(opt.id);
             return (
-              <label key={opt.id} className="hitl-checkbox-row">
+              <label
+                key={opt.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 10px',
+                  borderRadius: '6px',
+                  background: 'var(--panel)',
+                  border: '1px solid var(--line)',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={() => toggleMultiChoice(opt.id)}
                   style={{ accentColor: 'var(--accent)' }}
                 />
-                <span style={{ fontWeight: checked ? 600 : 400 }}>{opt.label}</span>
-                {opt.description && <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{opt.description}</span>}
+                <span style={{ fontWeight: checked ? 650 : 400, color: 'var(--ink)' }}>{opt.label}</span>
+                {opt.description && <span style={{ fontSize: '10px', color: 'var(--muted)', marginLeft: 'auto' }}>{opt.description}</span>}
               </label>
             );
           })}
-          <div className="hitl-actions" style={{ marginTop: '6px' }}>
+          <div className="hitl-actions" style={{ marginTop: '8px' }}>
             <button
-              className="btn-primary"
+              type="button"
+              className="btn primary small"
               onClick={handleMultiChoiceSubmit}
-              disabled={selectedChoices.length === 0}
+              disabled={selectedChoices.length === 0 || isSubmitting}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>check</span>
+              <Check size={12} />
               Lanjutkan ({selectedChoices.length} Dipilih)
             </button>
           </div>
@@ -237,53 +205,72 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
       {/* 3. Confirm */}
       {type === 'confirm' && (
         <div className="hitl-actions">
-          <button className="btn-primary" onClick={handleApprove}>
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>check</span>
-            Ya, Lanjutkan (Enter)
+          <button type="button" className="btn primary small" onClick={handleApprove} disabled={isSubmitting}>
+            <Check size={12} />
+            Ya, Lanjutkan
           </button>
-          <button className="btn-ghost" onClick={() => sidepanelStore.respondHitl(hitl.id, false)} style={{ color: 'var(--status-error)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>close</span>
-            Batal (Esc)
+          <button type="button" className="btn danger small" onClick={() => sidepanelStore.respondHitl(hitl.id, false)} disabled={isSubmitting}>
+            <X size={12} />
+            Batal
           </button>
         </div>
       )}
 
       {/* 4. Text Input */}
       {type === 'text_input' && (
-        <div>
-          <div className="hitl-text-input-wrap">
-            <input
-              ref={inputRef}
-              type="text"
-              className="hitl-input"
-              value={textVal}
-              onChange={(e) => setTextVal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleTextSubmit();
-                }
-              }}
-              placeholder={hitl.description || 'Ketik respon atau masukkan data di sini...'}
-            />
-            <button className="btn-primary" onClick={handleTextSubmit} disabled={!textVal.trim()}>
-              <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>send</span>
-              Kirim
-            </button>
-          </div>
+        <div className="hitl-text-input-wrap">
+          <input
+            ref={inputRef}
+            type="text"
+            className="hitl-input"
+            value={textVal}
+            onChange={(e) => setTextVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleTextSubmit();
+              }
+            }}
+            placeholder={hitl.description || 'Ketik respon atau masukkan data di sini...'}
+            disabled={isSubmitting}
+          />
+          <button
+            type="button"
+            className="btn primary"
+            onClick={handleTextSubmit}
+            disabled={!textVal.trim() || isSubmitting}
+            style={{ padding: '8px 14px' }}
+          >
+            <Send size={12} />
+            <span>Kirim</span>
+          </button>
         </div>
       )}
 
       {/* 5. Number Input */}
       {type === 'number_input' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="hitl-number-box">
-            <button className="hitl-num-btn" onClick={() => setNumVal((v) => Math.max(0, v - 1))}>-</button>
-            <span className="hitl-num-val">{numVal}</span>
-            <button className="hitl-num-btn" onClick={() => setNumVal((v) => v + 1)}>+</button>
+          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line)', borderRadius: '6px', background: 'var(--bg)', overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setNumVal((v) => Math.max(0, v - 1))}
+              style={{ border: 0, background: 'transparent', padding: '6px 10px', cursor: 'pointer', color: 'var(--ink)' }}
+            >
+              -
+            </button>
+            <span style={{ padding: '0 8px', fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: 'var(--ink)' }}>
+              {numVal}
+            </span>
+            <button
+              type="button"
+              onClick={() => setNumVal((v) => v + 1)}
+              style={{ border: 0, background: 'transparent', padding: '6px 10px', cursor: 'pointer', color: 'var(--ink)' }}
+            >
+              +
+            </button>
           </div>
-          <button className="btn-primary" onClick={handleNumberSubmit}>
-            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>check</span>
+          <button type="button" className="btn primary small" onClick={handleNumberSubmit} disabled={isSubmitting}>
+            <Check size={12} />
             Lanjutkan
           </button>
         </div>
@@ -293,63 +280,70 @@ export const HitlApprovalCard: React.FC<HitlApprovalCardProps> = ({ hitl }) => {
       {type === 'approval' && (
         <div>
           {hitl.action_name && (
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-              Aksi yang Diusulkan: <strong style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{hitl.action_name}</strong>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
+              Aksi yang Diusulkan: <strong style={{ color: 'var(--accent)', fontFamily: 'var(--mono)' }}>{hitl.action_name}</strong>
             </div>
           )}
+
           {hitl.parameters && (
-            <pre className="hitl-code-preview">
+            <pre style={{
+              background: 'var(--panel)',
+              border: '1px solid var(--line)',
+              borderRadius: '6px',
+              padding: '8px 10px',
+              fontSize: '10px',
+              fontFamily: 'var(--mono)',
+              color: 'var(--ink)',
+              maxHeight: '120px',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              margin: '0 0 10px',
+            }}>
               {JSON.stringify(hitl.parameters, null, 2)}
             </pre>
           )}
 
           {isEditing ? (
-            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ marginTop: '8px' }}>
               <input
                 type="text"
-                className="hitl-input"
-                placeholder="Berikan instruksi modifikasi / perubahan..."
+                className="input"
                 value={editFeedback}
                 onChange={(e) => setEditFeedback(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleEditSubmit();
-                }}
-                autoFocus
+                placeholder="Tulis instruksi modifikasi atau koreksi..."
+                style={{ fontSize: '11px', marginBottom: '8px' }}
               />
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button className="btn-primary" onClick={handleEditSubmit}>
-                  Kirim Perubahan
+              <div className="hitl-actions">
+                <button type="button" className="btn primary small" onClick={handleEditSubmit} disabled={isSubmitting}>
+                  <Check size={12} /> Kirim Koreksi
                 </button>
-                <button className="btn-ghost" onClick={() => setIsEditing(false)}>
+                <button type="button" className="btn ghost small" onClick={() => setIsEditing(false)}>
                   Batal
                 </button>
               </div>
             </div>
           ) : (
             <div className="hitl-actions">
-              <button className="btn-primary" onClick={handleApprove} title="Shortcut: A atau Enter">
-                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>check</span>
-                Setujui (A)
+              <button type="button" className="btn primary small" onClick={handleApprove} disabled={isSubmitting}>
+                <Check size={12} /> Setujui &amp; Jalankan
               </button>
-              <button className="btn-ghost" onClick={handleReject} style={{ color: 'var(--status-error)' }} title="Shortcut: R">
-                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>close</span>
-                Tolak (R)
+              <button type="button" className="btn small" onClick={() => setIsEditing(true)} disabled={isSubmitting}>
+                <Edit3 size={12} /> Edit Parameter
               </button>
-              <button className="btn-secondary" onClick={() => setIsEditing(true)} title="Shortcut: E">
-                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>edit</span>
-                Ubah (E)
+              <button type="button" className="btn danger small" onClick={handleReject} disabled={isSubmitting}>
+                <X size={12} /> Tolak Aksi
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 7. Waiting (Manual CAPTCHA / Action) */}
+      {/* 7. Waiting Manual Action */}
       {type === 'waiting' && (
         <div className="hitl-actions">
-          <button className="btn-primary" onClick={handleWaitingResume} style={{ background: 'var(--status-warning)', borderColor: 'var(--status-warning)', color: '#000' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>play_arrow</span>
-            Saya Sudah Selesai, Lanjutkan (Enter)
+          <button type="button" className="btn primary small" onClick={handleWaitingResume} disabled={isSubmitting}>
+            <Check size={12} />
+            Saya Telah Selesai, Lanjutkan
           </button>
         </div>
       )}

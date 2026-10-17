@@ -254,13 +254,6 @@ export const ToolsView: React.FC<ToolsViewProps> = ({ onUsePrompt }) => {
               </div>
             ))}
           </div>
-
-          <div className="callout" style={{ marginTop: '18px' }}>
-            <ShieldCheck size={15} />
-            <span>
-              All browser actions execute locally in your Edge session via Chrome DevTools Protocol (CDP). No cloud sandbox lock-in.
-            </span>
-          </div>
         </>
       )}
 

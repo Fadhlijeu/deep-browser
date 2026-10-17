@@ -377,7 +377,7 @@
               overlay.appendChild(badge);
             });
 
-            document.body.appendChild(overlay);
+            (document.body || document.documentElement).appendChild(overlay);
           },
           args: [elements.slice(0, 100)], // Limit to first 100 visible elements
         });

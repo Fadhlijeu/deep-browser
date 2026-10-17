@@ -695,6 +695,15 @@
             decision.parameters = this.urlShortener.restoreParams(decision.parameters);
           }
 
+          // Emit visible narrative for user (SHOW)
+          if (decision.message || decision.user_message) {
+            this._emit('NARRATIVE', decision.message || decision.user_message, {
+              text: decision.message || decision.user_message,
+              step: this.step,
+            });
+          }
+
+          // Emit deep AI reasoning (UNSHOW)
           if (decision.thinking) {
             this._emit('REASONING', decision.thinking, {
               step: this.step,
@@ -1034,7 +1043,9 @@
         this.isRunning = false;
         if (this.browserSession) {
           try {
-            await this.browserSession.clearInPageHighlights();
+            if (this.browserSession.highlightsEnabled === false) {
+              await this.browserSession.clearInPageHighlights();
+            }
           } catch (_) {}
         }
       }

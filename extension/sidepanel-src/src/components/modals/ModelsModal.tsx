@@ -228,14 +228,6 @@ export const ModelsModal: React.FC<ModelsModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Callout matching prototype */}
-          <div className="callout" style={{ marginTop: '14px' }}>
-            <AlertTriangle size={15} />
-            <span>
-              Switching models updates local execution routing. Offline local models (Ollama) and cloud models (Gemini, OpenAI, Claude) operate seamlessly with verified CDP tool calls.
-            </span>
-          </div>
         </div>
 
         {/* Foot */}

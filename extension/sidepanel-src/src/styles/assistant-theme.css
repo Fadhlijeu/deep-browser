@@ -2943,3 +2943,293 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   HITL INTERACTIVE UI WIDGET (PAPER THEME)
+   ========================================================================== */
+.hitl-card {
+  margin: 10px 0 14px;
+  padding: 13px 15px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  box-shadow: 0 4px 16px rgba(40, 35, 24, 0.05);
+  animation: fadeIn 0.2s ease;
+}
+
+[data-theme="dark"] .hitl-card {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.hitl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  gap: 8px;
+}
+
+.hitl-header-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.hitl-type-tag {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  padding: 1.5px 5px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.hitl-question {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.5;
+  margin-bottom: 5px;
+}
+
+.hitl-desc {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.hitl-text-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.hitl-input {
+  flex: 1;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  border-radius: 7px;
+  padding: 8px 11px;
+  color: var(--ink);
+  font-size: 11.5px;
+  outline: none;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+
+.hitl-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(184, 78, 53, 0.12);
+}
+
+.hitl-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.hitl-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.hitl-choice-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  transition: all 0.16s;
+  cursor: pointer;
+  width: 100%;
+}
+
+.hitl-choice-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.hitl-choice-key {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.hitl-choice-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.hitl-choice-label {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.hitl-choice-sub {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   CHAT EVENTLOG & THINKING (SHOW / UNSHOW SYSTEM)
+   ========================================================================== */
+/* Tool Calls Eventlog in Chat */
+.chat-tool-eventlog {
+  margin: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper);
+  overflow: hidden;
+  font-size: 11px;
+  transition: border-color 0.16s;
+}
+
+[data-theme="dark"] .chat-tool-eventlog {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.chat-tool-eventlog:hover {
+  border-color: var(--line-strong);
+}
+
+.chat-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-tool-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chat-tool-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10.5px;
+}
+
+.chat-tool-duration {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.chat-tool-detail {
+  padding: 7px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+/* AI Reasoning Eventlog (Unshow) */
+.chat-reasoning-eventlog {
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 7px 7px 0;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .chat-reasoning-eventlog {
+  background: var(--panel);
+  border-color: var(--line);
+  border-left-color: var(--accent);
+}
+
+.chat-reasoning-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-reasoning-head:hover {
+  background: var(--panel);
+}
+
+.chat-reasoning-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-reasoning-sub {
+  font-size: 9px;
+  color: var(--muted);
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.chat-reasoning-body {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  background: var(--panel);
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* Chat Show Narrative */
+.chat-show-narrative {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink);
+}
+

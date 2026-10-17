@@ -12,7 +12,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
       <div className="poster">
         <div className="poster-kicker">
           <span className="poster-dot" />
-          BROWSER INTELLIGENCE / FIELD NOTES 001
+          BROWSER INTELLIGENCE
         </div>
 
         <div className="poster-title">
@@ -22,10 +22,6 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
 
         <div className="poster-foot">
           <p>A considered workspace for conversation, browser action, and human judgment.</p>
-          <div className="poster-stamp">
-            AUTONOMOUS RUNTIME<br />
-            DIRECT CDP · VERIFIED V1.0
-          </div>
         </div>
 
         {/* Poster Abstract Visual Artwork */}

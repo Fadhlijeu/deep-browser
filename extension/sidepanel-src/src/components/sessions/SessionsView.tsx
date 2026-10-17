@@ -217,13 +217,6 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
           </div>
         )}
       </div>
-
-      <div className="callout" style={{ marginTop: '16px' }}>
-        <Pin size={15} />
-        <span>
-          <strong>Local-first persistence.</strong> Sessions are securely stored in your browser extension storage. No external accounts or cloud database required.
-        </span>
-      </div>
     </div>
   );
 };
