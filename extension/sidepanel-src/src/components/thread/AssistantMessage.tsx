@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Copy,
@@ -278,8 +278,8 @@ const ToolStepsGroup: React.FC<{
     return <ToolCallItem step={steps[0]} onViewScreenshot={onViewScreenshot} />;
   }
 
-  // Multi-step collapsible container
-  const [open, setOpen] = useState(false);
+  // Multi-step collapsible container (defaults to open inside Working section)
+  const [open, setOpen] = useState(true);
 
   return (
     <div className="chat-tool-group">
@@ -382,51 +382,139 @@ const ReasoningBlock: React.FC<{
   );
 };
 
+// ─── Unified Working > Collapsible Activity Container ───────────────────────
+const WorkingSection: React.FC<{
+  isRunning: boolean;
+  totalStepsCount?: number;
+  children: React.ReactNode;
+}> = ({ isRunning, totalStepsCount = 0, children }) => {
+  // If running, open by default so user can follow progress; if finished, collapsed by default
+  const [open, setOpen] = useState(isRunning);
+  const [hasUserToggled, setHasUserToggled] = useState(false);
+
+  useEffect(() => {
+    if (!isRunning && !hasUserToggled) {
+      setOpen(false);
+    }
+  }, [isRunning, hasUserToggled]);
+
+  const handleToggle = () => {
+    setHasUserToggled(true);
+    setOpen((prev) => !prev);
+  };
+
+  const actionText = totalStepsCount > 0 ? `(${totalStepsCount} ${totalStepsCount === 1 ? 'aksi' : 'aksi'})` : '';
+
+  return (
+    <div className="chat-working-section">
+      <button
+        type="button"
+        className={`chat-working-trigger ${isRunning ? 'is-running' : ''}`}
+        onClick={handleToggle}
+        aria-expanded={open}
+        title={open ? 'Tutup aktivitas (Working)' : 'Lihat aktivitas (Working)'}
+      >
+        <span className="chat-working-indicator">
+          {isRunning ? (
+            <span className="chat-working-pulse-dot" />
+          ) : (
+            <span className="chat-working-done-dot" />
+          )}
+        </span>
+        <span className="chat-working-title">
+          {isRunning ? 'Working...' : 'Working'}
+        </span>
+        {actionText && !isRunning && (
+          <span className="chat-working-count">{actionText}</span>
+        )}
+        <ChevronRight
+          size={12}
+          className="chat-working-chevron"
+          style={{
+            transform: open ? 'rotate(90deg)' : 'none',
+            transition: 'transform 0.18s ease',
+          }}
+        />
+      </button>
+
+      {open && (
+        <div className="chat-working-body">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Grouping Helper for Activities ──────────────────────────────────────────
-interface ActivityGroup {
-  type: 'narrative' | 'reasoning' | 'tools';
-  narrativeText?: string;
+interface WorkingSubItem {
+  type: 'reasoning' | 'tools';
   thoughtText?: string;
   steps?: ToolStep[];
   id: string;
 }
 
+interface ActivityGroup {
+  type: 'narrative' | 'working';
+  narrativeText?: string;
+  workingItems?: WorkingSubItem[];
+  totalSteps?: number;
+  id: string;
+}
+
 const groupActivities = (activities: ActivityItem[]): ActivityGroup[] => {
   const groups: ActivityGroup[] = [];
+  let currentWorkingItems: WorkingSubItem[] = [];
   let currentToolSteps: ToolStep[] = [];
+  let totalStepsInCurrentWorking = 0;
 
   const flushTools = () => {
     if (currentToolSteps.length > 0) {
-      groups.push({
+      currentWorkingItems.push({
         type: 'tools',
         steps: [...currentToolSteps],
         id: 'grp_tools_' + currentToolSteps[0].id,
       });
+      totalStepsInCurrentWorking += currentToolSteps.length;
       currentToolSteps = [];
+    }
+  };
+
+  const flushWorking = () => {
+    flushTools();
+    if (currentWorkingItems.length > 0) {
+      groups.push({
+        type: 'working',
+        workingItems: [...currentWorkingItems],
+        totalSteps: totalStepsInCurrentWorking,
+        id: 'working_' + currentWorkingItems[0].id,
+      });
+      currentWorkingItems = [];
+      totalStepsInCurrentWorking = 0;
     }
   };
 
   for (const act of activities) {
     if (act.type === 'step' && act.step) {
       currentToolSteps.push(act.step);
-    } else {
+    } else if (act.type === 'reasoning' && act.thought) {
       flushTools();
-      if (act.type === 'narrative' && act.text) {
-        groups.push({
-          type: 'narrative',
-          narrativeText: act.text,
-          id: act.id,
-        });
-      } else if (act.type === 'reasoning' && act.thought) {
-        groups.push({
-          type: 'reasoning',
-          thoughtText: act.thought,
-          id: act.id,
-        });
-      }
+      currentWorkingItems.push({
+        type: 'reasoning',
+        thoughtText: act.thought,
+        id: act.id,
+      });
+    } else if (act.type === 'narrative' && act.text) {
+      flushWorking();
+      groups.push({
+        type: 'narrative',
+        narrativeText: act.text,
+        id: act.id,
+      });
     }
   }
-  flushTools();
+
+  flushWorking();
   return groups;
 };
 
@@ -483,6 +571,8 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const activities: ActivityItem[] = message.activities || [];
   const hasActivities = activities.length > 0;
   const grouped = hasActivities ? groupActivities(activities) : [];
+  const lastWorkingGroupIndex = grouped.map((g) => g.type).lastIndexOf('working');
+  const hasWorkingGroup = lastWorkingGroupIndex !== -1;
   const totalStepsCount = steps.length || activities.filter((a) => a.type === 'step').length;
   const timeStr = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -528,14 +618,9 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
             </div>
           )}
 
-          {/* Top reasoning if present on message and not yet in activities */}
-          {!hasActivities && message.thought && (
-            <ReasoningBlock thought={message.thought} isStreaming={isRunning} />
-          )}
-
-          {/* 1. Dynamic Activities Stream: Grouped tools, reasoning toggles, and show narrative */}
+          {/* 1. Dynamic Activities Stream: Grouped tools & reasoning toggles under Working > */}
           {hasActivities ? (
-            grouped.map((grp) => {
+            grouped.map((grp, grpIdx) => {
               if (grp.type === 'narrative' && grp.narrativeText) {
                 return (
                   <div key={grp.id} className="chat-show-narrative">
@@ -543,49 +628,81 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                   </div>
                 );
               }
-              if (grp.type === 'reasoning' && grp.thoughtText) {
+              if (grp.type === 'working') {
                 return (
-                  <ReasoningBlock
+                  <WorkingSection
                     key={grp.id}
-                    thought={grp.thoughtText}
-                    isStreaming={isRunning}
-                  />
-                );
-              }
-              if (grp.type === 'tools' && grp.steps && grp.steps.length > 0) {
-                return (
-                  <ToolStepsGroup
-                    key={grp.id}
-                    steps={grp.steps}
-                    onViewScreenshot={(url, title) => {
-                      setModalImage(url);
-                      setModalTitle(title);
-                    }}
-                  />
+                    isRunning={isRunning}
+                    totalStepsCount={grp.totalSteps}
+                  >
+                    {grp.workingItems?.map((wItem) => {
+                      if (wItem.type === 'reasoning' && wItem.thoughtText) {
+                        return (
+                          <ReasoningBlock
+                            key={wItem.id}
+                            thought={wItem.thoughtText}
+                            isStreaming={isRunning}
+                          />
+                        );
+                      }
+                      if (wItem.type === 'tools' && wItem.steps && wItem.steps.length > 0) {
+                        return (
+                          <ToolStepsGroup
+                            key={wItem.id}
+                            steps={wItem.steps}
+                            onViewScreenshot={(url, title) => {
+                              setModalImage(url);
+                              setModalTitle(title);
+                            }}
+                          />
+                        );
+                      }
+                      return null;
+                    })}
+                    {/* Include Judge verdict inside the last working section if present */}
+                    {grpIdx === lastWorkingGroupIndex && message.judgeVerdict && (
+                      <JudgeVerdictCard verdict={message.judgeVerdict} />
+                    )}
+                  </WorkingSection>
                 );
               }
               return null;
             })
           ) : (
             <>
-              {/* Fallback for legacy messages with raw steps */}
-              {steps.length > 0 && (
-                <ToolStepsGroup
-                  steps={steps}
-                  onViewScreenshot={(url, title) => {
-                    setModalImage(url);
-                    setModalTitle(title);
-                  }}
-                />
+              {/* Fallback for legacy messages with raw steps / thought / judgeVerdict */}
+              {(steps.length > 0 || message.thought || message.judgeVerdict) && (
+                <WorkingSection
+                  isRunning={isRunning}
+                  totalStepsCount={steps.length}
+                >
+                  {message.thought && (
+                    <ReasoningBlock thought={message.thought} isStreaming={isRunning} />
+                  )}
+                  {steps.length > 0 && (
+                    <ToolStepsGroup
+                      steps={steps}
+                      onViewScreenshot={(url, title) => {
+                        setModalImage(url);
+                        setModalTitle(title);
+                      }}
+                    />
+                  )}
+                  {message.judgeVerdict && <JudgeVerdictCard verdict={message.judgeVerdict} />}
+                </WorkingSection>
               )}
             </>
           )}
 
-          {/* 2. Interactive UI Widget (HITL: AskForm, choices, approvals) */}
-          {message.hitl && <HitlApprovalCard hitl={message.hitl} />}
+          {/* If there were activities but no working group (e.g. only narrative) and there is a judge verdict */}
+          {hasActivities && !hasWorkingGroup && message.judgeVerdict && (
+            <WorkingSection isRunning={false}>
+              <JudgeVerdictCard verdict={message.judgeVerdict} />
+            </WorkingSection>
+          )}
 
-          {/* 3. AI Judge Evaluation Card (if audited) */}
-          {message.judgeVerdict && <JudgeVerdictCard verdict={message.judgeVerdict} />}
+          {/* 2. Interactive UI Widget (HITL: AskForm, choices, approvals) - never collapsed, always accessible */}
+          {message.hitl && <HitlApprovalCard hitl={message.hitl} />}
 
           {/* 4. Final Text / Response (Show) */}
           {message.text ? (

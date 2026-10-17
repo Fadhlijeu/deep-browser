@@ -4328,3 +4328,91 @@ tbody tr:hover {
   .chat-tool-pill .tool-meta { gap: 5px !important; }
   .log-card { padding: 10px 0 !important; }
 }
+
+/* ─── Unified Working > Collapsible Activity Container ─── */
+.chat-working-section {
+  margin: 5px 0 8px;
+}
+
+.chat-working-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 550;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+  user-select: none;
+}
+
+.chat-working-trigger:hover {
+  color: var(--ink);
+}
+
+.chat-working-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.chat-working-done-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.7;
+}
+
+.chat-working-pulse-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 6px var(--blue);
+  animation: tracePulse 1.2s ease-in-out infinite;
+}
+
+.chat-working-title {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+
+.chat-working-trigger:hover .chat-working-title {
+  color: var(--ink);
+}
+
+.chat-working-count {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.chat-working-chevron {
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+
+.chat-working-trigger:hover .chat-working-chevron {
+  color: var(--ink);
+}
+
+.chat-working-body {
+  margin: 4px 0 6px 6px;
+  padding: 2px 0 4px 12px;
+  border-left: 1.5px solid var(--line-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: traceReveal 0.18s ease both;
+}
+
