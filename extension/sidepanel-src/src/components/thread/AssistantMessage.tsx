@@ -329,7 +329,7 @@ const ReasoningBlock: React.FC<{
 }> = ({ thought, isStreaming }) => {
   const [open, setOpen] = useState(false);
   const thoughtText = (thought || '').trim();
-  const lineCount = thoughtText ? thoughtText.split(/\\r?\\n/).filter(Boolean).length : 0;
+  const lineCount = thoughtText ? thoughtText.split(/\r?\n/).filter(Boolean).length : 0;
 
   return (
     <section className={`chat-reasoning-card ${isStreaming ? 'is-thinking' : 'is-ready'} ${open ? 'is-expanded' : ''}`}>
