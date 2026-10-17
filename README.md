@@ -2,40 +2,40 @@
 
 <p align="center">
   <strong>AI browser copilot for desktop and Chrome.</strong><br>
-  Delegate multi-step web tasks, follow execution in real time, and keep sensitive actions under human control.
+  Delegate multi-step web tasks in natural language, inspect agent activity, and keep sensitive actions under human control.
   <br><br>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white" alt="Chrome Manifest V3">
   <img src="https://img.shields.io/badge/License-MIT-5B8C5A" alt="MIT License">
 </p>
 
+## Agent demo
+
 <p align="center">
-  <img src="docs/images/chatbot-demo.gif" alt="Animated tour of the Deep-Browser interface" width="920">
+  <img src="docs/images/agent-demo.gif" alt="Simulated Deep-Browser agent demo showing reasoning, tool calls, verification, and a final summary" width="960">
   <br>
-  <sub>UI demo: chat, execution inspector, sessions, activity, and command palette.</sub>
+  <sub>Simulated showcase only — prompt, reasoning, tool results, and verification data are demo fixtures, not a live browser run.</sub>
 </p>
 
 ## Interface
 
-**Full workspace · Near-black theme**
+| **Dark theme** | **White theme** |
+|:---:|:---:|
+| <img src="docs/images/chatbot-full-dark.png" alt="Deep-Browser full interface in near-black theme" width="100%"> | <img src="docs/images/chatbot-full-light.png" alt="Deep-Browser full interface in white theme" width="100%"> |
+
+**Chrome Side Panel · High-resolution capture**
 
 <p align="center">
-  <img src="docs/images/chatbot-full-dark.png" alt="Deep-Browser full workspace in near-black theme" width="100%">
+  <img src="docs/images/chatbot-sidepanel-dark.png" alt="Deep-Browser compact Chrome side panel in near-black theme" width="420">
 </p>
 
-**Chrome Side Panel · Compact layout**
+## Features
 
-<p align="center">
-  <img src="docs/images/chatbot-sidepanel-dark.png" alt="Deep-Browser running in a narrow Chrome side panel viewport" width="380">
-</p>
-
-## Capabilities
-
-- **Natural-language browser tasks** — hand off multi-step workflows through a chat interface.
-- **Live execution visibility** — inspect tool steps, event logs, execution status, and verification details.
-- **Human approval gates** — keep sensitive actions behind an explicit review step.
-- **Desktop + Chrome** — use the Electron workstation or the Manifest V3 side panel.
-- **Flexible model setup** — Gemini is the default; optional provider settings include OpenAI, Anthropic, and Ollama.
+- **Natural-language tasks** — delegate multi-step browser workflows through chat.
+- **Execution visibility** — inspect reasoning display, tool calls, event logs, and verification status.
+- **Human approval** — keep sensitive actions behind explicit review gates.
+- **Desktop + Chrome** — Electron workstation and Chrome Manifest V3 side panel.
+- **Model configuration** — Gemini by default, with optional OpenAI, Anthropic, and Ollama settings.
 
 ## Tech stack
 
@@ -65,8 +65,6 @@ uvicorn deep_browser.bridge.server:app --host 127.0.0.1 --port 8765
 ```
 
 ### 2. Build and load the Chrome extension
-
-In a second terminal, from the repository root:
 
 ```bash
 npm ci --prefix extension
