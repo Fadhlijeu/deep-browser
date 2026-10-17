@@ -1,151 +1,155 @@
-import { 
-  X, 
-  Plus, 
-  Trash2, 
-  Folder, 
-  ExternalLink, 
-  Settings, 
-  Eye, 
+import React from 'react';
+import {
+  MessageSquare,
+  Layers,
+  Activity,
+  Blocks,
+  CalendarClock,
+  Settings2,
+  MoreHorizontal,
+  Globe
 } from 'lucide-react';
-import { Session } from '../../types';
+import { ViewType, Session, TabItem, RunState } from '../../types';
 
 interface SidebarProps {
-  isOpen: boolean;
-  onClose: () => void;
-  isDetached: boolean;
+  currentView: ViewType;
+  onSetView: (view: ViewType) => void;
   sessions: Session[];
-  activeSessionId: string;
-  onNewSession: () => void;
-  onSwitchSession: (id: string) => void;
-  onDeleteSession: (id: string) => void;
-  onClearActiveSession: () => void;
+  activeTab?: TabItem | null;
+  runState: RunState;
+  stepCount: number;
   onOpenSettings: () => void;
-  onToggleDetach: () => void;
-  indexLabelingEnabled: boolean;
-  onToggleIndexLabeling: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  isOpen,
-  onClose,
-  isDetached,
+  currentView,
+  onSetView,
   sessions,
-  activeSessionId,
-  onNewSession,
-  onSwitchSession,
-  onDeleteSession,
-  onClearActiveSession,
+  activeTab,
+  runState,
+  stepCount,
   onOpenSettings,
-  onToggleDetach,
-  indexLabelingEnabled,
-  onToggleIndexLabeling,
 }) => {
-  if (!isOpen) return null;
+  const activeSessionsCount = sessions.filter((s) => !s.archived).length;
+  const progressPercent = Math.min(100, Math.max(15, (stepCount / 25) * 100));
+
+  let tabHostname = 'Edge Active Tab';
+  if (activeTab?.url) {
+    try {
+      tabHostname = new URL(activeTab.url).hostname;
+    } catch (_) {
+      tabHostname = activeTab.title || 'Attached Tab';
+    }
+  }
 
   return (
-    <div className="sidebar-overlay-container">
-      {/* Dark backdrop overlay */}
-      <div className="sidebar-backdrop" onClick={onClose} />
+    <aside className="sidebar" aria-label="Main navigation">
+      {/* Brand Header with Times New Roman Wordmark */}
+      <div className="brand">
+        <div className="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="m10 15 5-3-5-3v6Z" fill="currentColor" />
+          </svg>
+        </div>
+        <div className="brand-copy">
+          <div className="brand-name">Deep Browser<br />Copilot</div>
+          <div className="brand-sub">Agent workspace</div>
+        </div>
+      </div>
 
-      {/* Slide-in Sidebar Panel on Top Layer */}
-      <aside className="sidebar-panel">
-        {/* Header: Large Editorial Title (No Icon) & Close */}
-        <div className="sidebar-header">
-          <div className="sidebar-brand">
-            <h1 className="sidebar-title-large">Deep Browser</h1>
+      {/* Navigation Links */}
+      <div className="nav-label">Workspace</div>
+      <nav className="nav">
+        <button
+          className={`nav-btn ${currentView === 'chat' ? 'active' : ''}`}
+          onClick={() => onSetView('chat')}
+          title="Chat"
+        >
+          <MessageSquare />
+          <span className="nav-text">Chat</span>
+        </button>
+
+        <button
+          className={`nav-btn ${currentView === 'sessions' ? 'active' : ''}`}
+          onClick={() => onSetView('sessions')}
+          title="Sessions"
+        >
+          <Layers />
+          <span className="nav-text">Sessions</span>
+          <span className="nav-count">{String(activeSessionsCount).padStart(2, '0')}</span>
+        </button>
+
+        <button
+          className={`nav-btn ${currentView === 'activity' ? 'active' : ''}`}
+          onClick={() => onSetView('activity')}
+          title="Activity & Runs"
+        >
+          <Activity />
+          <span className="nav-text">Activity &amp; Runs</span>
+        </button>
+
+        <button
+          className={`nav-btn ${currentView === 'tools' ? 'active' : ''}`}
+          onClick={() => onSetView('tools')}
+          title="Tools"
+        >
+          <Blocks />
+          <span className="nav-text">Tools</span>
+        </button>
+
+        <button
+          className={`nav-btn ${currentView === 'automations' ? 'active' : ''}`}
+          onClick={() => onSetView('automations')}
+          title="Automations"
+        >
+          <CalendarClock />
+          <span className="nav-text">Automations</span>
+          <span className="nav-count">3</span>
+        </button>
+
+        <div className="nav-label" style={{ marginTop: '12px' }}>Configure</div>
+        <button
+          className={`nav-btn ${currentView === 'settings' ? 'active' : ''}`}
+          onClick={() => onSetView('settings')}
+          title="Settings"
+        >
+          <Settings2 />
+          <span className="nav-text">Settings</span>
+        </button>
+      </nav>
+
+      {/* Real Workspace Card & Profile */}
+      <div className="sidebar-bottom">
+        <div className="workspace-card">
+          <div className="workspace-top">
+            <span className={`dot ${runState === 'running' ? 'running' : ''}`} />
+            <span>{runState === 'running' ? `Step ${stepCount} running` : tabHostname}</span>
           </div>
-          <button className="icon-btn" onClick={onClose} title="Tutup Menu">
-            <X size={16} />
-          </button>
+          <p title={activeTab?.title || activeTab?.url || 'Active browser session'}>
+            {activeTab?.title || 'Attached to active Edge tab. Direct CDP and DOM automation.'}
+          </p>
+          <div className="mini-meter">
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
         </div>
 
-        {/* Primary New Session Button (Exclusive to Sidebar) */}
-        <div className="sidebar-primary-action">
-          <button 
-            className="sidebar-primary-new-btn"
-            onClick={() => {
-              onNewSession();
-              onClose();
-            }}
-            title="Mulai Sesi Baru"
+        <div className="profile">
+          <div className="avatar">DB</div>
+          <div className="profile-copy">
+            <div className="profile-name">Deep Browser</div>
+            <div className="profile-meta">v1.0 Local Agent</div>
+          </div>
+          <button
+            className="more-btn"
+            onClick={onOpenSettings}
+            aria-label="Workspace settings"
+            title="Open Settings"
           >
-            <Plus size={14} />
-            <span>Sesi Baru</span>
+            <MoreHorizontal size={15} />
           </button>
         </div>
-
-        {/* Session Management (Clean List, No Tree) */}
-        <div className="sidebar-sessions-section">
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-title">Riwayat Sesi</span>
-            <span className="sidebar-count-mono">{sessions.length} sesi</span>
-          </div>
-
-          <div className="sidebar-sessions-list">
-            {sessions.map((s) => {
-              const isActive = String(s.id) === String(activeSessionId);
-              return (
-                <div
-                  key={s.id}
-                  className={`sidebar-session-item ${isActive ? 'active' : ''}`}
-                  onClick={() => {
-                    onSwitchSession(s.id);
-                    onClose();
-                  }}
-                >
-                  <div className="sidebar-session-left truncate">
-                    <Folder size={13} className="sidebar-session-icon" />
-                    <span className="sidebar-session-name truncate">{s.name}</span>
-                  </div>
-                  <div className="sidebar-session-actions">
-                    <span className="sidebar-session-date">
-                      {new Date(s.createdAt).toLocaleDateString('id-ID', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <button
-                      className="sidebar-delete-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSession(s.id);
-                      }}
-                      title="Hapus Sesi"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Bottom Utility Controls */}
-        <div className="sidebar-footer">
-          <div className="sidebar-actions-grid">
-            <button 
-              className="sidebar-action-btn"
-              onClick={onToggleDetach} 
-              title={isDetached ? 'Kaitkan Kembali' : 'Buka Pop-Out Terpisah'}
-            >
-              <ExternalLink size={12} />
-              <span>{isDetached ? 'Attach' : 'Pop Out'}</span>
-            </button>
-            <button 
-              className="sidebar-icon-action" 
-              onClick={onOpenSettings} 
-              title="Pengaturan & Mode Engine"
-            >
-              <Settings size={13} />
-            </button>
-            <button 
-              className={`sidebar-icon-action ${indexLabelingEnabled ? 'active' : ''}`} 
-              onClick={onToggleIndexLabeling} 
-              title={indexLabelingEnabled ? 'Nonaktifkan Label Indeks Elemen' : 'Aktifkan Label Indeks Elemen'}
-            >
-              <Eye size={13} />
-            </button>
-          </div>
-        </div>
-      </aside>
-    </div>
+      </div>
+    </aside>
   );
 };

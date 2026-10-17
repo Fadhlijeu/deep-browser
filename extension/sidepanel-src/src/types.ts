@@ -100,6 +100,9 @@ export interface Session {
   id: string;
   name: string;
   createdAt: number;
+  updatedAt?: number;
+  pinned?: boolean;
+  archived?: boolean;
   messages: ChatMessage[];
   events: LogEvent[];
 }
@@ -115,7 +118,7 @@ export interface TabItem {
 
 export type RunState = 'idle' | 'running' | 'paused' | 'error' | 'done';
 
-export type ViewType = 'chat' | 'logs';
+export type ViewType = 'chat' | 'sessions' | 'activity' | 'tools' | 'automations' | 'settings';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting' | 'standalone';
 

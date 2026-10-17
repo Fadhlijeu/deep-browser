@@ -1,4 +1,4 @@
-import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, ConnectionMode, PresetId, ExecutionMode, LogEvent, LogCategory, ToolStep, HitlInteraction, StagedFile, RecordedVideo } from '../types';
+import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, ConnectionMode, PresetId, ExecutionMode, LogEvent, LogCategory, ToolStep, HitlInteraction, StagedFile, RecordedVideo, ViewType } from '../types';
 
 declare const chrome: any;
 
@@ -197,12 +197,14 @@ export interface SidepanelState {
   judgeModelId: string;
   isDetached: boolean;
   stepCount: number;
-  currentView: 'chat' | 'logs';
+  currentView: ViewType;
   logFilter: LogCategory;
   logSearch: string;
   stagedFiles: StagedFile[];
   isRecordingEnabled: boolean;
   isHudEnabled: boolean;
+  theme: 'light' | 'dark' | 'system';
+  isInspectorOpen: boolean;
   modals: {
     drawer: boolean;
     apikeys: boolean;
@@ -250,6 +252,8 @@ export class SidepanelStateManager {
       stagedFiles: [],
       isRecordingEnabled: false,
       isHudEnabled: false,
+      theme: 'light',
+      isInspectorOpen: false,
       modals: { drawer: false, apikeys: false, settings: false, models: false },
     };
 
@@ -329,8 +333,14 @@ export class SidepanelStateManager {
         const stored = await chrome.storage.local.get([
           'sessions', 'activeSessionId', 'selectedModelId', 'selectedMode',
           'selectedPreset', 'apiKeys', 'models', 'sidepanelEnabled',
-          'indexLabelingEnabled', 'judgeEnabled', 'judgeModelId', 'connectionMode', 'runState', 'stepCount'
+          'indexLabelingEnabled', 'judgeEnabled', 'judgeModelId', 'connectionMode', 'runState', 'stepCount', 'theme'
         ]);
+        if (stored.theme) {
+          this.state.theme = stored.theme;
+          if (typeof document !== 'undefined') {
+            document.documentElement.setAttribute('data-theme', stored.theme);
+          }
+        }
         if (stored.sessions && stored.sessions.length > 0) {
           this.state.sessions = stored.sessions;
         }
@@ -425,6 +435,7 @@ export class SidepanelStateManager {
           connectionMode: this.state.connectionMode,
           runState: this.state.runState,
           stepCount: this.state.stepCount,
+          theme: this.state.theme,
         });
       } catch (err) {
         console.warn('[DeepBrowser] Error saving storage:', err);
@@ -951,8 +962,90 @@ export class SidepanelStateManager {
     return session;
   }
 
-  public setView(view: 'chat' | 'logs') {
+  public setView(view: ViewType) {
     this.state.currentView = view;
+    this.notify();
+  }
+
+  public setTheme(theme: 'light' | 'dark' | 'system') {
+    this.state.theme = theme;
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+    this.saveStorage();
+    this.notify();
+  }
+
+  public toggleInspector(open?: boolean) {
+    this.state.isInspectorOpen = open !== undefined ? open : !this.state.isInspectorOpen;
+    this.notify();
+  }
+
+  public renameSession(sessionId: string, newName: string) {
+    const s = this.state.sessions.find((x) => String(x.id) === String(sessionId));
+    if (s && newName.trim()) {
+      s.name = newName.trim();
+      s.updatedAt = Date.now();
+      this.saveStorage();
+      this.notify();
+    }
+  }
+
+  public togglePinSession(sessionId: string) {
+    const s = this.state.sessions.find((x) => String(x.id) === String(sessionId));
+    if (s) {
+      s.pinned = !s.pinned;
+      s.updatedAt = Date.now();
+      this.saveStorage();
+      this.notify();
+    }
+  }
+
+  public toggleArchiveSession(sessionId: string) {
+    const s = this.state.sessions.find((x) => String(x.id) === String(sessionId));
+    if (s) {
+      s.archived = !s.archived;
+      s.updatedAt = Date.now();
+      this.saveStorage();
+      this.notify();
+    }
+  }
+
+  public setApiKey(provider: string, key: string) {
+    this.state.apiKeys = { ...this.state.apiKeys, [provider]: key };
+    this.saveStorage();
+    this.notify();
+  }
+
+  public resolveHitl(interactionId: string, value: any) {
+    if (this.activeAgent && (this.activeAgent as any).interactionManager) {
+      const im = (this.activeAgent as any).interactionManager;
+      const targetId = (im.activeInteraction && im.activeInteraction.status === 'pending')
+        ? im.activeInteraction.interaction_id
+        : interactionId;
+      try {
+        if (typeof im.submitResponse === 'function') {
+          im.submitResponse(targetId, value);
+        } else if (typeof im.resolveInteraction === 'function') {
+          im.resolveInteraction(targetId, value);
+        }
+      } catch (_) {}
+    }
+    const active = this.getActiveSession();
+    if (active) {
+      for (let i = active.messages.length - 1; i >= 0; i--) {
+        if (active.messages[i].hitl) {
+          active.messages[i].hitl = undefined;
+          break;
+        }
+      }
+    }
+    this.notify();
+  }
+
+  public toggleJudge(enabled?: boolean) {
+    this.state.judgeEnabled = enabled !== undefined ? enabled : !this.state.judgeEnabled;
+    this.saveStorage();
     this.notify();
   }
 
@@ -1122,12 +1215,6 @@ export class SidepanelStateManager {
 
   public setSelectedPreset(preset: PresetId) {
     this.state.selectedPreset = preset;
-    this.saveStorage();
-    this.notify();
-  }
-
-  public setApiKey(provider: string, key: string) {
-    this.state.apiKeys = { ...this.state.apiKeys, [provider]: key };
     this.saveStorage();
     this.notify();
   }

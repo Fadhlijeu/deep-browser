@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, Paperclip } from 'lucide-react';
+import { Copy, Check, FileText } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -16,52 +16,40 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const timeStr = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   return (
-    <div className="user-message-row">
-      {message.stagedFiles && message.stagedFiles.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px', justifyContent: 'flex-end' }}>
-          {message.stagedFiles.map((f) => (
-            <div
-              key={f.id}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: '6px',
-                fontSize: '10.5px',
-                color: '#93c5fd',
-              }}
-            >
-              <Paperclip size={10} />
-              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {f.name}
-              </span>
-            </div>
-          ))}
+    <article className="message user" data-message-id={message.id}>
+      <div className="message-avatar">DB</div>
+      <div className="message-main">
+        <div className="message-meta">
+          <span>You</span>
+          <span>·</span>
+          <span>{timeStr}</span>
         </div>
-      )}
-      <div className="user-bubble">
-        <MarkdownRenderer content={message.text} />
-      </div>
-      <div className="user-meta">
-        <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        <button
-          className="icon-btn"
-          onClick={copyText}
-          title="Salin Pesan"
-          style={{ width: '18px', height: '18px', padding: 0 }}
-        >
-          {copied ? (
-            <Check size={11} style={{ color: 'var(--status-success)' }} />
-          ) : (
-            <Copy size={11} style={{ color: 'var(--text-tertiary)' }} />
+
+        <div className="message-content">
+          <MarkdownRenderer content={message.text} />
+
+          {message.stagedFiles && message.stagedFiles.length > 0 && (
+            <div className="toolbar" style={{ marginTop: '8px', justifyContent: 'flex-end' }}>
+              {message.stagedFiles.map((f) => (
+                <span key={f.id} className="pill">
+                  <FileText size={10} />
+                  <span>{f.name}</span>
+                </span>
+              ))}
+            </div>
           )}
-        </button>
+        </div>
+
+        <div className="message-actions">
+          <button onClick={copyText} title="Copy message">
+            {copied ? <Check size={12} color="var(--green)" /> : <Copy size={12} />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+        </div>
       </div>
-    </div>
+    </article>
   );
 };
-

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle, Video, Download, BookmarkPlus, CheckCheck } from 'lucide-react';
+import { Sparkles, Clock, Copy, Check, ChevronRight, Brain, AlertCircle, Video, Download, BookmarkPlus, CheckCheck } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
@@ -16,13 +16,11 @@ const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought, isStreaming = fa
   const [open, setOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Dynamic accelerating typewriter with fade-in
   const { displayedText, isTyping } = useTypewriter(thought, {
     isStreaming,
     immediate: !isStreaming,
   });
 
-  // Auto-scroll reasoning container to bottom as new tokens arrive
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -30,23 +28,20 @@ const ReasoningItem: React.FC<ReasoningItemProps> = ({ thought, isStreaming = fa
   }, [displayedText]);
 
   return (
-    <div className="activity-reasoning-item">
-      <div className="activity-reasoning-header" onClick={() => setOpen(!open)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <Brain size={12} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <span style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            Penalaran Agen (Reasoning)
-          </span>
-          {isTyping && (
-            <span className="reasoning-typing-pill">menalar...</span>
-          )}
+    <div className="info-card" style={{ marginBottom: '8px' }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+        onClick={() => setOpen(!open)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Brain size={13} color="var(--accent)" />
+          <span style={{ fontSize: '10.5px', fontWeight: 650, color: 'var(--ink)' }}>Agent Reasoning</span>
+          {isTyping && <span className="status running" style={{ padding: '2px 5px', fontSize: '8px' }}>thinking...</span>}
         </div>
-        <span className="material-symbols-outlined" style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
-          {open ? 'expand_less' : 'expand_more'}
-        </span>
+        <ChevronRight size={13} style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
       </div>
       {open && (
-        <div ref={scrollRef} className={`activity-reasoning-body ${isTyping ? 'typing-fade-in' : ''}`}>
+        <div ref={scrollRef} style={{ fontSize: '11px', lineHeight: 1.6, color: 'var(--muted)', marginTop: '8px', whiteSpace: 'pre-wrap' }}>
           {displayedText}
           {isTyping && <span className="typewriter-cursor" />}
         </div>
@@ -68,7 +63,6 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 }) => {
   const isRunning = isCurrentMessage && runState === 'running';
 
-  // Dynamic accelerating typewriter with fade-in for normal response writing
   const { displayedText: displayedMessageText, isTyping: isMessageTyping } = useTypewriter(
     message.text || '',
     {
@@ -77,11 +71,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
     }
   );
 
-  // State for unified activity accordion:
-  // While running, open by default; once finished, auto-collapse so only final text is shown!
-  const [userToggle, setUserToggle] = useState<boolean | null>(null);
-  const isOpen = userToggle !== null ? userToggle : isRunning;
-
+  const [isOpen, setIsOpen] = useState(isRunning);
   const [copied, setCopied] = useState(false);
   const [skillSaved, setSkillSaved] = useState(false);
 
@@ -96,9 +86,9 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
       const skillMgr = (window as any).SkillManager;
       if (skillMgr && skillMgr.recordRunToSkill) {
         await skillMgr.recordRunToSkill({
-          title: message.text?.slice(0, 32) || 'Skill Alur Browser',
-          description: `Otomatisasi langkah dari pesan ${message.id}`,
-          task: message.text || 'Otomatisasi langkah',
+          title: message.text?.slice(0, 32) || 'Workflow Skill',
+          description: `Extracted workflow from run ${message.id}`,
+          task: message.text || 'Workflow step automation',
           history: message.steps || [],
         });
         setSkillSaved(true);
@@ -113,175 +103,129 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const steps = message.steps || [];
   const hasActivities = activities.length > 0 || steps.length > 0 || Boolean(message.thought);
   const totalStepsCount = steps.length || activities.filter((a) => a.type === 'step').length;
+  const timeStr = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="assistant-message-row">
-      <div className="assistant-card">
-        {/* Run Metadata Strip */}
-        <div className="assistant-meta-strip">
-          <span className="meta-chip">
-            <Bot size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <strong>{message.modelName || 'Deep Browser'}</strong>
-          </span>
-          <span className="meta-chip">
-            <Clock size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-            <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-          </span>
-          <button
-            className="icon-btn"
-            onClick={copyText}
-            title="Salin Jawaban"
-            style={{ width: '20px', height: '20px', marginLeft: 'auto' }}
-          >
-            {copied ? (
-              <Check size={12} style={{ color: 'var(--status-success)' }} />
-            ) : (
-              <Copy size={12} style={{ color: 'var(--text-secondary)' }} />
-            )}
-          </button>
+    <article className="message assistant" data-message-id={message.id}>
+      <div className="message-avatar">
+        <Sparkles size={15} />
+      </div>
+
+      <div className="message-main">
+        {/* Meta Bar */}
+        <div className="message-meta">
+          <span>Deep Browser Copilot</span>
+          <span>·</span>
+          <span>{timeStr}</span>
+          {message.modelName && <span className="pill">{message.modelName}</span>}
         </div>
 
-        {/* Unified Real-time Interleaved Steps & Reasoning Accordion */}
-        {hasActivities && (
-          <div className="timeline-accordion">
-            <div
-              className="timeline-accordion-header"
-              onClick={() => setUserToggle(!isOpen)}
-              style={{ cursor: 'pointer' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <ChevronRight
-                  size={13}
-                  style={{
-                    transform: isOpen ? 'rotate(90deg)' : 'none',
-                    transition: 'transform 0.15s ease',
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ fontWeight: 600 }}>Langkah & Penalaran Browser</span>
-                {isRunning && (
-                  <div className="sleek-pulse-indicator" style={{ marginLeft: '6px' }}>
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                )}
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                {isRunning ? 'Sedang Berjalan...' : `${totalStepsCount} langkah selesai`}
-              </span>
-            </div>
-
-            {isOpen && (
-              <div className="timeline-steps-list">
-                {activities.length > 0 ? (
-                  activities.map((act) => {
-                    if (act.type === 'step' && act.step) {
-                      return <ToolStepCard key={act.id} step={act.step} />;
-                    }
-                    if (act.type === 'reasoning' && act.thought) {
-                      return <ReasoningItem key={act.id} thought={act.thought} isStreaming={isRunning} />;
-                    }
-                    return null;
-                  })
-                ) : (
-                  <>
-                    {steps.map((st) => (
-                      <ToolStepCard key={st.id} step={st} />
-                    ))}
-                    {message.thought && (
-                      <ReasoningItem thought={message.thought} isStreaming={isRunning} />
-                    )}
-                  </>
-                )}
-
-                {/* Sleek Minimal Monochrome Progress Indicator */}
-                {isRunning && (
-                  <div className="activity-loading-item">
-                    <div className="sleek-pulse-indicator">
-                      <span />
-                      <span />
-                      <span />
+        {/* Message Content Container */}
+        <div className="message-content">
+          {/* Real-time Tool Steps & Reasoning Accordion */}
+          {hasActivities && (
+            <div className="info-card" style={{ marginBottom: '10px' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                onClick={() => setIsOpen(!isOpen)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ChevronRight size={13} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                  <strong style={{ fontSize: '11px', color: 'var(--ink)' }}>Execution Steps &amp; Reasoning</strong>
+                  {isRunning && (
+                    <div className="typing" style={{ padding: '0 4px' }}>
+                      <i /><i /><i />
                     </div>
-                    <span>Mengeksekusi tindakan browser...</span>
-                  </div>
-                )}
+                  )}
+                </div>
+                <span className="tiny muted">
+                  {isRunning ? 'Running...' : `${totalStepsCount} steps completed`}
+                </span>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* HITL Review Card */}
-        {message.hitl && (
-          <HitlApprovalCard hitl={message.hitl} />
-        )}
+              {isOpen && (
+                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {activities.length > 0 ? (
+                    activities.map((act) => {
+                      if (act.type === 'step' && act.step) {
+                        return <ToolStepCard key={act.id} step={act.step} />;
+                      }
+                      if (act.type === 'reasoning' && act.thought) {
+                        return <ReasoningItem key={act.id} thought={act.thought} isStreaming={isRunning} />;
+                      }
+                      return null;
+                    })
+                  ) : (
+                    <>
+                      {steps.map((st) => (
+                        <ToolStepCard key={st.id} step={st} />
+                      ))}
+                      {message.thought && (
+                        <ReasoningItem thought={message.thought} isStreaming={isRunning} />
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* AI Judge Evaluation Card */}
-        {message.judgeVerdict && (
-          <JudgeVerdictCard verdict={message.judgeVerdict} />
-        )}
+          {/* HITL Review Card */}
+          {message.hitl && <HitlApprovalCard hitl={message.hitl} />}
 
-        {/* User-Friendly Response Body */}
-        {displayedMessageText && (
-          <div style={{ marginTop: '4px' }}>
-            {message.isError && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--status-error)', fontWeight: 600, marginBottom: '4px' }}>
-                <AlertCircle size={13} style={{ flexShrink: 0 }} />
-                <span>Gagal Memproses Permintaan</span>
-              </div>
-            )}
-            <div className={`markdown-body ${isMessageTyping ? 'typing-fade-in' : ''}`}>
+          {/* AI Judge Evaluation Card */}
+          {message.judgeVerdict && <JudgeVerdictCard verdict={message.judgeVerdict} />}
+
+          {/* Assistant Text Response */}
+          {displayedMessageText && (
+            <div style={{ marginTop: '6px' }}>
+              {message.isError && (
+                <div className="callout" style={{ marginBottom: '8px', background: 'var(--red-soft)', borderColor: '#e8c4bd', color: 'var(--red)' }}>
+                  <AlertCircle size={14} />
+                  <span>Failed to process request</span>
+                </div>
+              )}
               <MarkdownRenderer content={displayedMessageText} />
               {isMessageTyping && <span className="typewriter-cursor" />}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Video Session Playback Card */}
-        {message.recordedVideo && (
-          <div className="video-preview-card">
-            <div className="video-preview-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Video size={12} style={{ color: '#ef4444' }} />
-                <span style={{ fontWeight: 600 }}>Rekaman Video Sesi ({message.recordedVideo.durationSeconds}s)</span>
+          {/* Video Session Playback Card */}
+          {message.recordedVideo && (
+            <div className="info-card" style={{ marginTop: '10px', padding: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 650 }}>
+                  <Video size={13} color="var(--red)" />
+                  <span>Tab Session Recording ({message.recordedVideo.durationSeconds}s)</span>
+                </div>
+                <a
+                  href={message.recordedVideo.url}
+                  download={message.recordedVideo.fileName}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--blue)', fontSize: '10px', textDecoration: 'none' }}
+                >
+                  <Download size={11} /> Download
+                </a>
               </div>
-              <a
-                href={message.recordedVideo.url}
-                download={message.recordedVideo.fileName}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#60a5fa', textDecoration: 'none', fontSize: '10.5px' }}
-                title="Unduh rekaman video WebM"
-              >
-                <Download size={11} /> Unduh
-              </a>
+              <video src={message.recordedVideo.url} controls style={{ width: '100%', maxHeight: '240px', borderRadius: '6px', background: '#000' }} />
             </div>
-            <video src={message.recordedVideo.url} controls className="video-preview-player" />
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* One-Click Save as Skill Button */}
-        {!isRunning && totalStepsCount > 0 && !message.isError && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-            <button
-              type="button"
-              className="save-skill-btn"
-              onClick={handleSaveSkill}
-              title="Simpan alur kerja ini sebagai skill lokal yang bisa dipakai ulang"
-            >
-              {skillSaved ? (
-                <>
-                  <CheckCheck size={12} style={{ color: '#34d399' }} />
-                  <span>Tersimpan sebagai Skill!</span>
-                </>
-              ) : (
-                <>
-                  <BookmarkPlus size={12} />
-                  <span>Simpan Alur sebagai Skill</span>
-                </>
-              )}
+        {/* Action Buttons Below Message */}
+        <div className="message-actions">
+          <button onClick={copyText} title="Copy response">
+            {copied ? <Check size={12} color="var(--green)" /> : <Copy size={12} />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+
+          {!isRunning && totalStepsCount > 0 && !message.isError && (
+            <button onClick={handleSaveSkill} title="Save this verified workflow as a reusable skill">
+              {skillSaved ? <CheckCheck size={12} color="var(--green)" /> : <BookmarkPlus size={12} />}
+              <span>{skillSaved ? 'Saved as Skill' : 'Save as Skill'}</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </article>
   );
 };

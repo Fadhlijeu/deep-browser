@@ -1,86 +1,182 @@
 import React, { useState, useEffect } from 'react';
 import { sidepanelStore, SidepanelState } from './state/sidepanelStore';
-import { SlimHeader } from './components/sidebar/SlimHeader';
 import { Sidebar } from './components/sidebar/Sidebar';
-import { AssistantThread } from './components/thread/AssistantThread';
-import { LogsView } from './components/logs/LogsView';
+import { CopilotTopbar } from './components/topbar/CopilotTopbar';
+import { CopilotChatView } from './components/thread/CopilotChatView';
+import { SessionsView } from './components/sessions/SessionsView';
+import { ActivityView } from './components/activity/ActivityView';
+import { ToolsView } from './components/tools/ToolsView';
+import { AutomationsView } from './components/automations/AutomationsView';
+import { SettingsView } from './components/settings/SettingsView';
+import { CommandPalette } from './components/modals/CommandPalette';
+import { ModelsModal } from './components/modals/ModelsModal';
 import { ApiKeysModal } from './components/modals/ApiKeysModal';
 import { SettingsModal } from './components/modals/SettingsModal';
-import { ModelsModal } from './components/modals/ModelsModal';
 
 export const App: React.FC = () => {
   const [state, setState] = useState<SidepanelState>(sidepanelStore.getState());
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = sidepanelStore.subscribe(() => {
       setState({ ...sidepanelStore.getState() });
     });
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', sidepanelStore.getState().theme || 'light');
+    }
     return unsubscribe;
   }, []);
 
   const activeSession = sidepanelStore.getActiveSession();
   const currentModel = state.models.find((m) => m.id === state.selectedModelId) || state.models[0];
+  const activeTab = state.tabs.find((t) => t.active) || state.tabs[0];
+
+  const handleToggleTheme = () => {
+    const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
+    sidepanelStore.setTheme(nextTheme);
+  };
 
   return (
-    <div className="app-container">
-      {/* Sleek Topbar with Hamburger, Chat/Logs Switcher, and Online Status */}
-      <SlimHeader
-        onOpenSidebar={() => setSidebarOpen(true)}
+    <div className="app" data-theme={state.theme}>
+      {/* 1. Left Sidebar Navigation */}
+      <Sidebar
         currentView={state.currentView}
-        logsCount={activeSession.events.length}
         onSetView={(v) => sidepanelStore.setView(v)}
-        connectionStatus={state.connectionStatus}
+        sessions={state.sessions}
+        activeTab={activeTab}
         runState={state.runState}
         stepCount={state.stepCount}
-        onToggleOnline={() => sidepanelStore.toggleOnline()}
+        onOpenSettings={() => sidepanelStore.setView('settings')}
       />
 
-      {/* Main View Area: Chat or Logs */}
-      <main className="main-content">
-        {state.currentView === 'chat' ? (
-          <AssistantThread
-            session={activeSession}
-            runState={state.runState}
-            selectedModel={currentModel}
-            selectedPreset={state.selectedPreset}
-            selectedMode={state.selectedMode}
-            onSendMessage={(txt) => sidepanelStore.sendMessage(txt)}
-            onCancelRun={() => sidepanelStore.cancelRun()}
-            onOpenModels={() => sidepanelStore.setModal('models', true)}
-            onOpenSettings={() => sidepanelStore.setModal('settings', true)}
-          />
-        ) : (
-          <LogsView
-            events={activeSession.events}
-            filter={state.logFilter}
-            search={state.logSearch}
-            runState={state.runState}
-            onSetFilter={(f) => sidepanelStore.setLogFilter(f)}
-            onSetSearch={(s) => sidepanelStore.setLogSearch(s)}
-            onClearLogs={() => sidepanelStore.clearLogs()}
-          />
-        )}
+      {/* 2. Main Right Container */}
+      <main className="main">
+        {/* Topbar */}
+        <CopilotTopbar
+          currentView={state.currentView}
+          connectionStatus={state.connectionStatus}
+          runState={state.runState}
+          stepCount={state.stepCount}
+          theme={state.theme}
+          isDetached={state.isDetached}
+          onToggleTheme={handleToggleTheme}
+          onToggleDetach={() => sidepanelStore.toggleDetach()}
+          onOpenSearch={() => setIsCommandPaletteOpen(true)}
+          onOpenSettings={() => sidepanelStore.setView('settings')}
+        />
+
+        {/* View Content Router */}
+        <div className="content">
+          {state.currentView === 'chat' && (
+            <CopilotChatView
+              session={activeSession}
+              runState={state.runState}
+              selectedModel={currentModel}
+              selectedPreset={state.selectedPreset}
+              selectedMode={state.selectedMode}
+              isInspectorOpen={state.isInspectorOpen}
+              onToggleInspector={() => sidepanelStore.toggleInspector()}
+              onSendMessage={(txt) => sidepanelStore.sendMessage(txt)}
+              onCancelRun={() => sidepanelStore.cancelRun()}
+              onOpenModels={() => sidepanelStore.setModal('models', true)}
+              onOpenSettings={() => sidepanelStore.setView('settings')}
+            />
+          )}
+
+          {state.currentView === 'sessions' && (
+            <SessionsView
+              sessions={state.sessions}
+              activeSessionId={state.activeSessionId}
+              onSelectSession={(id) => {
+                sidepanelStore.switchSession(id);
+                sidepanelStore.setView('chat');
+              }}
+              onNewSession={() => {
+                sidepanelStore.createNewSession();
+                sidepanelStore.setView('chat');
+              }}
+              onDeleteSession={(id) => sidepanelStore.deleteSession(id)}
+              onRenameSession={(id, name) => sidepanelStore.renameSession(id, name)}
+              onTogglePin={(id) => sidepanelStore.togglePinSession(id)}
+              onToggleArchive={(id) => sidepanelStore.toggleArchiveSession(id)}
+            />
+          )}
+
+          {state.currentView === 'activity' && (
+            <ActivityView
+              session={activeSession}
+              allSessions={state.sessions}
+              onResolveHitl={(id, val) => sidepanelStore.resolveHitl(id, val)}
+              onOpenSession={(id) => {
+                sidepanelStore.switchSession(id);
+                sidepanelStore.setView('chat');
+              }}
+            />
+          )}
+
+          {state.currentView === 'tools' && (
+            <ToolsView
+              onUsePrompt={(p) => {
+                sidepanelStore.setView('chat');
+                setTimeout(() => sidepanelStore.sendMessage(p), 100);
+              }}
+            />
+          )}
+
+          {state.currentView === 'automations' && (
+            <AutomationsView
+              onRunSkill={(p) => {
+                sidepanelStore.setView('chat');
+                setTimeout(() => sidepanelStore.sendMessage(p), 100);
+              }}
+            />
+          )}
+
+          {state.currentView === 'settings' && (
+            <SettingsView
+              models={state.models}
+              selectedModelId={state.selectedModelId}
+              selectedMode={state.selectedMode}
+              apiKeys={state.apiKeys}
+              theme={state.theme}
+              indexLabelingEnabled={state.indexLabelingEnabled}
+              isRecordingEnabled={state.isRecordingEnabled}
+              isHudEnabled={state.isHudEnabled}
+              judgeEnabled={state.judgeEnabled}
+              onSetTheme={(t) => sidepanelStore.setTheme(t)}
+              onSelectModel={(id) => sidepanelStore.setSelectedModel(id)}
+              onSetMode={(m) => sidepanelStore.setMode(m)}
+              onSaveApiKey={(prov, k) => sidepanelStore.setApiKey(prov, k)}
+              onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
+              onToggleRecording={() => sidepanelStore.toggleRecording()}
+              onToggleHud={() => sidepanelStore.toggleDemoHud()}
+              onToggleJudge={() => sidepanelStore.toggleJudge()}
+            />
+          )}
+        </div>
       </main>
 
-      {/* Top Layer Overlay Sidebar (Slides over chat when open, vanishes when closed) */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        isDetached={state.isDetached}
+      {/* 3. Global Command Palette (Ctrl/Cmd K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSetView={(v) => sidepanelStore.setView(v)}
+        onSelectModel={(id) => sidepanelStore.setSelectedModel(id)}
+        onSelectSession={(id) => sidepanelStore.switchSession(id)}
+        models={state.models}
         sessions={state.sessions}
-        activeSessionId={state.activeSessionId}
-        onNewSession={() => sidepanelStore.createNewSession()}
-        onSwitchSession={(id) => sidepanelStore.switchSession(id)}
-        onDeleteSession={(id) => sidepanelStore.deleteSession(id)}
-        onClearActiveSession={() => sidepanelStore.clearActiveSession()}
-        onOpenSettings={() => sidepanelStore.setModal('settings', true)}
-        onToggleDetach={() => sidepanelStore.toggleDetach()}
-        indexLabelingEnabled={state.indexLabelingEnabled}
-        onToggleIndexLabeling={() => sidepanelStore.toggleIndexLabeling()}
       />
 
-      {/* Modals for Settings, API Keys, and Models */}
+      {/* 4. Modals */}
+      <ModelsModal
+        isOpen={state.modals.models}
+        models={state.models}
+        selectedModelId={state.selectedModelId}
+        judgeEnabled={state.judgeEnabled}
+        judgeModelId={state.judgeModelId}
+        onClose={() => sidepanelStore.setModal('models', false)}
+      />
+
       <ApiKeysModal
         isOpen={state.modals.apikeys}
         apiKeys={state.apiKeys}
@@ -99,15 +195,6 @@ export const App: React.FC = () => {
         judgeModelId={state.judgeModelId}
         isDetached={state.isDetached}
         onClose={() => sidepanelStore.setModal('settings', false)}
-      />
-
-      <ModelsModal
-        isOpen={state.modals.models}
-        models={state.models}
-        selectedModelId={state.selectedModelId}
-        judgeEnabled={state.judgeEnabled}
-        judgeModelId={state.judgeModelId}
-        onClose={() => sidepanelStore.setModal('models', false)}
       />
     </div>
   );
