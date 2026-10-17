@@ -220,6 +220,14 @@ You MUST choose one of the following two actions immediately:
 `;
       }
 
+      // Check if ActionLoopDetector detected repetitive actions or page stagnation
+      let loopNudgeSection = '';
+      if (options.loopNudge) {
+        loopNudgeSection = `### ⚠️ SYSTEM LOOP & STAGNATION AWARENESS NUDGE:
+${options.loopNudge}
+`;
+      }
+
       // Check if the immediately preceding step had a user response from a widget
       let latestUserResponseSection = '';
       if (this.history.length > 0) {
@@ -269,7 +277,7 @@ CRITICAL OUTPUT COMPLETION RULES:
    DO NOT BE LAZY: Never use phrases like "dan X lainnya", "serta repository lainnya...", or "...". If there are 16 or 17 items, list all 16 or 17 completely!
 Return your JSON response.`;
 
-      const textPrompt = [historySection, antiLoopSection, latestUserResponseSection, stateSection, userGoalSection]
+      const textPrompt = [historySection, antiLoopSection, loopNudgeSection, latestUserResponseSection, stateSection, userGoalSection]
         .filter(Boolean)
         .join('\n\n');
 

@@ -63,6 +63,13 @@
       this.isRunning = false;
       this.isStopped = false;
       this.history = [];
+
+      // Priority 1 from browser_use legacy: ActionLoopDetector & UrlShortener
+      const LoopDetectorCls = (typeof window !== 'undefined' && window.ActionLoopDetector) || (typeof global !== 'undefined' && global.ActionLoopDetector) || (typeof ActionLoopDetector !== 'undefined' ? ActionLoopDetector : null);
+      this.loopDetector = LoopDetectorCls ? new LoopDetectorCls() : null;
+
+      const UrlShortenerCls = (typeof window !== 'undefined' && window.UrlShortener) || (typeof global !== 'undefined' && global.UrlShortener) || (typeof UrlShortener !== 'undefined' ? UrlShortener : null);
+      this.urlShortener = UrlShortenerCls ? new UrlShortenerCls() : null;
     }
 
 
@@ -213,11 +220,26 @@
             reachedTopOnPage = true;
           }
 
+          // ActionLoopDetector: Record page state for stagnation detection
+          if (this.loopDetector) {
+            this.loopDetector.recordPageState(state.url, state.simplifiedTreeText || '', state.elements?.length || 0);
+          }
+
           // Anti-loop trigger: If agent has already scanned both top and bottom of this page,
           // and has scrolled 3 or more times consecutively without any other productive action
           const isStuckOscillating = consecutiveScrollCount >= 3 && reachedBottomOnPage && reachedTopOnPage;
           if (isStuckOscillating) {
             this._emit('LOOP_DETECTED', `Deteksi looping terpicu: agen telah menjelajahi seluruh halaman bolak-balik tanpa menemukan konten target. Mengarahkan agen untuk pivot atau terminasi...`, { url: currentUrl });
+          }
+
+          // ActionLoopDetector nudge (escalating awareness for repetition and page stagnation)
+          const loopNudge = this.loopDetector ? this.loopDetector.getNudgeMessage() : null;
+          if (loopNudge) {
+            this._emit('LOOP_DETECTED', `Deteksi repetisi/stagnasi terpicu: ${loopNudge.slice(0, 100)}...`, {
+              nudge: loopNudge,
+              repetitionCount: this.loopDetector.maxRepetitionCount,
+              stagnantPages: this.loopDetector.consecutiveStagnantPages,
+            });
           }
 
           this._emit(
@@ -237,8 +259,16 @@
           }
 
           // ─── 2. CONTEXT & PROMPT ────────────────────────────────────────────────
-          const stepPayload = this.messageManager.buildStepPrompt(state, this.step, { isStuckOscillating });
+          const stepPayload = this.messageManager.buildStepPrompt(state, this.step, { isStuckOscillating, loopNudge });
           if (this.isStopped) break;
+
+          // URL Shortener: Compress tracking and bloated URLs in prompt text to save token context
+          if (this.urlShortener && stepPayload.textPrompt) {
+            const { shortenedText, count } = this.urlShortener.shortenText(stepPayload.textPrompt);
+            if (count > 0) {
+              stepPayload.textPrompt = shortenedText;
+            }
+          }
 
           // ─── 3. PLANNING ────────────────────────────────────────────────────────
           this._emit('PLAN', `[Langkah ${this.step}] Merencanakan langkah berikutnya...`, { step: this.step });
@@ -254,6 +284,11 @@
           }
 
           if (this.isStopped) break;
+
+          // URL Shortener: Restore any shortened URLs passed in decision parameters
+          if (this.urlShortener && decision.parameters) {
+            decision.parameters = this.urlShortener.restoreParams(decision.parameters);
+          }
 
           if (decision.thinking) {
             this._emit('REASONING', decision.thinking, {
@@ -426,6 +461,11 @@
             if (actionName === 'refresh') {
               lastPageUrl = null; // triggers mandatory auto-scan on next step!
             }
+          }
+
+          // ActionLoopDetector: Record action into rolling window for repetition analysis
+          if (this.loopDetector) {
+            this.loopDetector.recordAction(actionName, params);
           }
 
           // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────

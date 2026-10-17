@@ -51,6 +51,7 @@ require('../../extension/core/widgets.js');
 require('../../extension/core/tools.js');
 require('../../extension/core/message_manager.js');
 require('../../extension/core/llm_client.js');
+require('../../extension/core/loop_detector.js');
 require('../../extension/core/agent.js');
 
 
@@ -229,6 +230,8 @@ async function runTests() {
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.totalSteps, 2);
     assert(result.result.includes('Teknik Informatika'));
+    assert(agent.loopDetector !== null, 'agent should have an ActionLoopDetector instance');
+    assert(agent.urlShortener !== null, 'agent should have a UrlShortener instance');
     assert(events.includes('TASK_STARTED'));
     assert(events.includes('OBSERVATION'));
     assert(events.includes('REASONING'));

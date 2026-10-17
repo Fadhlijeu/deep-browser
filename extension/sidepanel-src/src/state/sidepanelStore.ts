@@ -122,6 +122,7 @@ export class SidepanelStateManager {
         'core/tools.js',
         'core/message_manager.js',
         'core/llm_client.js',
+        'core/loop_detector.js',
         'core/agent.js',
       ];
 
