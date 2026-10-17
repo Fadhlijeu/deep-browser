@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Check,
   Cpu,
   ArrowUp,
   Square,
@@ -11,7 +13,7 @@ import {
   FileText,
   Eye,
 } from 'lucide-react';
-import { PRESET_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
+import { PRESET_OPTIONS, MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
 import { PresetId, ExecutionMode, ModelDef } from '../../types';
 import { ProviderLogo } from '../common/ProviderLogo';
 
@@ -30,6 +32,7 @@ interface ComposerProps {
 export const Composer: React.FC<ComposerProps> = ({
   runState,
   selectedPreset,
+  selectedMode = 'agent_decide',
   selectedModel,
   onSend,
   onCancel,
@@ -41,6 +44,27 @@ export const Composer: React.FC<ComposerProps> = ({
   const presetScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollPresetLeft, setCanScrollPresetLeft] = useState(false);
   const [canScrollPresetRight, setCanScrollPresetRight] = useState(false);
+
+  // Execution mode dropdown state
+  const [isModeOpen, setIsModeOpen] = useState(false);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setIsModeOpen(false);
+      }
+    };
+    if (isModeOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isModeOpen]);
+
+  const currentModeOpt = MODE_OPTIONS.find((m) => m.id === selectedMode) || MODE_OPTIONS[0];
+  const modeIconColor = selectedMode === 'hitl' ? '#f59e0b' : (selectedMode === 'auto' ? '#10b981' : '#60a5fa');
 
   const checkPresetScroll = useCallback(() => {
     if (presetScrollRef.current) {
@@ -179,6 +203,7 @@ export const Composer: React.FC<ComposerProps> = ({
         <div className="footer-left">
           {/* Model Selector Pill */}
           <button
+            type="button"
             className="pill-selector-btn"
             onClick={onOpenModels}
             title={`Model Aktif: ${selectedModel.name} (${selectedModel.provider})`}
@@ -186,6 +211,51 @@ export const Composer: React.FC<ComposerProps> = ({
             <ProviderLogo provider={selectedModel.provider} size={13} />
             <span className="truncate">{selectedModel.name}</span>
           </button>
+
+          {/* Mode / Decide Selector Pill */}
+          <div className="mode-selector-wrap" ref={modeMenuRef}>
+            <button
+              type="button"
+              className="pill-selector-btn mode-pill-btn"
+              onClick={() => setIsModeOpen((prev) => !prev)}
+              title={`Mode Otonomi: ${currentModeOpt.name} (Klik untuk mengganti mode)`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '13px', color: modeIconColor }}>
+                {currentModeOpt.icon}
+              </span>
+              <span className="truncate">{currentModeOpt.name}</span>
+              <ChevronDown size={10} style={{ opacity: 0.6, flexShrink: 0 }} />
+            </button>
+
+            {isModeOpen && (
+              <div className="mode-popover-menu">
+                <div className="mode-popover-header">Mode Eksekusi Agen</div>
+                {MODE_OPTIONS.map((m) => {
+                  const isActive = (selectedMode || 'agent_decide') === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`mode-popover-item ${isActive ? 'active' : ''}`}
+                      onClick={() => {
+                        sidepanelStore.setMode(m.id);
+                        setIsModeOpen(false);
+                      }}
+                    >
+                      <span className="material-symbols-outlined mode-item-icon">
+                        {m.icon}
+                      </span>
+                      <div className="mode-item-details">
+                        <div className="mode-item-title">{m.name}</div>
+                        <div className="mode-item-desc">{m.desc}</div>
+                      </div>
+                      {isActive && <Check size={13} className="mode-item-check" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Action Button */}

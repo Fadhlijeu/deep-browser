@@ -1,7 +1,6 @@
-import React from 'react';
 import { Scale, Bot, Check, X, Sparkles } from 'lucide-react';
 import { ModelDef } from '../../types';
-import { sidepanelStore } from '../../state/sidepanelStore';
+import { PROVIDER_LABELS, sidepanelStore } from '../../state/sidepanelStore';
 import { ProviderLogo } from '../common/ProviderLogo';
 
 interface ModelsModalProps {
@@ -22,6 +21,23 @@ export const ModelsModal: React.FC<ModelsModalProps> = ({
   onClose,
 }) => {
   if (!isOpen) return null;
+
+  // Group and sort models by provider, then A to Z
+  const groupedModels = models.reduce((acc, m) => {
+    if (!acc[m.provider]) acc[m.provider] = [];
+    acc[m.provider].push(m);
+    return acc;
+  }, {} as Record<string, ModelDef[]>);
+
+  const providerKeys = ['gemini', 'openai', 'anthropic', 'custom_openai', 'ollama'].filter(
+    (p) => groupedModels[p] && groupedModels[p].length > 0
+  );
+  Object.keys(groupedModels).forEach((p) => {
+    if (!providerKeys.includes(p)) providerKeys.push(p);
+  });
+  providerKeys.forEach((p) => {
+    groupedModels[p].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  });
 
   const handleSelectModel = (modelId: string) => {
     sidepanelStore.setSelectedModel(modelId);
@@ -50,102 +66,127 @@ export const ModelsModal: React.FC<ModelsModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="modal-body" style={{ maxHeight: '440px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div className="modal-body" style={{ maxHeight: '460px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           
           {/* Section 1: Main Agent Model */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Model Utama Agen
+                Pilih Model Utama Agen
               </span>
               <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
                 {models.length} model terdaftar
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {models.map((m) => {
-                const isSelected = selectedModelId === m.id;
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {providerKeys.map((provider) => {
+                const pModels = groupedModels[provider];
+                const providerLabel = PROVIDER_LABELS[provider] || provider.toUpperCase();
                 return (
-                  <div
-                    key={m.id}
-                    onClick={() => handleSelectModel(m.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: isSelected ? 'var(--bg-surface-elevated)' : 'var(--bg-base)',
-                      border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.12s ease',
-                      gap: '8px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: 'var(--radius-xs)',
-                        background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-subtle)',
-                        border: '1px solid var(--border-subtle)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <ProviderLogo provider={m.provider} size={16} />
+                  <div key={provider} className="provider-model-group">
+                    <div className="provider-group-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <ProviderLogo provider={provider as any} size={13} />
+                        <span className="provider-group-title">{providerLabel}</span>
                       </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 600, fontSize: '12px', color: isSelected ? '#ffffff' : 'var(--text-primary)' }} className="truncate">
-                            {m.name}
-                          </span>
-                          <span style={{
-                            fontSize: '9px',
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--text-tertiary)',
-                            textTransform: 'uppercase',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            padding: '1px 4px',
-                            borderRadius: '3px'
-                          }}>
-                            {m.provider}
-                          </span>
-                          {m.category && (
-                            <span className="model-category-badge" style={{ fontSize: '8.5px', padding: '1px 4px' }}>
-                              {m.category}
-                            </span>
-                          )}
-                        </div>
-                        {(m.rpm || m.tpm || m.rpd) && (
-                          <div className="model-quota-row" style={{ marginTop: '2px' }}>
-                            {m.rpm && (
-                              <span className="model-quota-chip" style={{ fontSize: '9px' }}>
-                                <span className="chip-label">RPM</span>
-                                <span className="chip-val">{m.rpm}</span>
-                              </span>
-                            )}
-                            {m.tpm && (
-                              <span className="model-quota-chip" style={{ fontSize: '9px' }}>
-                                <span className="chip-label">TPM</span>
-                                <span className="chip-val">{m.tpm}</span>
-                              </span>
-                            )}
-                            {m.rpd && (
-                              <span className="model-quota-chip" style={{ fontSize: '9px' }}>
-                                <span className="chip-label">RPD</span>
-                                <span className="chip-val">{m.rpd}</span>
-                              </span>
+                      <span className="provider-group-count">{pModels.length} model</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {pModels.map((m) => {
+                        const isSelected = selectedModelId === m.id;
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => handleSelectModel(m.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 10px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: isSelected ? 'rgba(59, 130, 246, 0.12)' : 'var(--bg-card)',
+                              border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.45)' : 'var(--border-subtle)'}`,
+                              cursor: 'pointer',
+                              transition: 'all 0.12s ease',
+                              gap: '8px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: 'var(--radius-xs)',
+                                background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-subtle)',
+                                border: '1px solid var(--border-subtle)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                              }}>
+                                <ProviderLogo provider={m.provider} size={15} />
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '12px', color: isSelected ? '#ffffff' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }} title={m.name}>
+                                    {m.name}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '9px',
+                                    fontFamily: 'var(--font-mono)',
+                                    color: 'var(--text-tertiary)',
+                                    textTransform: 'uppercase',
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    padding: '1px 4px',
+                                    borderRadius: '3px'
+                                  }}>
+                                    {m.provider}
+                                  </span>
+                                </div>
+                                {(m.rpm || m.tpm || m.rpd) && (
+                                  <div className="model-quota-row" style={{ marginTop: '2px' }}>
+                                    {m.rpm && (
+                                      <span className="model-quota-chip">
+                                        <span className="chip-label">RPM</span>
+                                        <span className="chip-val">{m.rpm}</span>
+                                      </span>
+                                    )}
+                                    {m.tpm && (
+                                      <span className="model-quota-chip">
+                                        <span className="chip-label">TPM</span>
+                                        <span className="chip-val">{m.tpm}</span>
+                                      </span>
+                                    )}
+                                    {m.rpd && (
+                                      <span className="model-quota-chip">
+                                        <span className="chip-label">RPD</span>
+                                        <span className="chip-val">{m.rpd}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '50%',
+                                background: 'rgba(59, 130, 246, 0.2)',
+                                border: '1px solid rgba(59, 130, 246, 0.5)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                              }}>
+                                <Check size={12} strokeWidth={2.8} style={{ color: '#60a5fa' }} />
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
+                        );
+                      })}
                     </div>
-                    {isSelected && (
-                      <Check size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                    )}
                   </div>
                 );
               })}

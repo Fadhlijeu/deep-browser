@@ -16,7 +16,7 @@ import {
   Scale,
   Sparkles
 } from 'lucide-react';
-import { MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
+import { MODE_OPTIONS, PROVIDER_LABELS, sidepanelStore } from '../../state/sidepanelStore';
 import { ExecutionMode, ModelDef } from '../../types';
 import { ProviderLogo } from '../common/ProviderLogo';
 
@@ -74,11 +74,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsFetchingModels(true);
     setFetchToast(null);
     try {
-      const added = await sidepanelStore.autoFetchModels();
-      if (added > 0) {
-        setFetchToast(`Berhasil menambahkan ${added} model baru!`);
+      const res = await sidepanelStore.autoFetchModels('gemini');
+      if (res.count > 0) {
+        setFetchToast(`Berhasil menambahkan ${res.count} model baru!`);
       } else {
-        setFetchToast('Semua model sudah mutakhir (tidak ada model baru).');
+        setFetchToast(res.message || 'Semua model sudah mutakhir.');
       }
     } catch (e: any) {
       setFetchToast(`Auto-fetch gagal: ${e?.message || 'Error'}`);
@@ -94,7 +94,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const displayedModels = models;
+  // Group and sort models by provider, then A to Z
+  const groupedModels = models.reduce((acc, m) => {
+    if (!acc[m.provider]) acc[m.provider] = [];
+    acc[m.provider].push(m);
+    return acc;
+  }, {} as Record<string, ModelDef[]>);
+
+  const providerKeys = ['gemini', 'openai', 'anthropic', 'custom_openai', 'ollama'].filter(
+    (p) => groupedModels[p] && groupedModels[p].length > 0
+  );
+  Object.keys(groupedModels).forEach((p) => {
+    if (!providerKeys.includes(p)) providerKeys.push(p);
+  });
+  providerKeys.forEach((p) => {
+    groupedModels[p].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  });
 
   // Model CRUD handlers
   const handleOpenAdd = () => {
@@ -338,108 +353,115 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </form>
               ) : (
-                /* Paginated Models List */
-                <div className="model-crud-list-wrapper">
-                  <div className="model-crud-list">
-                    {displayedModels.map((m) => {
-                      const isSelected = selectedModelId === m.id;
-                      return (
-                        <div 
-                          key={m.id} 
-                          className={`model-card-item ${isSelected ? 'active' : ''}`}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: 'var(--radius-sm)',
-                              background: 'var(--bg-subtle)',
-                              border: '1px solid var(--border-subtle)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              <ProviderLogo provider={m.provider} size={18} />
-                            </div>
-
-                            <div className="model-card-info">
-                              <div className="model-card-top-row">
-                                <span className="model-card-name truncate">{m.name}</span>
-                                <span className="model-provider-badge">{m.provider}</span>
-                                {m.category && (
-                                  <span className="model-category-badge">{m.category}</span>
-                                )}
-                                {isSelected && (
-                                  <span className="model-active-tag">
-                                    <Check size={10} />
-                                    <span>Aktif</span>
-                                  </span>
-                                )}
-                              </div>
-                              <div className="model-card-sub-row truncate">
-                                <span className="model-slug-code">{m.modelId}</span>
-                                {m.baseUrl && (
-                                  <span className="model-url-preview truncate" title={m.baseUrl}>
-                                    • {m.baseUrl}
-                                  </span>
-                                )}
-                              </div>
-                              {(m.rpm || m.tpm || m.rpd) && (
-                                <div className="model-quota-row">
-                                  {m.rpm && (
-                                    <span className="model-quota-chip">
-                                      <span className="chip-label">RPM</span>
-                                      <span className="chip-val">{m.rpm}</span>
-                                    </span>
-                                  )}
-                                  {m.tpm && (
-                                    <span className="model-quota-chip">
-                                      <span className="chip-label">TPM</span>
-                                      <span className="chip-val">{m.tpm}</span>
-                                    </span>
-                                  )}
-                                  {m.rpd && (
-                                    <span className="model-quota-chip">
-                                      <span className="chip-label">RPD</span>
-                                      <span className="chip-val">{m.rpd}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                <>
+                  {/* Paginated Models List Grouped per Provider and Ordered A-Z */}
+                  <div className="model-crud-list-wrapper">
+                  {providerKeys.map((provider) => {
+                    const pModels = groupedModels[provider];
+                    const providerLabel = PROVIDER_LABELS[provider] || provider.toUpperCase();
+                    return (
+                      <div key={provider} className="provider-model-group">
+                        <div className="provider-group-header">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <ProviderLogo provider={provider as any} size={14} />
+                            <span className="provider-group-title">{providerLabel}</span>
                           </div>
-
-                          <div className="model-card-actions">
-                            {!isSelected && (
-                              <button
-                                className="model-btn-select"
-                                onClick={() => sidepanelStore.setSelectedModel(m.id)}
-                                title="Pilih sebagai model aktif"
-                              >
-                                Pilih
-                              </button>
-                            )}
-                            <button
-                              className="model-btn-icon"
-                              onClick={() => handleOpenEdit(m)}
-                              title="Edit Model"
-                            >
-                              <Pencil size={12} />
-                            </button>
-                            <button
-                              className="model-btn-icon delete"
-                              onClick={() => handleDeleteModel(m.id)}
-                              disabled={models.length <= 1}
-                              title={models.length <= 1 ? 'Minimal harus ada 1 model' : 'Hapus Model'}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
+                          <span className="provider-group-count">{pModels.length} model</span>
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        <div className="model-crud-list">
+                          {pModels.map((m) => {
+                            const isSelected = selectedModelId === m.id;
+                            return (
+                              <div 
+                                key={m.id} 
+                                className={`model-card-item ${isSelected ? 'active' : ''}`}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0 }}>
+                                  <div className="model-avatar-box">
+                                    <ProviderLogo provider={m.provider} size={16} />
+                                  </div>
+
+                                  <div className="model-card-info">
+                                    <div className="model-card-top-row">
+                                      <span className="model-card-name truncate" title={m.name}>{m.name}</span>
+                                      {isSelected && (
+                                        <span className="model-active-tag">
+                                          <Check size={9} strokeWidth={2.6} />
+                                          <span>Aktif</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="model-card-sub-row">
+                                      <span className="model-slug-code">{m.modelId}</span>
+                                      {m.baseUrl && (
+                                        <span className="model-url-preview truncate" title={m.baseUrl}>
+                                          • {m.baseUrl}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {(m.rpm || m.tpm || m.rpd) && (
+                                      <div className="model-quota-row">
+                                        {m.rpm && (
+                                          <span className="model-quota-chip">
+                                            <span className="chip-label">RPM</span>
+                                            <span className="chip-val">{m.rpm}</span>
+                                          </span>
+                                        )}
+                                        {m.tpm && (
+                                          <span className="model-quota-chip">
+                                            <span className="chip-label">TPM</span>
+                                            <span className="chip-val">{m.tpm}</span>
+                                          </span>
+                                        )}
+                                        {m.rpd && (
+                                          <span className="model-quota-chip">
+                                            <span className="chip-label">RPD</span>
+                                            <span className="chip-val">{m.rpd}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="model-card-actions">
+                                  {!isSelected && (
+                                    <button
+                                      type="button"
+                                      className="model-btn-select"
+                                      onClick={() => sidepanelStore.setSelectedModel(m.id)}
+                                      title="Pilih sebagai model aktif"
+                                    >
+                                      Pilih
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="model-btn-icon"
+                                    onClick={() => handleOpenEdit(m)}
+                                    title="Edit Model"
+                                  >
+                                    <Pencil size={11} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="model-btn-icon delete"
+                                    onClick={() => handleDeleteModel(m.id)}
+                                    disabled={models.length <= 1}
+                                    title={models.length <= 1 ? 'Minimal harus ada 1 model' : 'Hapus Model'}
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
                   {/* AI Judge Evaluation Configuration */}
                   <div style={{
@@ -540,7 +562,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     )}
                   </div>
-                </div>
+                </>
               )}
             </div>
           )}

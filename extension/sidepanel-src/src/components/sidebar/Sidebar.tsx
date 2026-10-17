@@ -120,11 +120,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Bottom Utility Controls */}
         <div className="sidebar-footer">
-          <div className="sidebar-mode-policy">
-            <span className="sidebar-policy-label">Mode Eksekusi:</span>
-            <span className="sidebar-policy-val">Agent Decide</span>
-          </div>
-
           <div className="sidebar-actions-grid">
             <button 
               className="sidebar-action-btn"

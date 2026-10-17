@@ -3,29 +3,7 @@ import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, Co
 declare const chrome: any;
 
 export const DEFAULT_MODELS: ModelDef[] = [
-  // Google Gemini (8 Active Models Only)
-  {
-    id: 'gemini/gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash Lite',
-    icon: 'speed',
-    provider: 'gemini',
-    modelId: 'gemini-3.5-flash-lite',
-    category: 'Text-out models',
-    rpm: '15',
-    tpm: '250K',
-    rpd: '500',
-  },
-  {
-    id: 'gemini/gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash Lite',
-    icon: 'speed',
-    provider: 'gemini',
-    modelId: 'gemini-3.1-flash-lite',
-    category: 'Text-out models',
-    rpm: '15',
-    tpm: '250K',
-    rpd: '500',
-  },
+  // 1. Google Gemini (8 Active Models Only, Ordered A to Z)
   {
     id: 'gemini/gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
@@ -60,6 +38,28 @@ export const DEFAULT_MODELS: ModelDef[] = [
     rpd: '20',
   },
   {
+    id: 'gemini/gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    icon: 'speed',
+    provider: 'gemini',
+    modelId: 'gemini-3.1-flash-lite',
+    category: 'Text-out models',
+    rpm: '15',
+    tpm: '250K',
+    rpd: '500',
+  },
+  {
+    id: 'gemini/gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash Lite',
+    icon: 'speed',
+    provider: 'gemini',
+    modelId: 'gemini-3.5-flash-lite',
+    category: 'Text-out models',
+    rpm: '15',
+    tpm: '250K',
+    rpd: '500',
+  },
+  {
     id: 'gemini/gemini-3.6-flash',
     name: 'Gemini 3.6 Flash',
     icon: 'bolt',
@@ -92,7 +92,7 @@ export const DEFAULT_MODELS: ModelDef[] = [
     tpm: '250K',
     rpd: '20',
   },
-  // Other Non-Gemini Providers
+  // 2. OpenAI
   {
     id: 'openai/gpt-4o',
     name: 'GPT-4o',
@@ -109,6 +109,7 @@ export const DEFAULT_MODELS: ModelDef[] = [
     modelId: 'gpt-4o-mini',
     category: 'Fast Lightweight',
   },
+  // 3. Anthropic Claude
   {
     id: 'anthropic/claude-3-5-sonnet',
     name: 'Claude 3.5 Sonnet',
@@ -117,6 +118,7 @@ export const DEFAULT_MODELS: ModelDef[] = [
     modelId: 'claude-3-5-sonnet-20241022',
     category: 'Reasoning & Coding',
   },
+  // 4. Custom OpenAI-Compatible
   {
     id: 'custom/deepseek-chat',
     name: 'DeepSeek Chat (V3)',
@@ -126,6 +128,7 @@ export const DEFAULT_MODELS: ModelDef[] = [
     baseUrl: 'https://api.deepseek.com/v1',
     category: 'OpenAI-Compatible',
   },
+  // 5. Ollama (Local)
   {
     id: 'ollama/llama3',
     name: 'Llama 3 (Local)',
@@ -136,6 +139,31 @@ export const DEFAULT_MODELS: ModelDef[] = [
     category: 'Local Offline',
   },
 ];
+
+export const PROVIDER_ORDER: Record<string, number> = {
+  gemini: 1,
+  openai: 2,
+  anthropic: 3,
+  custom_openai: 4,
+  ollama: 5,
+};
+
+export const PROVIDER_LABELS: Record<string, string> = {
+  gemini: 'Google Gemini',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic Claude',
+  custom_openai: 'Custom OpenAI-Compatible',
+  ollama: 'Ollama (Local)',
+};
+
+export function sortModels(models: ModelDef[]): ModelDef[] {
+  return [...models].sort((a, b) => {
+    const pA = PROVIDER_ORDER[a.provider] || 99;
+    const pB = PROVIDER_ORDER[b.provider] || 99;
+    if (pA !== pB) return pA - pB;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
 
 export const PRESET_OPTIONS: { id: PresetId; name: string; icon: string }[] = [
   { id: 'default',         name: 'Auto',       icon: 'smart_toy' },
@@ -334,9 +362,9 @@ export class SidepanelStateManager {
               };
             }
           }
-          this.state.models = sanitized;
+          this.state.models = sortModels(sanitized);
         } else {
-          this.state.models = [...DEFAULT_MODELS];
+          this.state.models = sortModels([...DEFAULT_MODELS]);
         }
 
         if (stored.selectedModelId) {
@@ -928,7 +956,7 @@ export class SidepanelStateManager {
   }
 
   public addModel(model: ModelDef) {
-    this.state.models.push(model);
+    this.state.models = sortModels([...this.state.models, model]);
     this.saveStorage();
     this.notify();
   }
@@ -937,6 +965,7 @@ export class SidepanelStateManager {
     const idx = this.state.models.findIndex((m) => m.id === id);
     if (idx !== -1) {
       this.state.models[idx] = { ...this.state.models[idx], ...updates };
+      this.state.models = sortModels(this.state.models);
       this.saveStorage();
       this.notify();
     }
@@ -953,7 +982,7 @@ export class SidepanelStateManager {
   }
 
   public resetModelsToDefault() {
-    this.state.models = [...DEFAULT_MODELS];
+    this.state.models = sortModels([...DEFAULT_MODELS]);
     if (!this.state.models.some((m) => m.id === this.state.selectedModelId)) {
       this.state.selectedModelId = 'gemini/gemini-3.5-flash-lite';
     }
@@ -961,7 +990,7 @@ export class SidepanelStateManager {
     this.notify();
   }
 
-  public async autoFetchModels(provider: 'gemini' | 'openai' | 'anthropic' | 'custom_openai' | 'ollama'): Promise<{ success: boolean; count: number; message: string }> {
+  public async autoFetchModels(provider: 'gemini' | 'openai' | 'anthropic' | 'custom_openai' | 'ollama' = 'gemini'): Promise<{ success: boolean; count: number; message: string }> {
     const apiKey = this.state.apiKeys[provider] || (provider === 'gemini' ? this.state.apiKeys.gemini : '');
     try {
       if (provider === 'gemini') {
@@ -990,6 +1019,7 @@ export class SidepanelStateManager {
           }
         }
         if (addedCount > 0) {
+          this.state.models = sortModels(this.state.models);
           this.saveStorage();
           this.notify();
         }
