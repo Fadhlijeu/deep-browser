@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Copy,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Activity,
   ChevronRight,
+  ChevronDown,
   Terminal,
   Maximize2,
   X,
@@ -23,10 +24,10 @@ import {
   FileText,
   ArrowDown,
   Eye,
+  Scale,
 } from 'lucide-react';
 import { ChatMessage, ToolStep, ActivityItem } from '../../types';
 import { HitlApprovalCard } from './HitlApprovalCard';
-import { JudgeVerdictCard } from './JudgeVerdictCard';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { useTypewriter } from '../../hooks/useTypewriter';
 
@@ -92,303 +93,250 @@ const ScreenshotModal: React.FC<{
   );
 };
 
-// ─── Single Sleek Tool Call Item ─────────────────────────────────────────────
-const ToolCallItem: React.FC<{
+// ─── Format Master Elapsed Duration Helper ────────────────────────────────────
+const getMasterDuration = (steps: ToolStep[], isRunning: boolean): string => {
+  if (isRunning) return 'Working...';
+
+  let totalMs = 0;
+  for (const s of steps) {
+    if (s.duration) {
+      if (s.duration.endsWith('ms')) {
+        totalMs += parseFloat(s.duration) || 0;
+      } else if (s.duration.endsWith('s')) {
+        totalMs += (parseFloat(s.duration) || 0) * 1000;
+      }
+    }
+  }
+
+  if (totalMs <= 0) {
+    const count = steps.length;
+    if (count === 0) return 'Worked';
+    totalMs = count * 900;
+  }
+
+  const totalSec = Math.round(totalMs / 1000);
+  if (totalSec < 1) return 'Worked for <1s';
+  if (totalSec < 60) return `Worked for ${totalSec}s`;
+  const mins = Math.floor(totalSec / 60);
+  const remSec = totalSec % 60;
+  return `Worked for ${mins}m ${remSec}s`;
+};
+
+// ─── Minimal Syntax-Highlighted JSON Viewer (Matches User Photo) ─────────────
+const JsonViewer: React.FC<{ data: unknown }> = ({ data }) => {
+  const jsonStr = useMemo(() => {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      return String(data);
+    }
+  }, [data]);
+
+  const highlightedHtml = useMemo(() => {
+    const escaped = jsonStr
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    return escaped.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      (match) => {
+        let cls = 'json-number';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'json-key';
+          } else {
+            cls = 'json-string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'json-boolean';
+        } else if (/null/.test(match)) {
+          cls = 'json-null';
+        }
+        return `<span class="${cls}">${match}</span>`;
+      }
+    );
+  }, [jsonStr]);
+
+  return (
+    <pre
+      className="chat-trace-json"
+      dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+    />
+  );
+};
+
+// ─── Tool Icon Helper ────────────────────────────────────────────────────────
+const getToolIcon = (name: string, iconStr?: string) => {
+  const n = (name || iconStr || '').toLowerCase();
+  if (n.includes('layar') || n.includes('screenshot') || n.includes('camera')) return <Camera size={11} />;
+  if (n.includes('nav') || n.includes('buka') || n.includes('url') || n.includes('goto')) return <Compass size={11} />;
+  if (n.includes('search') || n.includes('cari')) return <Search size={11} />;
+  if (n.includes('click') || n.includes('klik') || n.includes('touch') || n.includes('press')) return <MousePointer size={11} />;
+  if (n.includes('type') || n.includes('input') || n.includes('ketik')) return <Edit3 size={11} />;
+  if (n.includes('scroll')) return <ArrowDown size={11} />;
+  if (n.includes('extract') || n.includes('ekstrak') || n.includes('pdf')) return <FileText size={11} />;
+  if (n.includes('obs') || n.includes('baca') || n.includes('lihat')) return <Eye size={11} />;
+  return <Terminal size={11} />;
+};
+
+// ─── Single Minimal Trace Tool Item (No ms, No status pill, No cards) ───────
+const TraceToolItem: React.FC<{
   step: ToolStep;
   onViewScreenshot: (url: string, title: string) => void;
 }> = ({ step, onViewScreenshot }) => {
   const [open, setOpen] = useState(false);
   const scUrl = getScreenshotUrl(step);
-  const hasDetail = Boolean(step.args || step.result || step.error || step.verification || scUrl);
 
-  const getToolIcon = (name: string, iconStr?: string) => {
-    const n = (name || iconStr || '').toLowerCase();
-    if (scUrl || n.includes('layar') || n.includes('screenshot')) return <Camera size={11} />;
-    if (n.includes('nav') || n.includes('buka') || n.includes('url')) return <Compass size={11} />;
-    if (n.includes('search') || n.includes('cari')) return <Search size={11} />;
-    if (n.includes('click') || n.includes('klik') || n.includes('touch')) return <MousePointer size={11} />;
-    if (n.includes('type') || n.includes('input') || n.includes('ketik')) return <Edit3 size={11} />;
-    if (n.includes('extract') || n.includes('ekstrak') || n.includes('pdf')) return <FileText size={11} />;
-    if (n.includes('scroll')) return <ArrowDown size={11} />;
-    if (n.includes('obs') || n.includes('baca') || n.includes('lihat')) return <Eye size={11} />;
-    return <Terminal size={11} />;
-  };
+  const detailData = useMemo(() => {
+    if (step.args && !step.result && !step.error && !step.verification) {
+      return step.args;
+    }
+    const payload: Record<string, unknown> = {};
+    if (step.args && Object.keys(step.args).length > 0) {
+      payload.args = step.args;
+    }
+    if (step.result !== undefined && step.result !== null) {
+      payload.result =
+        typeof step.result === 'object' && (step.result as any)?.screenshot
+          ? { ...(step.result as any), screenshot: '[Viewport Screenshot]' }
+          : step.result;
+    }
+    if (step.verification) payload.verification = step.verification;
+    if (step.error) payload.error = step.error;
+    return Object.keys(payload).length > 0 ? payload : null;
+  }, [step]);
+
+  const hasDetail = Boolean(detailData || scUrl);
 
   return (
-    <div style={{ margin: '3px 0' }}>
-      <div
-        className={`chat-tool-pill ${step.status === 'running' ? 'is-running' : step.status === 'failed' ? 'is-failed' : 'is-success'}`}
+    <div className="trace-item">
+      <button
+        type="button"
+        className="trace-item-trigger"
         onClick={() => hasDetail && setOpen(!open)}
-        onKeyDown={(event) => {
-          if (hasDetail && (event.key === 'Enter' || event.key === ' ')) {
-            event.preventDefault();
-            setOpen((value) => !value);
-          }
-        }}
-        role={hasDetail ? 'button' : undefined}
-        tabIndex={hasDetail ? 0 : undefined}
-        aria-expanded={hasDetail ? open : undefined}
-        title={step.name}
+        disabled={!hasDetail}
       >
-        <span className="tool-prompt-icon">&gt;_</span>
-        <span style={{ display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
+        <span className="trace-icon">
           {getToolIcon(step.name, step.icon)}
         </span>
-        <span className="tool-title">{step.name}</span>
-        <div className="tool-meta">
-          {step.duration && <span>{step.duration}</span>}
-          <span className={`status ${step.status === 'succeeded' ? 'success' : step.status === 'failed' ? 'failed' : 'running'}`}>
-            {step.status === 'succeeded' ? 'succeeded' : step.status === 'failed' ? 'failed' : 'running'}
-          </span>
-          {hasDetail && (
-            <ChevronRight
-              size={11}
-              style={{
-                transform: open ? 'rotate(90deg)' : 'none',
-                transition: 'transform 0.15s',
-                color: 'var(--muted)',
-              }}
-            />
-          )}
-        </div>
-      </div>
+        <span className="trace-item-title">{step.name}</span>
+        {hasDetail && (
+          <ChevronDown
+            size={11}
+            className={`trace-item-chevron ${open ? 'open' : ''}`}
+          />
+        )}
+      </button>
 
       {open && hasDetail && (
-        <div
-          style={{
-            margin: '2px 0 6px 14px',
-            padding: '8px',
-            border: '1px solid var(--line)',
-            borderRadius: '6px',
-            background: 'var(--paper)',
-          }}
-        >
+        <div className="trace-item-detail">
           {scUrl && (
-            <div style={{ marginBottom: '8px' }}>
-              <div
-                className="chat-screenshot-thumb-wrap"
-                onClick={() => onViewScreenshot(scUrl, step.name)}
-                style={{ borderRadius: '6px', maxHeight: '160px' }}
-              >
-                <img src={scUrl} alt={step.name} className="chat-screenshot-thumb" />
-                <span className="chat-screenshot-badge">
-                  <Maximize2 size={10} /> Klik untuk perbesar
-                </span>
-              </div>
+            <div
+              className="chat-screenshot-thumb-wrap"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewScreenshot(scUrl, step.name);
+              }}
+              style={{ borderRadius: '4px', maxHeight: '120px', maxWidth: '240px', margin: '2px 0 4px 14px' }}
+            >
+              <img src={scUrl} alt={step.name} className="chat-screenshot-thumb" />
+              <span className="chat-screenshot-badge">
+                <Maximize2 size={9} /> Buka gambar
+              </span>
             </div>
           )}
 
-          {(step.args || step.result || step.error || step.verification) && (
-            <pre className="chat-tool-detail mono">
-              {JSON.stringify(
-                {
-                  args: step.args,
-                  result: typeof step.result === 'object' && (step.result as any)?.screenshot ? { ...(step.result as any), screenshot: '[Base64 Viewport Image]' } : step.result,
-                  verification: step.verification,
-                  error: step.error,
-                },
-                null,
-                2
-              )}
-            </pre>
-          )}
+          {detailData && <JsonViewer data={detailData} />}
         </div>
       )}
     </div>
   );
 };
 
-// ─── Consecutive Screenshots Gallery ─────────────────────────────────────────
-const ScreenshotScanGallery: React.FC<{
-  steps: ToolStep[];
-  onViewScreenshot: (url: string, title: string) => void;
-}> = ({ steps, onViewScreenshot }) => {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="chat-screenshot-card">
-      <div
-        className="chat-tool-group-header"
-        onClick={() => setOpen(!open)}
-        title="Buka / tutup galeri hasil pemindaian layar"
-      >
-        <div className="chat-tool-group-title">
-          <Camera size={13} color="var(--accent)" />
-          <span>Pemindaian Layar ({steps.length} Tangkapan Viewport)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '9.5px', color: 'var(--muted)' }}>
-            {open ? 'Tutup galeri' : `Buka (${steps.length})`}
-          </span>
-          <ChevronRight
-            size={11}
-            style={{
-              transform: open ? 'rotate(90deg)' : 'none',
-              transition: 'transform 0.15s',
-              color: 'var(--muted)',
-            }}
-          />
-        </div>
-      </div>
-
-      {open && (
-        <div style={{ padding: '8px 10px', background: 'var(--panel)' }}>
-          <div className="screenshot-gallery-row">
-            {steps.map((st, idx) => {
-              const url = getScreenshotUrl(st);
-              const scrollPct = (st.result as any)?.scroll_percentage ?? Math.round((idx / Math.max(1, steps.length - 1)) * 100);
-              return (
-                <div
-                  key={st.id || idx}
-                  className="screenshot-gallery-item"
-                  onClick={() => url && onViewScreenshot(url, `${st.name} (${scrollPct}%)`)}
-                  title="Klik untuk melihat resolusi penuh"
-                >
-                  {url ? (
-                    <img src={url} alt={`Scan ${scrollPct}%`} />
-                  ) : (
-                    <div style={{ height: '90px', display: 'grid', placeItems: 'center', background: '#222', color: '#888', fontSize: '10px' }}>
-                      Memproses...
-                    </div>
-                  )}
-                  <div className="label">{scrollPct}% scrolled</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─── Group of Consecutive Tools with Open/Close Toggle ──────────────────────
-const ToolStepsGroup: React.FC<{
-  steps: ToolStep[];
-  onViewScreenshot: (url: string, title: string) => void;
-}> = ({ steps, onViewScreenshot }) => {
-  // If all are screenshots, render the visual gallery
-  const allScreenshots = steps.every((s) => Boolean(getScreenshotUrl(s)) || s.name.toLowerCase().includes('tangkapan layar'));
-  if (allScreenshots && steps.length >= 2) {
-    return <ScreenshotScanGallery steps={steps} onViewScreenshot={onViewScreenshot} />;
-  }
-
-  // If only 1 step, render single pill directly
-  if (steps.length === 1) {
-    return <ToolCallItem step={steps[0]} onViewScreenshot={onViewScreenshot} />;
-  }
-
-  // Multi-step collapsible container (defaults to open inside Working section)
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="chat-tool-group">
-      <button
-        type="button"
-        className="chat-tool-group-header"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        title="Buka / tutup daftar aksi browser"
-      >
-        <div className="chat-tool-group-title">
-          <span className="tool-prompt-icon">&gt;_</span>
-          <span>{steps.length} aksi browser dieksekusi</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '9.5px', color: 'var(--muted)' }}>
-            {open ? 'Tutup daftar' : `Buka (${steps.length} aksi)`}
-          </span>
-          <ChevronRight
-            size={11}
-            style={{
-              transform: open ? 'rotate(90deg)' : 'none',
-              transition: 'transform 0.15s',
-              color: 'var(--muted)',
-            }}
-          />
-        </div>
-      </button>
-
-      {open && (
-        <div className="chat-tool-group-body">
-          {steps.map((st) => (
-            <ToolCallItem
-              key={st.id}
-              step={st}
-              onViewScreenshot={onViewScreenshot}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─── AI Reasoning Eventlog (Unshow) - Matches Image 1 & 2 "Worked for ... ∨" ──
-const ReasoningBlock: React.FC<{
+// ─── Single Minimal Trace Reasoning Item ─────────────────────────────────────
+const TraceReasoningItem: React.FC<{
   thought: string;
-  isStreaming?: boolean;
-}> = ({ thought, isStreaming }) => {
+}> = ({ thought }) => {
   const [open, setOpen] = useState(false);
   const thoughtText = (thought || '').trim();
-  const lineCount = thoughtText ? thoughtText.split(/\r?\n/).filter(Boolean).length : 0;
+
+  const title = useMemo(() => {
+    if (!thoughtText) return 'Reasoning process';
+    const firstLine = thoughtText.split(/\r?\n/)[0].replace(/^#+\s*/, '').replace(/[*_`]/g, '').trim();
+    if (firstLine.length > 0 && firstLine.length <= 70) {
+      return firstLine;
+    }
+    return 'Reasoning process';
+  }, [thoughtText]);
 
   return (
-    <section className={`chat-reasoning-card ${isStreaming ? 'is-thinking' : 'is-ready'} ${open ? 'is-expanded' : ''}`}>
+    <div className="trace-item">
       <button
         type="button"
-        className="chat-reasoning-trigger"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        title={open ? 'Ciutkan detail proses' : 'Lihat detail proses'}
+        className="trace-item-trigger"
+        onClick={() => setOpen(!open)}
       >
-        <span className="chat-reasoning-icon" aria-hidden="true">
-          <Sparkles size={15} />
+        <span className="trace-icon">
+          <Sparkles size={11} />
         </span>
-        <span className="chat-reasoning-copy">
-          <span className="chat-reasoning-title">
-            {isStreaming ? 'Sedang menganalisis' : 'Ringkasan proses'}
-          </span>
-          <span className="chat-reasoning-subtitle">
-            {isStreaming ? 'Menyusun langkah berikutnya' : 'Konteks dan aktivitas agen'}
-            {lineCount > 0 ? ` · ${lineCount} baris` : ''}
-          </span>
-        </span>
-        <span className={`chat-reasoning-state ${isStreaming ? 'running' : 'complete'}`}>
-          <span className="chat-reasoning-state-dot" />
-          {isStreaming ? 'Berjalan' : 'Tersedia'}
-        </span>
-        <ChevronRight className="chat-reasoning-chevron" size={15} />
+        <span className="trace-item-title">{title}</span>
+        <ChevronDown
+          size={11}
+          className={`trace-item-chevron ${open ? 'open' : ''}`}
+        />
       </button>
 
       {open && (
-        <div className="chat-reasoning-body">
-          <div className="chat-reasoning-body-head">
-            <span>DETAIL PROSES</span>
-            <span>{lineCount} baris</span>
+        <div className="trace-item-detail">
+          <div className="chat-reasoning-markdown">
+            <MarkdownRenderer content={thoughtText} />
           </div>
-          {thoughtText ? (
-            <div className="chat-reasoning-text">
-              <MarkdownRenderer content={thoughtText} />
-            </div>
-          ) : (
-            <p className="chat-reasoning-empty">
-              {isStreaming ? 'Detail proses akan muncul saat tersedia.' : 'Tidak ada detail proses yang direkam untuk aktivitas ini.'}
-            </p>
-          )}
         </div>
       )}
-    </section>
+    </div>
   );
 };
 
-// ─── Unified Working > Collapsible Activity Container ───────────────────────
-const WorkingSection: React.FC<{
+// ─── Minimal Trace Judge Item ───────────────────────────────────────────────
+const TraceJudgeItem: React.FC<{ verdict: any }> = ({ verdict }) => {
+  const [open, setOpen] = useState(false);
+  const isValid = Boolean(verdict.verdict);
+
+  return (
+    <div className="trace-item">
+      <button
+        type="button"
+        className="trace-item-trigger"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="trace-icon">
+          <Scale size={11} color={isValid ? 'var(--green)' : 'var(--red)'} />
+        </span>
+        <span className="trace-item-title">
+          {isValid ? 'AI Judge Verification: Valid' : 'AI Judge Verification: Needs Attention'}
+        </span>
+        <ChevronDown
+          size={11}
+          className={`trace-item-chevron ${open ? 'open' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="trace-item-detail">
+          <JsonViewer data={verdict} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Master Trace Group Container ("Worked for 1m 55s ∨" / "Working... ∨") ───
+const TraceMasterGroup: React.FC<{
   isRunning: boolean;
-  totalStepsCount?: number;
+  steps: ToolStep[];
   children: React.ReactNode;
-}> = ({ isRunning, totalStepsCount = 0, children }) => {
-  // If running, open by default so user can follow progress; if finished, collapsed by default
+}> = ({ isRunning, steps, children }) => {
   const [open, setOpen] = useState(isRunning);
   const [hasUserToggled, setHasUserToggled] = useState(false);
 
@@ -403,109 +351,80 @@ const WorkingSection: React.FC<{
     setOpen((prev) => !prev);
   };
 
-  const actionText = totalStepsCount > 0 ? `(${totalStepsCount} ${totalStepsCount === 1 ? 'aksi' : 'aksi'})` : '';
+  const label = useMemo(() => {
+    return getMasterDuration(steps, isRunning);
+  }, [steps, isRunning]);
 
   return (
-    <div className="chat-working-section">
+    <div className="chat-trace-section">
       <button
         type="button"
-        className={`chat-working-trigger ${isRunning ? 'is-running' : ''}`}
+        className="chat-trace-master-trigger"
         onClick={handleToggle}
         aria-expanded={open}
-        title={open ? 'Tutup aktivitas (Working)' : 'Lihat aktivitas (Working)'}
       >
-        <span className="chat-working-indicator">
-          {isRunning ? (
-            <span className="chat-working-pulse-dot" />
-          ) : (
-            <span className="chat-working-done-dot" />
-          )}
-        </span>
-        <span className="chat-working-title">
-          {isRunning ? 'Working...' : 'Working'}
-        </span>
-        {actionText && !isRunning && (
-          <span className="chat-working-count">{actionText}</span>
-        )}
-        <ChevronRight
+        <span>{label}</span>
+        <ChevronDown
           size={12}
-          className="chat-working-chevron"
-          style={{
-            transform: open ? 'rotate(90deg)' : 'none',
-            transition: 'transform 0.18s ease',
-          }}
+          className={`chat-trace-chevron ${open ? 'open' : ''}`}
         />
       </button>
 
-      {open && (
-        <div className="chat-working-body">
-          {children}
-        </div>
-      )}
+      {open && <div className="chat-trace-body">{children}</div>}
     </div>
   );
 };
 
 // ─── Grouping Helper for Activities ──────────────────────────────────────────
-interface WorkingSubItem {
-  type: 'reasoning' | 'tools';
+interface TraceItemDef {
+  type: 'reasoning' | 'tool';
+  step?: ToolStep;
   thoughtText?: string;
-  steps?: ToolStep[];
   id: string;
 }
 
 interface ActivityGroup {
-  type: 'narrative' | 'working';
+  type: 'narrative' | 'trace';
   narrativeText?: string;
-  workingItems?: WorkingSubItem[];
-  totalSteps?: number;
+  traceItems?: TraceItemDef[];
+  steps?: ToolStep[];
   id: string;
 }
 
 const groupActivities = (activities: ActivityItem[]): ActivityGroup[] => {
   const groups: ActivityGroup[] = [];
-  let currentWorkingItems: WorkingSubItem[] = [];
-  let currentToolSteps: ToolStep[] = [];
-  let totalStepsInCurrentWorking = 0;
+  let currentTraceItems: TraceItemDef[] = [];
+  let currentSteps: ToolStep[] = [];
 
-  const flushTools = () => {
-    if (currentToolSteps.length > 0) {
-      currentWorkingItems.push({
-        type: 'tools',
-        steps: [...currentToolSteps],
-        id: 'grp_tools_' + currentToolSteps[0].id,
-      });
-      totalStepsInCurrentWorking += currentToolSteps.length;
-      currentToolSteps = [];
-    }
-  };
-
-  const flushWorking = () => {
-    flushTools();
-    if (currentWorkingItems.length > 0) {
+  const flushTrace = () => {
+    if (currentTraceItems.length > 0) {
       groups.push({
-        type: 'working',
-        workingItems: [...currentWorkingItems],
-        totalSteps: totalStepsInCurrentWorking,
-        id: 'working_' + currentWorkingItems[0].id,
+        type: 'trace',
+        traceItems: [...currentTraceItems],
+        steps: [...currentSteps],
+        id: 'trace_' + currentTraceItems[0].id,
       });
-      currentWorkingItems = [];
-      totalStepsInCurrentWorking = 0;
+      currentTraceItems = [];
+      currentSteps = [];
     }
   };
 
   for (const act of activities) {
     if (act.type === 'step' && act.step) {
-      currentToolSteps.push(act.step);
+      currentSteps.push(act.step);
+      currentTraceItems.push({
+        type: 'tool',
+        step: act.step,
+        id: act.id || act.step.id,
+      });
     } else if (act.type === 'reasoning' && act.thought) {
-      flushTools();
-      currentWorkingItems.push({
+      currentTraceItems.push({
         type: 'reasoning',
         thoughtText: act.thought,
         id: act.id,
       });
     } else if (act.type === 'narrative' && act.text) {
-      flushWorking();
+      flushTrace();
       groups.push({
         type: 'narrative',
         narrativeText: act.text,
@@ -514,7 +433,7 @@ const groupActivities = (activities: ActivityItem[]): ActivityGroup[] => {
     }
   }
 
-  flushWorking();
+  flushTrace();
   return groups;
 };
 
@@ -571,10 +490,9 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const activities: ActivityItem[] = message.activities || [];
   const hasActivities = activities.length > 0;
   const grouped = hasActivities ? groupActivities(activities) : [];
-  const lastWorkingGroupIndex = grouped.map((g) => g.type).lastIndexOf('working');
-  const hasWorkingGroup = lastWorkingGroupIndex !== -1;
+  const lastTraceGroupIndex = grouped.map((g) => g.type).lastIndexOf('trace');
+  const hasTraceGroup = lastTraceGroupIndex !== -1;
   const totalStepsCount = steps.length || activities.filter((a) => a.type === 'step').length;
-  const timeStr = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
     <article className="message assistant" data-message-id={message.id}>
@@ -593,14 +511,6 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
       </div>
 
       <div className="message-main">
-        {/* Meta Bar */}
-        <div className="message-meta">
-          <span>Deep Browser Copilot</span>
-          <span>·</span>
-          <span>{timeStr}</span>
-          {message.modelName && <span className="pill">{message.modelName}</span>}
-        </div>
-
         {/* Message Content: Clean stream alternating Show, Unshow, Toolcalls, and UI Widgets */}
         <div className="message-content">
           {message.isError && (
@@ -618,7 +528,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
             </div>
           )}
 
-          {/* 1. Dynamic Activities Stream: Grouped tools & reasoning toggles under Working > */}
+          {/* 1. Dynamic Activities Stream: Alternating Show Narrative and Unshow Minimal Traces */}
           {hasActivities ? (
             grouped.map((grp, grpIdx) => {
               if (grp.type === 'narrative' && grp.narrativeText) {
@@ -628,28 +538,27 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                   </div>
                 );
               }
-              if (grp.type === 'working') {
+              if (grp.type === 'trace') {
                 return (
-                  <WorkingSection
+                  <TraceMasterGroup
                     key={grp.id}
                     isRunning={isRunning}
-                    totalStepsCount={grp.totalSteps}
+                    steps={grp.steps || []}
                   >
-                    {grp.workingItems?.map((wItem) => {
-                      if (wItem.type === 'reasoning' && wItem.thoughtText) {
+                    {grp.traceItems?.map((tItem) => {
+                      if (tItem.type === 'reasoning' && tItem.thoughtText) {
                         return (
-                          <ReasoningBlock
-                            key={wItem.id}
-                            thought={wItem.thoughtText}
-                            isStreaming={isRunning}
+                          <TraceReasoningItem
+                            key={tItem.id}
+                            thought={tItem.thoughtText}
                           />
                         );
                       }
-                      if (wItem.type === 'tools' && wItem.steps && wItem.steps.length > 0) {
+                      if (tItem.type === 'tool' && tItem.step) {
                         return (
-                          <ToolStepsGroup
-                            key={wItem.id}
-                            steps={wItem.steps}
+                          <TraceToolItem
+                            key={tItem.id}
+                            step={tItem.step}
                             onViewScreenshot={(url, title) => {
                               setModalImage(url);
                               setModalTitle(title);
@@ -659,11 +568,11 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                       }
                       return null;
                     })}
-                    {/* Include Judge verdict inside the last working section if present */}
-                    {grpIdx === lastWorkingGroupIndex && message.judgeVerdict && (
-                      <JudgeVerdictCard verdict={message.judgeVerdict} />
+                    {/* Include Judge verdict inside the last trace section if present */}
+                    {grpIdx === lastTraceGroupIndex && message.judgeVerdict && (
+                      <TraceJudgeItem verdict={message.judgeVerdict} />
                     )}
-                  </WorkingSection>
+                  </TraceMasterGroup>
                 );
               }
               return null;
@@ -672,33 +581,29 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
             <>
               {/* Fallback for legacy messages with raw steps / thought / judgeVerdict */}
               {(steps.length > 0 || message.thought || message.judgeVerdict) && (
-                <WorkingSection
-                  isRunning={isRunning}
-                  totalStepsCount={steps.length}
-                >
-                  {message.thought && (
-                    <ReasoningBlock thought={message.thought} isStreaming={isRunning} />
-                  )}
-                  {steps.length > 0 && (
-                    <ToolStepsGroup
-                      steps={steps}
+                <TraceMasterGroup isRunning={isRunning} steps={steps}>
+                  {message.thought && <TraceReasoningItem thought={message.thought} />}
+                  {steps.map((st) => (
+                    <TraceToolItem
+                      key={st.id}
+                      step={st}
                       onViewScreenshot={(url, title) => {
                         setModalImage(url);
                         setModalTitle(title);
                       }}
                     />
-                  )}
-                  {message.judgeVerdict && <JudgeVerdictCard verdict={message.judgeVerdict} />}
-                </WorkingSection>
+                  ))}
+                  {message.judgeVerdict && <TraceJudgeItem verdict={message.judgeVerdict} />}
+                </TraceMasterGroup>
               )}
             </>
           )}
 
-          {/* If there were activities but no working group (e.g. only narrative) and there is a judge verdict */}
-          {hasActivities && !hasWorkingGroup && message.judgeVerdict && (
-            <WorkingSection isRunning={false}>
-              <JudgeVerdictCard verdict={message.judgeVerdict} />
-            </WorkingSection>
+          {/* If there were activities but no trace group (e.g. only narrative) and there is a judge verdict */}
+          {hasActivities && !hasTraceGroup && message.judgeVerdict && (
+            <TraceMasterGroup isRunning={false} steps={[]}>
+              <TraceJudgeItem verdict={message.judgeVerdict} />
+            </TraceMasterGroup>
           )}
 
           {/* 2. Interactive UI Widget (HITL: AskForm, choices, approvals) - never collapsed, always accessible */}

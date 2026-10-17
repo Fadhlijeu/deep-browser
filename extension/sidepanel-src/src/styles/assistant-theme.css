@@ -4329,90 +4329,164 @@ tbody tr:hover {
   .log-card { padding: 10px 0 !important; }
 }
 
-/* ─── Unified Working > Collapsible Activity Container ─── */
-.chat-working-section {
-  margin: 5px 0 8px;
+/* ─── Ultra-Minimal Trace UI (Matching User Reference Image) ─── */
+.chat-trace-section {
+  margin: 1px 0 4px;
 }
 
-.chat-working-trigger {
+.chat-trace-master-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 0;
+  gap: 5px;
+  padding: 1px 0;
   border: 0;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 11.5px;
-  font-weight: 550;
-  border-radius: 4px;
-  transition: color 0.15s ease;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
   user-select: none;
+  transition: color 0.15s ease;
 }
 
-.chat-working-trigger:hover {
+.chat-trace-master-trigger:hover {
   color: var(--ink);
 }
 
-.chat-working-indicator {
+.chat-trace-chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.chat-trace-chevron.open,
+.chat-trace-master-trigger[aria-expanded="true"] .chat-trace-chevron {
+  transform: rotate(180deg);
+}
+
+.chat-trace-body {
+  margin: 1px 0 2px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.trace-item {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+}
+
+.trace-item-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  user-select: none;
+  transition: color 0.15s ease;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.trace-item-trigger:hover {
+  color: var(--accent);
+}
+
+.trace-item-trigger:disabled {
+  cursor: default;
+  color: var(--ink);
+}
+
+.trace-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-}
-
-.chat-working-done-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--muted);
-  opacity: 0.7;
-}
-
-.chat-working-pulse-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 6px var(--blue);
-  animation: tracePulse 1.2s ease-in-out infinite;
-}
-
-.chat-working-title {
-  font-size: 11.5px;
   color: var(--muted);
-  font-weight: 550;
-  letter-spacing: -0.01em;
+  flex-shrink: 0;
 }
 
-.chat-working-trigger:hover .chat-working-title {
-  color: var(--ink);
-}
-
-.chat-working-count {
-  font-size: 10px;
-  color: var(--muted);
+.trace-item-title {
+  font-size: 12px;
   font-weight: 400;
-  opacity: 0.8;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.chat-working-chevron {
+.trace-item-chevron {
   color: var(--muted);
-  transition: transform 0.18s ease;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  margin-left: 1px;
 }
 
-.chat-working-trigger:hover .chat-working-chevron {
+.trace-item-chevron.open {
+  transform: rotate(180deg);
+}
+
+.trace-item-detail {
+  margin: 1px 0 2px 14px;
+}
+
+/* Syntax highlighted JSON viewer (Exact match to reference image) */
+.chat-trace-json {
+  margin: 1px 0 2px;
+  padding: 2px 0 2px 4px;
+  background: transparent;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--ink);
+  font-family: var(--mono);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 0;
 }
 
-.chat-working-body {
-  margin: 4px 0 6px 6px;
-  padding: 2px 0 4px 12px;
-  border-left: 1.5px solid var(--line-strong);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  animation: traceReveal 0.18s ease both;
+.chat-trace-json .json-key {
+  color: #cf222e;
 }
+[data-theme="dark"] .chat-trace-json .json-key {
+  color: #ff7b72;
+}
+
+.chat-trace-json .json-string {
+  color: #116329;
+}
+[data-theme="dark"] .chat-trace-json .json-string {
+  color: #7ee787;
+}
+
+.chat-trace-json .json-number,
+.chat-trace-json .json-boolean {
+  color: #0550ae;
+}
+[data-theme="dark"] .chat-trace-json .json-number,
+[data-theme="dark"] .chat-trace-json .json-boolean {
+  color: #79c0ff;
+}
+
+.chat-trace-json .json-null {
+  color: #6e7781;
+}
+
+.chat-reasoning-markdown {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  opacity: 0.9;
+}
+
+
 
