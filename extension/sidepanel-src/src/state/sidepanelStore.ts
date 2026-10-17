@@ -1116,6 +1116,10 @@ export class SidepanelStateManager {
     this.notify();
   }
 
+  public setMode(mode: ExecutionMode) {
+    this.setSelectedMode(mode);
+  }
+
   public setSelectedPreset(preset: PresetId) {
     this.state.selectedPreset = preset;
     this.saveStorage();
@@ -1766,6 +1770,8 @@ export class SidepanelStateManager {
       activeTab = this.state.tabs.find((t) => t.active) || this.state.tabs[0];
     }
 
+    let recorder: any = null;
+
     try {
       const browserSession = new (window as any).BrowserSession({
         tabId: activeTab?.id,
@@ -1825,7 +1831,6 @@ export class SidepanelStateManager {
       }
 
       // Check if Video Recording is requested
-      let recorder: any = null;
       if (this.state.isRecordingEnabled && (window as any).SessionRecorder && browserSession?.tabId) {
         try {
           const rec = new (window as any).SessionRecorder({ tabId: browserSession.tabId });
