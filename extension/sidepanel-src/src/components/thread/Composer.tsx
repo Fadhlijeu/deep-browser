@@ -12,9 +12,13 @@ import {
   Database,
   FileText,
   Eye,
+  Paperclip,
+  Video,
+  Monitor,
+  X,
 } from 'lucide-react';
 import { PRESET_OPTIONS, MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
-import { PresetId, ExecutionMode, ModelDef } from '../../types';
+import { PresetId, ExecutionMode, ModelDef, StagedFile } from '../../types';
 import { ProviderLogo } from '../common/ProviderLogo';
 
 interface ComposerProps {
@@ -41,9 +45,46 @@ export const Composer: React.FC<ComposerProps> = ({
 }) => {
   const [text, setText] = useState(initialPrompt);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const presetScrollRef = useRef<HTMLDivElement>(null);
   const [canScrollPresetLeft, setCanScrollPresetLeft] = useState(false);
   const [canScrollPresetRight, setCanScrollPresetRight] = useState(false);
+
+  // Store sync for staged files, recording, and HUD
+  const [storeState, setStoreState] = useState(() => sidepanelStore.getState());
+  useEffect(() => {
+    return sidepanelStore.subscribe(() => {
+      setStoreState({ ...sidepanelStore.getState() });
+    });
+  }, []);
+
+  const stagedFiles = storeState.stagedFiles || [];
+  const isRecordingEnabled = storeState.isRecordingEnabled || false;
+  const isHudEnabled = storeState.isHudEnabled || false;
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        sidepanelStore.addStagedFile({
+          id: 'file_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          dataUrl: reader.result as string,
+          base64: reader.result as string,
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Execution mode dropdown state
   const [isModeOpen, setIsModeOpen] = useState(false);
@@ -185,6 +226,36 @@ export const Composer: React.FC<ComposerProps> = ({
         )}
       </div>
 
+      {/* Staged Attachments Row */}
+      {stagedFiles && stagedFiles.length > 0 && (
+        <div className="staged-files-row">
+          {stagedFiles.map((file) => (
+            <div key={file.id} className="staged-file-chip" title={`${file.name} (${(file.size / 1024).toFixed(1)} KB)`}>
+              <Paperclip size={11} style={{ flexShrink: 0, opacity: 0.7 }} />
+              <span className="chip-name">{file.name}</span>
+              <span className="chip-size">({(file.size / 1024).toFixed(1)} KB)</span>
+              <button
+                type="button"
+                className="chip-remove-btn"
+                onClick={() => sidepanelStore.removeStagedFile(file.id)}
+                title="Hapus lampiran"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Hidden File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+
       {/* Input Field */}
       <div className="composer-input-wrap">
         <textarea
@@ -256,6 +327,36 @@ export const Composer: React.FC<ComposerProps> = ({
               </div>
             )}
           </div>
+
+          {/* Attach File Button */}
+          <button
+            type="button"
+            className={`composer-tool-btn ${stagedFiles.length > 0 ? 'active' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+            title={stagedFiles.length > 0 ? `${stagedFiles.length} berkas terlampir` : 'Lampirkan Berkas untuk Upload'}
+          >
+            <Paperclip size={13} />
+          </button>
+
+          {/* Session Video Recording Toggle */}
+          <button
+            type="button"
+            className={`composer-tool-btn ${isRecordingEnabled ? 'active recording' : ''}`}
+            onClick={() => sidepanelStore.toggleRecording()}
+            title={isRecordingEnabled ? 'Perekam Video: AKTIF (Merekam saat jalan)' : 'Aktifkan Perekaman Video Tab'}
+          >
+            <Video size={13} />
+          </button>
+
+          {/* In-Page Demo HUD Toggle */}
+          <button
+            type="button"
+            className={`composer-tool-btn ${isHudEnabled ? 'active' : ''}`}
+            onClick={() => sidepanelStore.toggleDemoHud()}
+            title={isHudEnabled ? 'In-Page Demo HUD: AKTIF di Halaman' : 'Tampilkan Floating Demo HUD di Halaman Web'}
+          >
+            <Monitor size={13} />
+          </button>
         </div>
 
         {/* Action Button */}

@@ -51,6 +51,22 @@ export interface ActivityItem {
   thought?: string;
 }
 
+export interface StagedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  base64?: string;
+  dataUrl?: string;
+}
+
+export interface RecordedVideo {
+  url: string;
+  fileName: string;
+  durationSeconds: number;
+  sizeBytes: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -64,6 +80,8 @@ export interface ChatMessage {
   isError?: boolean;
   hitl?: HitlInteraction;
   duration?: string;
+  stagedFiles?: StagedFile[];
+  recordedVideo?: RecordedVideo;
   judgeVerdict?: {
     verdict: boolean;
     score?: number;

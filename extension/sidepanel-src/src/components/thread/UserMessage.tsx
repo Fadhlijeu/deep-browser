@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Paperclip } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
@@ -18,6 +18,31 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
 
   return (
     <div className="user-message-row">
+      {message.stagedFiles && message.stagedFiles.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px', justifyContent: 'flex-end' }}>
+          {message.stagedFiles.map((f) => (
+            <div
+              key={f.id}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '6px',
+                fontSize: '10.5px',
+                color: '#93c5fd',
+              }}
+            >
+              <Paperclip size={10} />
+              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {f.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="user-bubble">
         <MarkdownRenderer content={message.text} />
       </div>

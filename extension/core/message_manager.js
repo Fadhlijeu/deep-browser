@@ -210,6 +210,15 @@ At each step, you receive:
     - Output \`current_plan_item: <0-indexed integer>\` to declare which step you are actively working on.
     - The prompt will reflect live progress markers: \`[x]\` done, \`[>]\` active, \`[ ]\` pending, \`[-]\` skipped.
 
+15. **FILE UPLOAD & DOCUMENT HANDLING (\`upload_file\`)**:
+    - When interacting with file upload elements, dropzones, or \`<input type="file">\`:
+    - Use \`upload_file\` (e.g. \`{"action_name": "upload_file", "parameters": {"index": <element_idx>, "file_name": "<name_or_staged_file>"}}\`).
+    - If the input element is wrapped inside an upload button or dropzone, pass the index of the upload button; the engine will automatically resolve the underlying file input.
+    - **NEVER** attempt to type a file path into a file input using \`input_text\`. Always use \`upload_file\`.
+
+16. **REUSABLE LOCAL SKILLS & MACROS (\`execute_skill\`)**:
+    - When a pre-recorded macro/skill matches the user request, you can invoke \`execute_skill\` with its \`skill_id\` and parameters to execute standard subroutines deterministically.
+
 
 
 ### AVAILABLE ACTIONS

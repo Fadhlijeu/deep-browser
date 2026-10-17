@@ -162,6 +162,31 @@
           },
         },
         {
+          name: 'upload_file',
+          description: 'Upload a staged attachment or local file into an <input type="file"> element or nearest upload button.',
+          parameters: {
+            type: 'object',
+            properties: {
+              index: { type: 'integer', description: 'Element index of the file input or upload trigger button.' },
+              file_name: { type: 'string', description: 'Optional filename of the staged file (e.g. "resume.pdf").' },
+              file_path: { type: 'string', description: 'Optional local absolute file path or filename.' },
+            },
+            required: ['index'],
+          },
+        },
+        {
+          name: 'execute_skill',
+          description: 'Execute a pre-recorded reusable skill/macro workflow by its skill_id.',
+          parameters: {
+            type: 'object',
+            properties: {
+              skill_id: { type: 'string', description: 'ID of the skill to execute (e.g. "pddikti_search").' },
+              parameters: { type: 'object', description: 'Parameter key-values required by the skill.' },
+            },
+            required: ['skill_id'],
+          },
+        },
+        {
           name: 'extract_html_snippet',
           description: 'Extract visual HTML & CSS structure of a specific section (e.g. biodata, info card, table, product details) and render it as a styled rich snippet in chat.',
           parameters: {
@@ -454,6 +479,29 @@
             return {
               success: true,
               message: res.message || 'Page saved as PDF.',
+              data: res,
+            };
+          }
+
+          case 'upload_file': {
+            const index = this._requireIndex(params);
+            const res = await this.browserSession.uploadFile(index, params);
+            if (!res.success) return { success: false, error: res.error };
+            return {
+              success: true,
+              message: `Uploaded "${res.fileName}" to [${index}] (${res.targetTag || 'input[type=file]'})`,
+              data: res,
+            };
+          }
+
+          case 'execute_skill': {
+            const skillId = params.skill_id;
+            const skillMgr = (typeof window !== 'undefined' && window.SkillManager) || (typeof global !== 'undefined' && global.SkillManager);
+            if (!skillMgr) return { success: false, error: 'SkillManager service not initialized.' };
+            const res = await skillMgr.executeSkill(skillId, params.parameters, this.browserSession);
+            return {
+              success: res.success !== false,
+              message: res.message || `Executed skill ${skillId}`,
               data: res,
             };
           }

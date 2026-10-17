@@ -108,6 +108,13 @@
       } catch (err) {
         console.error('[Agent] onEvent callback error:', err);
       }
+
+      // Live In-Page Floating HUD dispatch
+      if (this.browserSession?.tabId && typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
+        try {
+          chrome.tabs.sendMessage(this.browserSession.tabId, evt).catch(() => {});
+        } catch (_) {}
+      }
     }
 
     /**

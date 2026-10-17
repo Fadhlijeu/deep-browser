@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle } from 'lucide-react';
+import { Bot, Clock, Copy, Check, ChevronRight, Brain, AlertCircle, Video, Download, BookmarkPlus, CheckCheck } from 'lucide-react';
 import { ChatMessage } from '../../types';
 import { ToolStepCard } from './ToolStepCard';
 import { HitlApprovalCard } from './HitlApprovalCard';
@@ -83,11 +83,30 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const isOpen = userToggle !== null ? userToggle : isRunning;
 
   const [copied, setCopied] = useState(false);
+  const [skillSaved, setSkillSaved] = useState(false);
 
   const copyText = () => {
     navigator.clipboard?.writeText?.(message.text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleSaveSkill = async () => {
+    try {
+      const skillMgr = (window as any).SkillManager;
+      if (skillMgr && skillMgr.recordRunToSkill) {
+        await skillMgr.recordRunToSkill({
+          title: message.text?.slice(0, 32) || 'Skill Alur Browser',
+          description: `Otomatisasi langkah dari pesan ${message.id}`,
+          task: message.text || 'Otomatisasi langkah',
+          history: message.steps || [],
+        });
+        setSkillSaved(true);
+        setTimeout(() => setSkillSaved(false), 3000);
+      }
+    } catch (e) {
+      console.error('[SaveSkill Error]', e);
+    }
   };
 
   const activities = message.activities || [];
@@ -215,6 +234,51 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
               <MarkdownRenderer content={displayedMessageText} />
               {isMessageTyping && <span className="typewriter-cursor" />}
             </div>
+          </div>
+        )}
+
+        {/* Video Session Playback Card */}
+        {message.recordedVideo && (
+          <div className="video-preview-card">
+            <div className="video-preview-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Video size={12} style={{ color: '#ef4444' }} />
+                <span style={{ fontWeight: 600 }}>Rekaman Video Sesi ({message.recordedVideo.durationSeconds}s)</span>
+              </div>
+              <a
+                href={message.recordedVideo.url}
+                download={message.recordedVideo.fileName}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#60a5fa', textDecoration: 'none', fontSize: '10.5px' }}
+                title="Unduh rekaman video WebM"
+              >
+                <Download size={11} /> Unduh
+              </a>
+            </div>
+            <video src={message.recordedVideo.url} controls className="video-preview-player" />
+          </div>
+        )}
+
+        {/* One-Click Save as Skill Button */}
+        {!isRunning && totalStepsCount > 0 && !message.isError && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+            <button
+              type="button"
+              className="save-skill-btn"
+              onClick={handleSaveSkill}
+              title="Simpan alur kerja ini sebagai skill lokal yang bisa dipakai ulang"
+            >
+              {skillSaved ? (
+                <>
+                  <CheckCheck size={12} style={{ color: '#34d399' }} />
+                  <span>Tersimpan sebagai Skill!</span>
+                </>
+              ) : (
+                <>
+                  <BookmarkPlus size={12} />
+                  <span>Simpan Alur sebagai Skill</span>
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>

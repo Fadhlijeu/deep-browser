@@ -1,4 +1,4 @@
-import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, ConnectionMode, PresetId, ExecutionMode, LogEvent, LogCategory, ToolStep, HitlInteraction } from '../types';
+import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, ConnectionMode, PresetId, ExecutionMode, LogEvent, LogCategory, ToolStep, HitlInteraction, StagedFile, RecordedVideo } from '../types';
 
 declare const chrome: any;
 
@@ -200,6 +200,9 @@ export interface SidepanelState {
   currentView: 'chat' | 'logs';
   logFilter: LogCategory;
   logSearch: string;
+  stagedFiles: StagedFile[];
+  isRecordingEnabled: boolean;
+  isHudEnabled: boolean;
   modals: {
     drawer: boolean;
     apikeys: boolean;
@@ -244,6 +247,9 @@ export class SidepanelStateManager {
       currentView: 'chat',
       logFilter: 'all',
       logSearch: '',
+      stagedFiles: [],
+      isRecordingEnabled: false,
+      isHudEnabled: false,
       modals: { drawer: false, apikeys: false, settings: false, models: false },
     };
 
@@ -280,6 +286,8 @@ export class SidepanelStateManager {
         'core/llm_client.js',
         'core/loop_detector.js',
         'core/judge.js',
+        'core/skill_manager.js',
+        'core/session_recorder.js',
         'core/agent.js',
       ];
 
@@ -518,6 +526,41 @@ export class SidepanelStateManager {
               if (overlay) overlay.remove();
             },
           }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+    this.notify();
+    this.saveStorage();
+  }
+
+  public addStagedFile(file: StagedFile) {
+    this.state.stagedFiles = [...(this.state.stagedFiles || []), file];
+    this.notify();
+  }
+
+  public removeStagedFile(id: string) {
+    this.state.stagedFiles = (this.state.stagedFiles || []).filter((f) => f.id !== id);
+    this.notify();
+  }
+
+  public clearStagedFiles() {
+    this.state.stagedFiles = [];
+    this.notify();
+  }
+
+  public toggleRecording(enabled?: boolean) {
+    this.state.isRecordingEnabled = enabled !== undefined ? enabled : !this.state.isRecordingEnabled;
+    this.notify();
+    this.saveStorage();
+  }
+
+  public toggleDemoHud(enabled?: boolean) {
+    const nextVal = enabled !== undefined ? enabled : !this.state.isHudEnabled;
+    this.state.isHudEnabled = nextVal;
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]: any[]) => {
+        if (tab?.id) {
+          chrome.tabs.sendMessage(tab.id, { type: nextVal ? 'SHOW_FLOATING_HUD' : 'HIDE_FLOATING_HUD' }).catch(() => {});
         }
       }).catch(() => {});
     }
@@ -1220,11 +1263,13 @@ export class SidepanelStateManager {
     }
 
     // 1. Append user message
+    const staged = this.state.stagedFiles && this.state.stagedFiles.length > 0 ? [...this.state.stagedFiles] : undefined;
     const userMsg: ChatMessage = {
       id: 'msg_' + Date.now(),
       role: 'user',
       text: prompt,
       timestamp: Date.now(),
+      stagedFiles: staged,
     };
     active.messages.push(userMsg);
 
@@ -1768,6 +1813,31 @@ export class SidepanelStateManager {
         });
       }
 
+      if (this.state.stagedFiles && this.state.stagedFiles.length > 0 && browserSession?.setStagedFiles) {
+        browserSession.setStagedFiles(this.state.stagedFiles);
+        this.state.stagedFiles = [];
+        this.notify();
+      }
+
+      // Check if In-Page Floating HUD is enabled
+      if (this.state.isHudEnabled && browserSession?.tabId && typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
+        chrome.tabs.sendMessage(browserSession.tabId, { type: 'SHOW_FLOATING_HUD' }).catch(() => {});
+      }
+
+      // Check if Video Recording is requested
+      let recorder: any = null;
+      if (this.state.isRecordingEnabled && (window as any).SessionRecorder && browserSession?.tabId) {
+        try {
+          const rec = new (window as any).SessionRecorder({ tabId: browserSession.tabId });
+          const started = await rec.startRecording(browserSession.tabId);
+          if (started) {
+            recorder = rec;
+          }
+        } catch (recErr) {
+          console.warn('[SessionRecorder] Start error:', recErr);
+        }
+      }
+
       const agent = new (window as any).Agent({
         taskId: runId,
         task: prompt,
@@ -1793,6 +1863,26 @@ export class SidepanelStateManager {
       });
     } finally {
       this.activeAgent = null;
+
+      // Finalize video recording if active
+      if (recorder) {
+        try {
+          const recResult = await recorder.stopRecording();
+          if (recResult && recResult.videoUrl) {
+            assistantMsg.recordedVideo = {
+              url: recResult.videoUrl,
+              fileName: recResult.fileName,
+              durationSeconds: recResult.durationSeconds,
+              sizeBytes: recResult.sizeBytes,
+            };
+            this.notify();
+            this.saveStorage();
+          }
+        } catch (stopErr) {
+          console.warn('[SessionRecorder] Stop error:', stopErr);
+        }
+      }
+
       if (this.state.runState === 'running') {
         this.state.runState = 'idle';
       }

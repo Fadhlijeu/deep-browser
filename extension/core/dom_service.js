@@ -121,17 +121,23 @@
         const candidates = document.querySelectorAll(INTERACTIVE_SELECTORS);
 
         candidates.forEach((el) => {
+          if (el.closest('#deep-browser-floating-hud') || el.closest('[data-deep-browser-exclude="true"]') || el.closest('[data-browser-use-exclude]')) return;
           if (indexCounter > MAX_ELEMENTS) return;
 
           const rect = el.getBoundingClientRect();
           if (!isVisible(el, rect)) return;
 
-          const text = getAccessibleText(el).slice(0, 100);
+          let text = getAccessibleText(el).slice(0, 100);
           const tag = el.tagName.toLowerCase();
           const xpath = computeXPath(el);
           const idx = indexCounter++;
 
           el.setAttribute('data-deep-browser-idx', String(idx));
+
+          const inputType = el.getAttribute('type') || null;
+          if (tag === 'input' && inputType === 'file' && !text) {
+            text = '[File Upload Input]';
+          }
 
           // Extract interactive states (tabs, toggles, checkboxes, sliders, accordions)
           const ariaSelected = el.getAttribute('aria-selected');

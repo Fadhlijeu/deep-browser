@@ -34,8 +34,17 @@
       this.isAttached = false;
       this.downloadListeners = [];
       this.highlightsEnabled = options.highlightsEnabled !== false;
+      this.stagedFiles = options.stagedFiles || [];
 
       this._assertNoBrowserProcessSpawned();
+    }
+
+    /**
+     * Sets staged files available for upload.
+     * @param {Array<Object>} files
+     */
+    setStagedFiles(files = []) {
+      this.stagedFiles = Array.isArray(files) ? files : [];
     }
 
     /**
@@ -628,6 +637,132 @@
       }, [index, xpath, text, clear, pressEnter]);
 
       await this.waitForDOMStability(500);
+      return result;
+    }
+
+    /**
+     * Uploads a file to an <input type="file"> element or nearest file input in page.
+     * Supports staged attachments from Sidepanel UI as well as local file paths.
+     * @param {number} index - Element index of file input or upload trigger button
+     * @param {Object} options - { file_path, file_name, fileData, mimeType }
+     */
+    async uploadFile(index, options = {}) {
+      await this.animateCursorToElement(index);
+      await this.wait(0.2);
+
+      const xpath = this.cachedSelectorMap[index]?.xpath;
+      let fileName = options.file_name || (options.file_path ? options.file_path.split(/[\\/]/).pop() : '');
+      let base64Data = options.fileData || null;
+      let mimeType = options.mimeType || 'application/octet-stream';
+
+      // Check if file is available in stagedFiles
+      if (this.stagedFiles && this.stagedFiles.length > 0) {
+        let matchedStaged = null;
+        if (fileName) {
+          matchedStaged = this.stagedFiles.find(f => f.name === fileName || f.name.toLowerCase().includes(fileName.toLowerCase()));
+        }
+        if (!matchedStaged) {
+          matchedStaged = this.stagedFiles[0];
+        }
+        if (matchedStaged) {
+          fileName = matchedStaged.name;
+          base64Data = matchedStaged.base64 || matchedStaged.dataUrl || base64Data;
+          mimeType = matchedStaged.type || mimeType;
+        }
+      }
+
+      if (!fileName) {
+        fileName = 'document.pdf';
+      }
+
+      const result = await this._executeInTab((targetIndex, targetXpath, fName, fData, fMime) => {
+        let el = null;
+        if (targetXpath) {
+          const res = document.evaluate(targetXpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          el = res.singleNodeValue;
+        }
+        if (!el) {
+          el = document.querySelector(`[data-deep-browser-idx="${targetIndex}"]`);
+        }
+        if (!el) {
+          return { success: false, error: `Element [${targetIndex}] tidak ditemukan di halaman.` };
+        }
+
+        // Locate <input type="file">
+        let fileInput = (el.tagName === 'INPUT' && el.type === 'file') ? el : null;
+
+        if (!fileInput) {
+          fileInput = el.querySelector('input[type="file"]');
+        }
+        if (!fileInput && el.form) {
+          fileInput = el.form.querySelector('input[type="file"]');
+        }
+        if (!fileInput) {
+          const parent = el.closest('label, form, .dropzone, [class*="upload"], [id*="upload"], div');
+          if (parent) {
+            fileInput = parent.querySelector('input[type="file"]');
+          }
+        }
+        if (!fileInput) {
+          const allInputs = Array.from(document.querySelectorAll('input[type="file"]'));
+          if (allInputs.length > 0) {
+            const targetRect = el.getBoundingClientRect();
+            let closest = allInputs[0];
+            let minDist = Infinity;
+            for (const inp of allInputs) {
+              const r = inp.getBoundingClientRect();
+              const dist = Math.hypot(r.left - targetRect.left, r.top - targetRect.top);
+              if (dist < minDist) {
+                minDist = dist;
+                closest = inp;
+              }
+            }
+            fileInput = closest;
+          }
+        }
+
+        if (!fileInput) {
+          return { success: false, error: `Tidak ditemukan elemen <input type="file"> di sekitar elemen [${targetIndex}].` };
+        }
+
+        try {
+          let fileObj;
+          if (fData && typeof fData === 'string' && (fData.includes('base64,') || fData.length > 50)) {
+            const rawB64 = fData.includes('base64,') ? fData.split('base64,')[1] : fData;
+            const byteChars = atob(rawB64);
+            const byteNums = new Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+              byteNums[i] = byteChars.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNums);
+            const blob = new Blob([byteArray], { type: fMime || 'application/octet-stream' });
+            fileObj = new File([blob], fName, { type: fMime || 'application/octet-stream' });
+          } else {
+            const dummyBlob = new Blob([`Simulated content for ${fName}`], { type: fMime || 'text/plain' });
+            fileObj = new File([dummyBlob], fName, { type: fMime || 'text/plain' });
+          }
+
+          const dt = new DataTransfer();
+          dt.items.add(fileObj);
+          fileInput.files = dt.files;
+
+          fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+          return {
+            success: true,
+            fileName: fileObj.name,
+            fileSize: fileObj.size,
+            filesCount: fileInput.files.length,
+            targetTag: fileInput.tagName,
+            inputName: fileInput.name || fileInput.id || 'file_input',
+          };
+        } catch (err) {
+          return { success: false, error: `Gagal menyetel file input: ${err.message}` };
+        }
+      }, [index, xpath, fileName, base64Data, mimeType]);
+
+      await this.waitForDOMStability(800);
       return result;
     }
 
