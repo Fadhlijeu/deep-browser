@@ -71,6 +71,8 @@ let state = {
   logSearchQuery: '',
   retryPendingAction: null,
   activeTimeline: null,   // Current DOM timeline element
+  judgeEnabled: false,    // Independent AI Judge Evaluation
+  judgeModelId: 'auto',   // 'auto' or specific model id
 };
 
 // State Machine Engine instance
@@ -143,6 +145,7 @@ async function init() {
   renderModelsList();
   renderApikeys();
   renderModeOptions();
+  renderJudgeSettings();
   detectCurrentTab();
   loadSessions();
   updateTabStrip();
@@ -156,7 +159,7 @@ async function init() {
 async function loadStorage() {
   return new Promise((resolve) => {
     chrome.storage?.local?.get(
-      ['models', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'sessions', 'activeSessionId'],
+      ['models', 'selectedModelId', 'selectedMode', 'selectedPreset', 'apiKeys', 'sessions', 'activeSessionId', 'judgeEnabled', 'judgeModelId'],
       (data) => {
         if (data?.models && Array.isArray(data.models) && data.models.length > 0) {
           state.models = data.models;
@@ -167,6 +170,8 @@ async function loadStorage() {
         if (data?.apiKeys) state.apiKeys = data.apiKeys;
         if (data?.sessions && Array.isArray(data.sessions)) state.sessions = data.sessions;
         if (data?.activeSessionId) state.activeSessionId = data.activeSessionId;
+        if (data?.judgeEnabled !== undefined) state.judgeEnabled = data.judgeEnabled;
+        if (data?.judgeModelId) state.judgeModelId = data.judgeModelId;
 
         // Ensure at least one active session
         if (!state.sessions || state.sessions.length === 0) {
@@ -182,6 +187,41 @@ async function loadStorage() {
 
 async function saveStorage(keys) {
   return new Promise((resolve) => chrome.storage?.local?.set(keys, resolve));
+}
+
+
+// ─── AI Judge Settings Binding ───────────────────────────────────────────────
+function renderJudgeSettings() {
+  const chkJudge = $('chk-enable-judge');
+  const wrapSelect = $('judge-model-select-wrap');
+  const selJudgeModel = $('sel-judge-model');
+
+  if (chkJudge) {
+    chkJudge.checked = !!state.judgeEnabled;
+    if (wrapSelect) wrapSelect.style.display = state.judgeEnabled ? 'block' : 'none';
+
+    chkJudge.onchange = () => {
+      state.judgeEnabled = chkJudge.checked;
+      if (wrapSelect) wrapSelect.style.display = chkJudge.checked ? 'block' : 'none';
+      saveStorage({ judgeEnabled: state.judgeEnabled });
+    };
+  }
+
+  if (selJudgeModel) {
+    selJudgeModel.innerHTML = '<option value="auto">Sama dengan Model Utama (Default)</option>';
+    (state.models || []).forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = `${m.name} (${m.provider})`;
+      if (m.id === state.judgeModelId) opt.selected = true;
+      selJudgeModel.appendChild(opt);
+    });
+
+    selJudgeModel.onchange = () => {
+      state.judgeModelId = selJudgeModel.value;
+      saveStorage({ judgeModelId: state.judgeModelId });
+    };
+  }
 }
 
 // ─── Presets ─────────────────────────────────────────────────────────────────
@@ -1036,6 +1076,23 @@ async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
 
   if (widgetManager) widgetManager.setInteractionManager(interactionManager);
 
+  let judgeLlmClient = null;
+  if (state.judgeEnabled && state.judgeModelId && state.judgeModelId !== 'auto') {
+    const jModel = state.models.find(m => m.id === state.judgeModelId);
+    if (jModel) {
+      const jProvider = jModel.provider;
+      const jApiKey = state.apiKeys[jProvider] || '';
+      judgeLlmClient = new window.LLMClient({
+        provider: jProvider,
+        model: jModel.modelId || jModel.id,
+        apiKey: jApiKey,
+        baseUrl: jModel.baseUrl || state.apiKeys['custom_openai'] || '',
+        ollamaHost: state.apiKeys['ollama'] || 'http://localhost:11434',
+        temperature: jModel.temperature ?? 0.1,
+      });
+    }
+  }
+
   const agent = new window.Agent({
     taskId: state.activeSessionId,
     task: goal,
@@ -1045,6 +1102,8 @@ async function _runStandaloneAgent(goal, activeModel, provider, apiKey) {
     interactionManager,
     maxSteps: Infinity,
     mode: state.selectedMode,
+    useJudge: state.judgeEnabled,
+    judgeLlmClient: judgeLlmClient || llmClient,
     onEvent: handleAgentEvent,
   });
 
@@ -1211,6 +1270,37 @@ function handleAgentEvent(evt) {
   if (t === 'HTML_SNIPPET_CAPTURED') {
     renderHtmlSnippetInChat(data.html, data.title || 'Informasi Visual', data.text);
     recordMessageToActiveSession({ role: 'snippet', html: data.html, title: data.title });
+    return;
+  }
+
+  if (t === 'JUDGE_STARTED') {
+    renderJudgeEvaluatingCard(msg, data);
+    if (state.activeTimeline) {
+      addTimelineStepRow(state.activeTimeline, {
+        icon: 'gavel',
+        name: `AI Judge Evaluating (${data.model || 'Judge'})...`,
+        timestamp,
+        duration: '...',
+        status: 'running',
+        args: { task: data.task },
+      });
+    }
+    return;
+  }
+
+  if (t === 'TRACE_JUDGED') {
+    renderJudgeVerdictCard(data);
+    if (state.activeTimeline) {
+      addTimelineStepRow(state.activeTimeline, {
+        icon: 'gavel',
+        name: `AI Judge Verdict: ${data.verdict ? 'PASSED' : 'FAILED'}`,
+        timestamp,
+        duration: '1.5s',
+        status: data.verdict ? 'succeeded' : 'failed',
+        args: { task: data.task, groundTruth: data.groundTruth },
+        result: { verdict: data.verdict, reasoning: data.reasoning, failure_reason: data.failure_reason },
+      });
+    }
     return;
   }
 
@@ -1620,6 +1710,138 @@ function renderLogsList() {
 }
 
 // ─── Rich Media Artifact Helpers ─────────────────────────────────────────────
+
+// ─── AI Judge UI Card Components ─────────────────────────────────────────────
+let currentJudgeCardEl = null;
+
+function renderJudgeEvaluatingCard(message, data) {
+  hideEmptyState();
+  if (currentJudgeCardEl && currentJudgeCardEl.parentElement) {
+    currentJudgeCardEl.remove();
+  }
+
+  const card = document.createElement('div');
+  card.className = 'judge-eval-card';
+  card.id = 'active-judge-card';
+  card.innerHTML = `
+    <div class="judge-card-header">
+      <div class="judge-card-header-left">
+        <span class="material-symbols-outlined" style="font-size:16px;color:var(--accent);animation:spin 2s linear infinite">sync</span>
+        <span>AI Judge Evaluation (${escHtml(data?.model || 'Independent Evaluator')})</span>
+      </div>
+      <span class="judge-verdict-badge evaluating">Evaluating Trace...</span>
+    </div>
+    <div class="judge-card-summary" style="font-style:italic">
+      ${escHtml(message || 'Mengevaluasi apakah hasil akhir dan aksi agen memenuhi sasaran pengguna...')}
+    </div>
+  `;
+
+  if (state.activeTimeline && state.activeTimeline.block) {
+    state.activeTimeline.block.appendChild(card);
+  } else {
+    elTimeline.appendChild(card);
+  }
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  currentJudgeCardEl = card;
+}
+
+function renderJudgeVerdictCard(judgement) {
+  hideEmptyState();
+  const card = (currentJudgeCardEl && currentJudgeCardEl.parentElement)
+    ? currentJudgeCardEl
+    : document.createElement('div');
+
+  const isPassed = judgement.verdict === true;
+  card.className = `judge-eval-card ${isPassed ? 'verdict-passed' : 'verdict-failed'}`;
+  card.id = 'active-judge-card';
+
+  const badgeClass = isPassed ? 'passed' : 'failed';
+  const badgeText = isPassed ? 'PASSED (VALID)' : 'FAILED (INVALID)';
+  const badgeIcon = isPassed ? 'check_circle' : 'cancel';
+
+  card.innerHTML = `
+    <div class="judge-card-header">
+      <div class="judge-card-header-left">
+        <span class="material-symbols-outlined" style="font-size:16px;color:${isPassed ? '#4ade80' : '#f87171'}">gavel</span>
+        <span>Evaluasi AI Judge (${escHtml(judgement.model || 'AI Judge')})</span>
+      </div>
+      <span class="judge-verdict-badge ${badgeClass}">
+        <span class="material-symbols-outlined" style="font-size:12px">${badgeIcon}</span>
+        ${badgeText}
+      </span>
+    </div>
+    <div class="judge-card-summary">
+      <strong>Analisis Judge:</strong> ${escHtml(judgement.reasoning || (isPassed ? 'Tugas dinyatakan berhasil memenuhi sasaran.' : (judgement.failure_reason || 'Kriteria belum sepenuhnya terpenuhi.')))}
+    </div>
+    <div>
+      <button class="judge-details-toggle">
+        <span class="material-symbols-outlined" style="font-size:14px;transition:transform 0.15s ease">expand_more</span>
+        <span>Lihat Rincian Proses &amp; Trace Evaluasi</span>
+      </button>
+    </div>
+    <div class="judge-card-details">
+      <div class="judge-detail-section">
+        <span class="judge-detail-label">🎯 Sasaran Pengguna yang Dievaluasi:</span>
+        <div class="judge-detail-content" style="white-space:normal">${escHtml(judgement.task || '-')}</div>
+      </div>
+      ${judgement.groundTruth ? `
+      <div class="judge-detail-section">
+        <span class="judge-detail-label">🔍 Kriteria Validasi (Ground Truth):</span>
+        <div class="judge-detail-content" style="white-space:normal">${escHtml(judgement.groundTruth)}</div>
+      </div>` : ''}
+      <div class="judge-detail-section">
+        <span class="judge-detail-label">📜 Trace Langkah &amp; Aksi Agen:</span>
+        <div class="judge-detail-content">${escHtml(judgement.formattedSteps || '(Tidak ada riwayat langkah)')}</div>
+      </div>
+      <div class="judge-detail-section">
+        <span class="judge-detail-label">🏁 Jawaban Akhir yang Diperiksa:</span>
+        <div class="judge-detail-content" style="white-space:normal">${escHtml(judgement.finalResult || '(Kosong)')}</div>
+      </div>
+      ${judgement.failure_reason ? `
+      <div class="judge-detail-section">
+        <span class="judge-detail-label" style="color:var(--status-error)">⚠️ Alasan Kegagalan:</span>
+        <div class="judge-detail-content" style="color:var(--status-error);border-color:rgba(239,68,68,0.3)">${escHtml(judgement.failure_reason)}</div>
+      </div>` : ''}
+      <div style="display:flex;gap:12px;font-size:10.5px;color:var(--text-tertiary);margin-top:2px">
+        <span>Blocked Captcha: <strong>${judgement.reached_captcha ? 'Ya ⚠️' : 'Tidak'}</strong></span>
+        <span>Tugas Mustahil: <strong>${judgement.impossible_task ? 'Ya ⚠️' : 'Tidak'}</strong></span>
+      </div>
+    </div>
+  `;
+
+  const btnToggle = card.querySelector('.judge-details-toggle');
+  const detailsPanel = card.querySelector('.judge-card-details');
+  const chevronIcon = btnToggle.querySelector('.material-symbols-outlined');
+
+  const toggleOpen = () => {
+    const isOpen = detailsPanel.classList.toggle('open');
+    chevronIcon.style.transform = isOpen ? 'rotate(180deg)' : 'none';
+    btnToggle.querySelector('span:last-child').textContent = isOpen
+      ? 'Tutup Rincian Evaluasi'
+      : 'Lihat Rincian Proses & Trace Evaluasi';
+  };
+
+  btnToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleOpen();
+  });
+
+  card.querySelector('.judge-card-header').addEventListener('click', () => {
+    toggleOpen();
+  });
+
+  if (!card.parentElement) {
+    if (state.activeTimeline && state.activeTimeline.block) {
+      state.activeTimeline.block.appendChild(card);
+    } else {
+      elTimeline.appendChild(card);
+    }
+  }
+
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  currentJudgeCardEl = null;
+}
+
 function renderScreenshotInChat(dataUrl, fileName = 'screenshot.png') {
   hideEmptyState();
   const card = document.createElement('div');
@@ -1939,10 +2161,12 @@ function bindEvents() {
   // Mode Modal
   $('btn-open-settings')?.addEventListener('click', () => {
     renderModeOptions();
+    renderJudgeSettings();
     openModal('modal-settings');
   });
   $('btn-select-mode')?.addEventListener('click', () => {
     renderModeOptions();
+    renderJudgeSettings();
     openModal('modal-settings');
   });
   $('close-modal-settings')?.addEventListener('click', () => closeModal('modal-settings'));

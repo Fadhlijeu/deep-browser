@@ -371,7 +371,12 @@
         return { verdict: true, reasoning: 'Judge module not available, defaulting to true' };
       }
 
-      this._emit('JUDGE_STARTED', 'Memulai evaluasi independen trace oleh AI Judge...');
+      const activeJudgeModel = options.judgeModelName || (this.judge.llmClient?.model) || this.llmClient?.model || 'AI Judge';
+      this._emit('JUDGE_STARTED', `Memulai evaluasi independen trace oleh AI Judge (${activeJudgeModel})...`, {
+        model: activeJudgeModel,
+        task: this.task,
+        totalSteps: this.step,
+      });
 
       const lastHistoryItem = this.messageManager.history[this.messageManager.history.length - 1];
       const finalResult = lastHistoryItem?.action?.parameters?.text || lastHistoryItem?.result?.message || 'Task completed.';
@@ -381,14 +386,22 @@
         screenshotBase64 = state.screenshot || null;
       } catch (_) {}
 
+      const formattedSteps = this.judge.formatStepsForJudge(this.messageManager.history);
+
       const judgement = await this.judge.evaluateTrace({
         task: this.task,
         finalResult,
         history: this.messageManager.history,
         screenshotBase64,
         groundTruth: options.groundTruth || this.groundTruth,
-        llmClient: options.judgeLlmClient || this.llmClient,
+        llmClient: options.judgeLlmClient || this.judge.llmClient || this.llmClient,
       });
+
+      judgement.task = this.task;
+      judgement.finalResult = finalResult;
+      judgement.formattedSteps = formattedSteps;
+      judgement.model = activeJudgeModel;
+      judgement.groundTruth = options.groundTruth || this.groundTruth;
 
       this._emit('TRACE_JUDGED', `Hasil evaluasi Judge: ${judgement.verdict ? 'VALID (BERHASIL)' : 'INVALID (BELUM MEMENUHI)'} — ${judgement.reasoning}`, judgement);
 
@@ -914,16 +927,28 @@
             // ─── 9. COMPLETION CHECK ────────────────────────────────────────────────
             if (actionName === 'done' || actionResult.data?.is_done) {
               const finalAnswer = actionResult.data?.text || params.text || 'Tugas selesai.';
+              let judgement = null;
+
+              if (this.useJudge) {
+                try {
+                  judgement = await this.judgeTrace({ groundTruth: this.groundTruth });
+                } catch (jErr) {
+                  console.warn('[Agent] Judge evaluation error:', jErr);
+                }
+              }
+
               this.isRunning = false;
               this._emit('TASK_COMPLETED', finalAnswer, {
                 result: finalAnswer,
                 totalSteps: this.step,
                 success: actionResult.data?.success !== false,
+                judgement,
               });
               batchTerminalResult = {
                 success: true,
                 result: finalAnswer,
                 totalSteps: this.step,
+                judgement,
               };
               break;
             }

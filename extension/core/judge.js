@@ -107,6 +107,7 @@ If verdict is false, provide a concise explanation in "failure_reason".`;
         throw new Error('Judge requires an active LLMClient to evaluate traces.');
       }
 
+      const formattedSteps = this.formatStepsForJudge(history);
       const prompt = this.constructJudgePrompt({ task, finalResult, history, groundTruth });
       const systemPrompt = 'You are an objective AI Judge evaluating web agent traces. Respond strictly in valid JSON.';
 
@@ -118,36 +119,41 @@ If verdict is false, provide a concise explanation in "failure_reason".`;
         };
         const decision = await client.planNextStep(systemPrompt, stepPayload);
 
-        // If decision was parsed into thinking/parameters
+        let evalResult;
         if (decision.parameters && typeof decision.parameters.verdict === 'boolean') {
-          return {
+          evalResult = {
             verdict: decision.parameters.verdict,
             reasoning: decision.parameters.reasoning || decision.thinking || '',
             failure_reason: decision.parameters.failure_reason || null,
             impossible_task: !!decision.parameters.impossible_task,
             reached_captcha: !!decision.parameters.reached_captcha,
           };
-        }
-
-        // Check if decision has verdict directly
-        if (typeof decision.verdict === 'boolean') {
-          return {
+        } else if (typeof decision.verdict === 'boolean') {
+          evalResult = {
             verdict: decision.verdict,
             reasoning: decision.reasoning || decision.thinking || '',
             failure_reason: decision.failure_reason || null,
             impossible_task: !!decision.impossible_task,
             reached_captcha: !!decision.reached_captcha,
           };
+        } else {
+          // Fallback: heuristic extraction from thinking or text
+          const isTrue = /"verdict"\s*:\s*true/i.test(JSON.stringify(decision));
+          evalResult = {
+            verdict: isTrue,
+            reasoning: decision.thinking || 'Evaluated trace outcome',
+            failure_reason: isTrue ? null : (decision.thinking || 'Task incomplete'),
+            impossible_task: false,
+            reached_captcha: false,
+          };
         }
 
-        // Fallback: heuristic extraction from thinking or text
-        const isTrue = /"verdict"\s*:\s*true/i.test(JSON.stringify(decision));
         return {
-          verdict: isTrue,
-          reasoning: decision.thinking || 'Evaluated trace outcome',
-          failure_reason: isTrue ? null : (decision.thinking || 'Task incomplete'),
-          impossible_task: false,
-          reached_captcha: false,
+          ...evalResult,
+          formattedSteps,
+          task,
+          finalResult,
+          groundTruth,
         };
       } catch (err) {
         return {
@@ -156,6 +162,10 @@ If verdict is false, provide a concise explanation in "failure_reason".`;
           failure_reason: err.message,
           impossible_task: false,
           reached_captcha: false,
+          formattedSteps: this.formatStepsForJudge(history),
+          task,
+          finalResult,
+          groundTruth,
         };
       }
     }

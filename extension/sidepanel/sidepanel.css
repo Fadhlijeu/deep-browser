@@ -1581,3 +1581,137 @@ html, body {
   gap: 6px;
   margin-top: 4px;
 }
+
+/* ─── AI Judge Evaluation Card ─── */
+.judge-eval-card {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-top: 8px;
+  gap: 8px;
+  animation: slideUp 0.18s ease-out;
+}
+
+.judge-eval-card.verdict-passed {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.judge-eval-card.verdict-failed {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.judge-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.judge-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.judge-verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.judge-verdict-badge.passed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.judge-verdict-badge.failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.judge-verdict-badge.evaluating {
+  background: rgba(139, 140, 248, 0.15);
+  color: #8b8cf8;
+  border: 1px solid rgba(139, 140, 248, 0.3);
+}
+
+.judge-card-summary {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.judge-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.judge-details-toggle:hover {
+  text-decoration: underline;
+}
+
+.judge-card-details {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  animation: slideUp 0.15s ease-out;
+}
+
+.judge-card-details.open {
+  display: flex;
+}
+
+.judge-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.judge-detail-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.judge-detail-content {
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  max-height: 160px;
+  overflow-y: auto;
+}

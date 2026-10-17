@@ -317,6 +317,23 @@
                 <option value="4">4 Tab Simultan</option>
                 <option value="5">5 Tab Simultan</option>
               </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:14px;border-top:1px solid var(--border-subtle);padding-top:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <label class="form-label" style="margin-bottom:0">Evaluasi Independen AI Judge</label>
+            <input type="checkbox" id="chk-enable-judge" style="accent-color:#8b8cf8;width:16px;height:16px;cursor:pointer" />
+          </div>
+          <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">
+            Secara independen mengevaluasi hasil akhir dan langkah agen terhadap sasaran pengguna dan kriteria kebenaran (ground truth).
+          </div>
+          <div id="judge-model-select-wrap" style="margin-top:8px;display:none">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:11.5px;color:var(--text-primary)">Model AI Judge:</span>
+              <select id="sel-judge-model" style="background:#191B1F;border:1px solid #292C32;border-radius:4px;color:#ECEEF2;padding:3px 8px;font-size:11px;max-width:200px">
+                <option value="auto">Sama dengan Model Utama (Default)</option>
+              </select>
             </div>
           </div>
         </div>

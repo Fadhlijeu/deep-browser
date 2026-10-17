@@ -251,6 +251,43 @@ async function runTests() {
     assert.strictEqual(judgeEvt.data.verdict, true);
   });
 
+  // Test 8: Automated judge execution on done action when useJudge is true
+  await test('Agent automatically executes judge on task completion when useJudge is true', async () => {
+    const mockSession = new global.BrowserSession();
+    let events = [];
+
+    const mockLlm = new global.LLMClient();
+    mockLlm.planNextStep = async (sys, payload) => {
+      if (payload.textPrompt && payload.textPrompt.includes('You are an impartial Judge')) {
+        return {
+          verdict: true,
+          reasoning: 'Verified all criteria satisfied.',
+          failure_reason: null,
+        };
+      }
+      return {
+        thinking: 'Finishing the task',
+        action_name: 'done',
+        parameters: { text: 'Everything is done.' },
+      };
+    };
+
+    const agent = new global.Agent({
+      task: 'Auto judge test',
+      browserSession: mockSession,
+      llmClient: mockLlm,
+      useJudge: true,
+      onEvent: (evt) => events.push(evt.event_type),
+    });
+
+    const result = await agent.run();
+    assert.strictEqual(result.success, true);
+    assert(result.judgement !== undefined && result.judgement !== null, 'Expected judgement attached to final result');
+    assert.strictEqual(result.judgement.verdict, true);
+    assert(events.includes('JUDGE_STARTED'), 'Expected JUDGE_STARTED event');
+    assert(events.includes('TRACE_JUDGED'), 'Expected TRACE_JUDGED event');
+  });
+
   console.log(`\nResults: ${passed}/${total} Priority 3 tests passed.\n`);
   if (passed !== total) process.exit(1);
 }
