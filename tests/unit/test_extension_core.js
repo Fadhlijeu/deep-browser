@@ -18,8 +18,8 @@ const fs = require('fs');
 global.window = global;
 global.chrome = {
   tabs: {
-    query: async () => [{ id: 101, windowId: 1, url: 'https://pddikti.kemdiktisaintek.go.id', title: 'PDDikti' }],
-    get: async (id) => ({ id, windowId: 1, url: 'https://pddikti.kemdiktisaintek.go.id', title: 'PDDikti' }),
+    query: async () => [{ id: 101, windowId: 1, url: 'https://portal-data.example.org', title: 'Portal Data' }],
+    get: async (id) => ({ id, windowId: 1, url: 'https://portal-data.example.org', title: 'Portal Data' }),
     update: async (id, props) => ({ id, ...props }),
     create: async (props) => ({ id: 102, windowId: 1, ...props }),
     captureVisibleTab: async () => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -141,8 +141,8 @@ async function runTests() {
     assert(systemPrompt.includes('click_element'));
 
     const mockState = {
-      url: 'https://pddikti.kemdiktisaintek.go.id',
-      title: 'Pencarian Mahasiswa',
+      url: 'https://portal-data.example.org',
+      title: 'Pencarian Rekord',
       simplifiedTreeText: '[1]<input type="text" name="q" placeholder="Cari..." />\n[2]<button type="submit">Cari</button>',
       screenshot: 'base64_img',
       pageInfo: { viewport_width: 1280, viewport_height: 800, pixels_above: 0, pixels_below: 200 },
@@ -190,8 +190,8 @@ async function runTests() {
     const events = [];
     const session = new global.BrowserSession({ tabId: 101 });
     session.getState = async () => ({
-      url: 'https://pddikti.kemdiktisaintek.go.id',
-      title: 'PDDikti',
+      url: 'https://portal-data.example.org',
+      title: 'Portal Data',
       elements: [{ index: 1, tag: 'input', text: 'Cari' }],
       selectorMap: { 1: { xpath: '//*[@id="search"]' } },
       simplifiedTreeText: '[1]<input type="text" name="q" />',

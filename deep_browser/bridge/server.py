@@ -556,11 +556,12 @@ async def _run_extension_task_background(task_id: str, req: CreateTaskRequest, s
         # 5. Domain & operational guidance for autonomous agent
         system_extension_prompt = (
             "Deep-Browser Autonomous Agent Guidelines:\n"
-            "1. DETAIL COMPLETION & PROFILE VERIFICATION: When looking up specific records, profiles, students, or lecturers (e.g. on PDDikti or databases), NEVER conclude at the search result table/list. Click into the specific record, wait for the profile/detail page to load, and verify the full data before declaring the task done.\n"
-            "2. SCREENSHOT EVIDENCE: If the user asks for a screenshot or visual proof, ensure you have navigated to the final target page, scrolled the relevant information clearly into view, and taken the screenshot of the actual rendered content.\n"
-            "3. RESEARCH ACCURACY: For scientific, historical, or academic research, search and open authoritative, encyclopedic, or published sources (e.g. Wikipedia, scientific papers, official registries). Do not rely on commercial AI landing pages or promotional ads.\n"
-            "4. MULTI-TAB RESEARCH: When tasked with multi-tab or parallel research across topics, open new tabs using navigate(..., new_tab=True), inspect and extract key findings from each, and synthesize a comprehensive markdown summary.\n"
-            "5. OUTPUT FORMAT: Present your final result as structured, clean Markdown with clear headings, bullet points, and citations."
+            "1. INTENT DECOMPOSITION (PLATFORM FIRST, THEN SEARCH INTERNALLY): When the user says 'buka [Platform/Website] lalu cari [Entitas/Nama]', 'buka X' is the destination portal and 'lalu cari Y' is the internal query. NEVER combine them into a single search query on Google (do NOT search 'Y X'). First find and navigate to the official Website X, and only then use Website X's internal search feature to search for Y.\n"
+            "2. DETAIL COMPLETION & RECORD VERIFICATION: When looking up specific records, profiles, accounts, or database entries, NEVER conclude at the search result table/list. Click into the specific record, wait for the profile/detail page to load, and verify the full data before declaring the task done.\n"
+            "3. SCREENSHOT EVIDENCE: If the user asks for a screenshot or visual proof, ensure you have navigated to the final target page, scrolled the relevant information clearly into view, and taken the screenshot of the actual rendered content.\n"
+            "4. RESEARCH ACCURACY: Search and open authoritative, official, primary registries or published sources. Do not rely on commercial landing pages or promotional ads.\n"
+            "5. MULTI-TAB RESEARCH: When tasked with multi-tab or parallel research across topics, open new tabs using navigate(..., new_tab=True), inspect and extract key findings from each, and synthesize a comprehensive markdown summary.\n"
+            "6. OUTPUT FORMAT: Present your final result as structured, clean Markdown with clear headings, bullet points, and citations without lazy omissions."
         )
 
         # 6. Instantiate genuine Browser Use Agent

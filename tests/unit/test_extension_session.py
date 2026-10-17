@@ -94,9 +94,9 @@ class TestExtensionBrowserSession(unittest.IsolatedAsyncioTestCase):
             await self.transport.push_incoming({
                 "request_id": req_id,
                 "result": {
-                    "url": "https://pddikti.kemdiktisaintek.go.id",
-                    "title": "PDDikti",
-                    "tabs": [{"url": "https://pddikti.kemdiktisaintek.go.id", "title": "PDDikti", "id": 101}],
+                    "url": "https://portal-data.example.org",
+                    "title": "Portal Data",
+                    "tabs": [{"url": "https://portal-data.example.org", "title": "Portal Data", "id": 101}],
                     "elements": [
                         {"index": 1, "tag": "input", "placeholder": "Cari Mahasiswa", "xpath": "//input[@id='search']"},
                         {"index": 2, "tag": "button", "text": "Cari", "xpath": "//button[@type='submit']"},
@@ -113,8 +113,8 @@ class TestExtensionBrowserSession(unittest.IsolatedAsyncioTestCase):
 
         await transport_task
         self.assertIsInstance(summary, BrowserStateSummary)
-        self.assertEqual(summary.url, "https://pddikti.kemdiktisaintek.go.id")
-        self.assertEqual(summary.title, "PDDikti")
+        self.assertEqual(summary.url, "https://portal-data.example.org")
+        self.assertEqual(summary.title, "Portal Data")
         self.assertIsNotNone(summary.screenshot)
         self.assertEqual(len(summary.dom_state.selector_map), 2)
 

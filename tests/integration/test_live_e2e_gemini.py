@@ -356,7 +356,7 @@ async def test_e2e_challenge_detection_and_resolution():
     broadcaster.subscribe(lambda evt: received.append(evt))
 
     test_task = "task_cf_001"
-    test_sess = "sess_pddikti"
+    test_sess = "sess_portal_lookup"
 
     # Challenge emitted
     await broadcaster.broadcast(

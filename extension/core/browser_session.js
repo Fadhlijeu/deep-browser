@@ -1886,7 +1886,7 @@
     }
 
     /**
-     * Extracts visual HTML & CSS structure of a target information section (e.g. PDDIKTI info, table, card).
+     * Extracts visual HTML & CSS structure of a target information section (e.g. record profile, data table, card).
      */
     async extractHtmlSnippet(selectorOrKeyword) {
       return this._executeInTab((query) => {

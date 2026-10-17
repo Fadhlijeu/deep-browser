@@ -165,7 +165,7 @@ export const Composer: React.FC<ComposerProps> = ({
         <textarea
           ref={textareaRef}
           className="composer-textarea"
-          placeholder="Perintahkan agent (contoh: Cari data di PDDIKTI)..."
+          placeholder="Perintahkan agen (contoh: Buka portal X lalu cari data Y)..."
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}

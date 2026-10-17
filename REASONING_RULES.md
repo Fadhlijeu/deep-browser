@@ -10,7 +10,7 @@ Dokumen ini mendefinisikan aturan dan standar penalaran (*reasoning*) bagi agen 
 > [!IMPORTANT]
 > **Dilarang Keras Menginjeksi Aturan Statis atau Template Khusus Domain.**
 > Contoh yang DILARANG:
-> - ❌ `"Jika user meminta data di PDDIKTI, buka pddikti.kemdikbud.go.id"`
+> - ❌ `"Jika user meminta data di portal X, buka URL hardcoded domain-lama.gov.id"`
 > - ❌ `"Jika mencari akun pengguna, selalu buka halaman X"`
 > - ❌ `"Jika situs pendidikan tidak terbuka, anggap server sedang maintenance"`
 
@@ -36,13 +36,35 @@ graph TD
 ```
 
 1. **Platform / Ekosistem**:
-   - Layanan atau portal target (misal: GitHub, Wikipedia, E-commerce, Portal Kemahasiswaan).
+   - Layanan atau portal target (misal: GitHub, Wikipedia, E-commerce, Portal Layanan Publik).
    - Jika belum berada di situs tersebut dan URL-nya tidak diketahui secara pasti, **cari portal resminya via Google/Bing** terlebih dahulu.
 2. **Entitas / Subjek**:
-   - Target spesifik yang dicari di dalam platform (misal: repositori pengguna, nama akun, kode barang, nomor identitas mahasiswa).
+   - Target spesifik yang dicari di dalam platform (misal: repositori pengguna, nama akun, kode barang, nomor identitas).
 3. **Lingkup & Granularitas Output**:
    - Apakah pengguna meminta **1 atribut spesifik** (misal: "berapa bintang repo ini?"), atau meminta **koleksi lengkap** (misal: "apa saja repo yang saya punya?", "semua riwayat transaksi")?
    - Jika pengguna meminta **koleksi lengkap**, terapkan **Aturan Eksplorasi Komprehensif** di bawah.
+
+---
+
+### 2.1. Anti-Query Smashing: Aturan Wajib "Buka X Lalu Cari Y"
+
+Ketika pengguna memberikan instruksi berstruktur:
+`"buka [Platform/Website] lalu cari [Entitas/Nama] dan ambil [Informasi]"`
+
+Agen **DILARANG KERAS** menggabungkan nama platform dan nama entitas menjadi satu queri pencarian pada mesin pencari luar!
+- ❌ **SALAH**: Mengetik `"[Nama Entitas] [Nama Platform]"`, `"john doe github"`, atau `"sepatu olahraga tokopedia"` pada Google / search engine.
+  - *Mengapa salah?* Google akan menyajikan artikel blog pihak ketiga, situs agregator tidak resmi, atau arsip lama yang tidak terverifikasi. Selain itu, ini memotong instruksi pengguna yang secara eksplisit meminta untuk **membuka portal X**.
+- ✅ **BENAR (3-Tahap Otonom)**:
+  - **Tahap 1 (Cari & Masuk ke Situs Resmi X)**:
+    - Jika browser berada di tab kosong atau mesin pencari, queri pencarian **HANYA NAMA PLATFORM X** (contoh: `"[Nama Portal X]"` atau `"portal [Nama Portal X]"`).
+    - Amati hasil pencarian, identifikasi tautan resmi utama (cek domain resmi seperti `.go.id`, `.edu`, `.org`, atau domain utama), lalu **KLIK link untuk masuk ke dalam Website X**.
+    - Pastikan URL dan judul halaman aktif telah menunjukkan bahwa browser sudah berada di Website X.
+  - **Tahap 2 (Pencarian Internal di Dalam Website X)**:
+    - Di dalam halaman Website X, temukan kolom pencarian internal, filter bar, atau input form pencarian.
+    - Ketik nama entitas `Y` (contoh: `"muhammad fadhli rizaldy"`), lalu kirim dengan `"press_enter": true` atau klik tombol cari.
+  - **Tahap 3 (Masuk ke Halaman Detail & Ekstraksi Lengkap)**:
+    - Jangan berhenti di tabel ringkasan atau baris hasil pencarian.
+    - Klik masuk ke halaman detail profil/entitas tersebut, tunggu halaman termuat utuh, lalu kumpulkan seluruh atribut informasi yang diminta pengguna.
 
 ---
 
@@ -175,6 +197,7 @@ Agent runtime wajib memvalidasi dan memulihkan format JSON dari LLM:
 
 | Kondisi | Respon Reasoning yang Benar | Respon yang Salah |
 | :--- | :--- | :--- |
+| User meminta "buka X lalu cari Y" | Cari portal X di Google, KLIK masuk ke situs resmi X, baru gunakan kolom pencarian internal di dalam situs X untuk mencari Y. | Menggabungkan queri menjadi "Y X" di Google tanpa pernah membuka portal X. |
 | User meminta "semua repo / katalog" | Cek tab Repositories, cek total counter, scroll bertahap hingga Pixels Below = 0, lalu tampilkan seluruh 16–17 repo dalam tabel/daftar bernomor 1 s/d N. | Menyebutkan 6–10 item lalu menulis "Serta repository lainnya..." atau "...17 lainnya...". |
 | Teks highlight melintasi tag inline (`<a>`, `<span>`) | Deteksi teks di tingkat blok paragraf dan sorot kata/frasa target secara mulus. | Menghentikan aksi dengan alasan teks tidak ditemukan. |
 | Output LLM memiliki kurung kurawal ganda (`} }`) | Parser mengekstrak JSON seimbang (*balanced braces*) dan menjalankan aksi yang dimaksud. | Membuang string mentah JSON ke chat pengguna sebagai hasil akhir. |

@@ -185,13 +185,13 @@ class TestExtensionContextPrompt(unittest.TestCase):
             task_id="task_x",
             task="Kerjakan halaman ini",
             tab_id=7,
-            url="https://pddikti.kemdikbud.go.id/",
-            title="PDDikti",
+            url="https://portal-data.example.org/",
+            title="Portal Data",
         )
         prompt = build_extension_context_prompt("Kerjakan halaman ini", ctx)
 
-        self.assertIn("https://pddikti.kemdikbud.go.id/", prompt)
-        self.assertIn("PDDikti", prompt)
+        self.assertIn("https://portal-data.example.org/", prompt)
+        self.assertIn("Portal Data", prompt)
         self.assertIn("Kerjakan halaman ini", prompt)
         # Must instruct agent NOT to navigate away
         self.assertIn("ALREADY OPEN", prompt.upper())

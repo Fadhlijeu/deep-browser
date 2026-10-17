@@ -199,7 +199,7 @@ Berikut adalah usulan saran struktural, hierarki informasi, dan pengalaman pengg
 * **Kondisi Saat Ini**: Laci riwayat sesi hanya menampilkan nama dan tanggal.
 * **Usulan Redesign Konten**:
   - **Penamaan Otomatis Berdasarkan Tugas (Auto-Title)**:
-    - Sesi diberi nama otomatis dari intisari perintah pertama (contoh: *"Riset PDDIKTI"*, *"Pencarian Repo GitHub"*).
+    - Sesi diberi nama otomatis dari intisari perintah pertama (contoh: *"Riset Dokumentasi"*, *"Pencarian Repo GitHub"*).
   - **Pencarian Riwayat Sesi**:
     - Input pencarian untuk menyaring sesi-sesi lama berdasarkan kata kunci tugas.
   - **Ekspor Sesi**:

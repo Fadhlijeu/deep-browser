@@ -128,8 +128,8 @@ async def test_explicit_extension_to_workspace_handoff():
     mock_session = MagicMock(spec=BrowserSession)
     mock_session.id = "ext_session_search"
     mock_session.is_cdp_connected = True
-    mock_session.get_current_page_url = AsyncMock(return_value="https://pddikti.kemdikbud.go.id")
-    mock_session.get_current_page_title = AsyncMock(return_value="PDDIKTI Search")
+    mock_session.get_current_page_url = AsyncMock(return_value="https://portal-data.example.org")
+    mock_session.get_current_page_title = AsyncMock(return_value="Portal Search")
     mock_session.get_tabs = AsyncMock(return_value=[])
 
     coordinator.register_existing_session(
@@ -223,8 +223,8 @@ def test_extension_task_creation_with_active_tab_context():
         "browser_id": "edge_9222",
         "tab_id": 12345,
         "window_id": 1,
-        "url": "https://pddikti.kemdikbud.go.id/data_mahasiswa/xyz",
-        "title": "Data Mahasiswa PDDIKTI",
+        "url": "https://portal-data.example.org/records/xyz",
+        "title": "Data Rekord Mahasiswa",
         "safe_mode": True,
     })
 

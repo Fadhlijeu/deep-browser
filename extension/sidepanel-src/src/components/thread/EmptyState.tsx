@@ -8,10 +8,10 @@ interface EmptyStateProps {
 export const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
   const suggestions = [
     {
-      code: '01 / AUDIT',
-      title: 'Cari data di PDDIKTI',
-      desc: 'Verifikasi profil, status mahasiswa, dan data kampus.',
-      prompt: 'Cari website pddikti yang benar lalu cari data mahasiswa dan ambil informasinya',
+      code: '01 / NAVIGATE',
+      title: 'Buka Portal & Ekstrak Data',
+      desc: 'Buka portal web target, cari entitas spesifik, dan kumpulkan informasi.',
+      prompt: 'Buka portal web resmi yang relevan, cari informasi target dan kumpulkan data lengkapnya',
     },
     {
       code: '02 / EXTRACT',

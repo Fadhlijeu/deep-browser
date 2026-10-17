@@ -46,17 +46,25 @@ At each step, you receive:
 4. An optional visual screenshot of the current viewport.
 
 ### DEEP REASONING & CORE DIRECTIVES
-1. **FIRST-PRINCIPLES INTENT DECOMPOSITION (PLATFORM FIRST, ENTITY SECOND)**:
-   - When the user asks for data on a platform, portal, or website (e.g. "buka [platform], cari [entitas] dan berikan [informasi]"):
-   - Do NOT mash the platform and entity query together into an ambiguous search query.
-   - Decompose the request systematically:
-     a) **Platform / Ecosystem**: Identify the target service, portal, or site. If you are not yet on the platform and its direct URL is unknown, search for the official platform portal via Google or Bing.
-     b) **Target Entity / Subject**: Identify the specific profile, repository, account, product, or record to look up.
-     c) **Scope & Output Granularity**: Single attribute lookup vs. exhaustive catalog/list.
-   - Execution Sequence:
-     - **Step 1**: Reach and enter the target platform portal or user profile page first.
-     - **Step 2**: Once on the platform, use its native search box, filter inputs, or dedicated tab navigation.
-     - **Step 3**: Submit queries with \`"press_enter": true\` or by clicking search buttons.
+1. **FIRST-PRINCIPLES INTENT DECOMPOSITION (STRICT SEPARATION: PLATFORM DESTINATION vs. INTERNAL SEARCH)**:
+   - When the user asks to "buka [Platform/Website] lalu cari [Entitas/Nama]" or any variant of "buka X lalu cari Y" / "open X and search for Y":
+     - "buka X" is an explicit Stage 1 command: The user is specifying the destination environment/portal.
+     - "lalu cari Y" is Stage 2: The search for Y MUST be conducted INSIDE website X using X's native search bar.
+   - **⛔ STRICT PROHIBITION: NEVER COMBINE X AND Y INTO AN EXTERNAL SEARCH QUERY (ANTI-QUERY SMASHING)**:
+     - ❌ ABSOLUTELY FORBIDDEN: Typing "Y X" or "[Entitas] [Platform]" into Google, Bing, or browser search bars (e.g. searching "[Nama Orang/Entitas] [Nama Portal]" on Google).
+     - WHY? External search engines return third-party aggregators, SEO spam, or stale cache pages. They do not have live database access and violate the user's explicit instruction to "buka X".
+   - **MANDATORY 3-STAGE EXECUTION SEQUENCE**:
+     - **Stage 1 (Find & Enter Official Website X)**:
+       - If on an empty tab or external search engine, search ONLY for the platform name: e.g. query "[Nama Platform X]".
+       - Inspect search results, identify the official domain (look for official government/institutional domain extensions like .go.id, .edu, .org, or official branding), and **CLICK the link to enter Website X**.
+       - Confirm that current URL and page title now represent Website X.
+     - **Stage 2 (Search Within Website X)**:
+       - Once inside Website X, locate its internal search input field, filter bar, or database lookup box from the interactive DOM tree.
+       - Type the entity name "Y" (e.g. "[Nama Entitas Y]") into the internal search input.
+       - Submit with \`"press_enter": true\` or by clicking the search button.
+     - **Stage 3 (Inspect Entity Detail & Exhaustive Data Extraction)**:
+       - Search result previews or summary tables are NOT the final answer.
+       - Click into the specific record or profile detail page, wait for the full profile to load, and extract all requested attributes thoroughly.
 
 2. **EXHAUSTIVE DISCOVERY & COMPLETE ENUMERATION (ZERO LAZY SUMMARIES)**:
    - **The Viewport Horizon Limitation**: The Simplified Interactive DOM tree and screenshot ONLY reflect elements visible in or near the current viewport. They do NOT contain the entire webpage!
@@ -316,11 +324,16 @@ ${state.simplifiedTreeText ? state.simplifiedTreeText : '(No interactive element
 ${this.task}
 
 Analyze the current page state above and decide the next best action to accomplish the goal.
-CRITICAL OUTPUT COMPLETION RULES:
-1. When calling done, format your final answer in clean structured Markdown.
-2. IF THE USER ASKED FOR A LIST OR CATALOG (e.g. all repositories, all products, all items):
-   YOU MUST EXPLICITLY ENUMERATE EVERY SINGLE ITEM (1 to N).
-   DO NOT BE LAZY: Never use phrases like "dan X lainnya", "serta repository lainnya...", or "...". If there are 16 or 17 items, list all 16 or 17 completely!
+CRITICAL COGNITIVE DIRECTIVES:
+1. INTENT DECOMPOSITION ("Buka X lalu cari Y"):
+   - If the user instructed to "buka [Portal X] lalu cari [Entitas Y]":
+   - NEVER search "Y X" on Google/Bing!
+   - Stage 1: If not yet on Portal X, search ONLY "X" on Google and CLICK into the official Website X.
+   - Stage 2: Once inside Website X, locate its internal search input and search for "Y".
+   - Stage 3: Click into the entity's profile/record detail page to get full data.
+2. EXHAUSTIVE ENUMERATION:
+   - If the user asked for a list or catalog: List EVERY SINGLE ITEM (1 to N) without lazy phrases ("dan X lainnya", "...").
+3. When calling done, format your final answer in clean structured Markdown.
 Return your JSON response.`;
 
       const textPrompt = [historySection, antiLoopSection, loopNudgeSection, planSection, replanNudgeSection, latestUserResponseSection, stateSection, userGoalSection]

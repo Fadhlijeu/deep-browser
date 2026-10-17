@@ -80,8 +80,8 @@
             <span>Aksi Cepat &amp; Widget</span>
           </div>
           <div class="db-quick-widgets-grid">
-            <button class="db-quick-chip" data-prompt="Cari data di PDDIKTI lalu ambil informasi lengkapnya">
-              <span>Cari PDDIKTI</span>
+            <button class="db-quick-chip" data-prompt="Jelajahi halaman aktif ini dan kumpulkan informasi intinya">
+              <span>Jelajahi Halaman</span>
               <svg class="db-svg-icon" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </button>
             <button class="db-quick-chip" data-prompt="Rangkum konten halaman aktif ini dan jelaskan poin-poin intinya">
