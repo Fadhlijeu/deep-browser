@@ -70,6 +70,15 @@
 
       const UrlShortenerCls = (typeof window !== 'undefined' && window.UrlShortener) || (typeof global !== 'undefined' && global.UrlShortener) || (typeof UrlShortener !== 'undefined' ? UrlShortener : null);
       this.urlShortener = UrlShortenerCls ? new UrlShortenerCls() : null;
+
+      // Priority 2 from browser_use legacy: Multi-Action and Plan State Machine
+      this.enablePlanning = options.enablePlanning !== false;
+      this.planningReplanOnStall = options.planningReplanOnStall ?? 3;
+      this.planningExplorationLimit = options.planningExplorationLimit ?? 5;
+      this.plan = null;
+      this.currentPlanItemIndex = 0;
+      this.planGenerationStep = null;
+      this.consecutiveActionFailures = 0;
     }
 
 
@@ -112,6 +121,170 @@
       }
       this._emit('TASK_CANCELLED', 'Agent dihentikan oleh pengguna');
     }
+
+    /**
+     * Updates plan state from model output (plan_update, current_plan_item).
+     * @param {Object} decision
+     */
+    _updatePlanFromModelOutput(decision) {
+      if (!this.enablePlanning || !decision) return;
+
+      // If model provided a new plan via plan_update, initialize/replace plan
+      if (Array.isArray(decision.plan_update) && decision.plan_update.length > 0) {
+        this.plan = decision.plan_update.map(stepText => ({
+          text: String(stepText),
+          status: 'pending',
+        }));
+        this.currentPlanItemIndex = 0;
+        this.planGenerationStep = this.step;
+        if (this.plan.length > 0) {
+          this.plan[0].status = 'current';
+        }
+        this._emit('PLAN_UPDATED', `Rencana kerja diperbarui (${this.plan.length} butir langkah)`, {
+          plan: this.plan,
+          generationStep: this.step,
+        });
+        return;
+      }
+
+      // If model provided current_plan_item index, advance the plan
+      if (typeof decision.current_plan_item === 'number' && Array.isArray(this.plan) && this.plan.length > 0) {
+        let newIdx = decision.current_plan_item;
+        newIdx = Math.max(0, Math.min(newIdx, this.plan.length - 1));
+
+        // Mark steps prior to new as done
+        for (let i = 0; i < newIdx; i++) {
+          if (this.plan[i] && (this.plan[i].status === 'current' || this.plan[i].status === 'pending')) {
+            this.plan[i].status = 'done';
+          }
+        }
+
+        // Mark target step as current
+        if (this.plan[newIdx]) {
+          this.plan[newIdx].status = 'current';
+        }
+
+        this.currentPlanItemIndex = newIdx;
+        this._emit('PLAN_PROGRESS', `Kemajuan rencana: langkah [${newIdx + 1}/${this.plan.length}] aktif`, {
+          currentPlanItemIndex: newIdx,
+          plan: this.plan,
+        });
+      }
+    }
+
+    /**
+     * Renders the current plan with status markers [x], [>], [ ], [-].
+     * @returns {string|null}
+     */
+    _renderPlanDescription() {
+      if (!this.enablePlanning || !Array.isArray(this.plan) || this.plan.length === 0) {
+        return null;
+      }
+      const markers = { done: '[x]', current: '[>]', pending: '[ ]', skipped: '[-]' };
+      return this.plan.map((item, idx) => {
+        const marker = markers[item.status] || '[ ]';
+        return `${marker} ${idx}: ${item.text}`;
+      }).join('\n');
+    }
+
+    /**
+     * Injects a replan nudge when stall detection threshold is met,
+     * or an exploration nudge if agent took many steps without planning.
+     * @returns {string|null}
+     */
+    _getPlanNudge() {
+      if (!this.enablePlanning) return null;
+
+      // Replan nudge on consecutive failures
+      if (this.plan && this.planningReplanOnStall > 0 && this.consecutiveActionFailures >= this.planningReplanOnStall) {
+        return `REPLAN SUGGESTED: You have failed ${this.consecutiveActionFailures} consecutive times. Your current plan may need revision. Output a new \`plan_update\` with revised steps to recover.`;
+      }
+
+      // Exploration nudge: steps without a plan
+      if (!this.plan && this.planningExplorationLimit > 0 && this.step >= this.planningExplorationLimit) {
+        return `PLANNING NUDGE: You have taken ${this.step} steps without creating a plan. If the task is complex, output a \`plan_update\` with clear todo items now. If the task is already done, call \`done\` instead.`;
+      }
+
+      return null;
+    }
+
+    /**
+     * Executes multiple actions sequentially with page-change guards (browser-use legacy adoption).
+     * @param {Array<{action_name: string, parameters: Object}>} actions
+     * @returns {Promise<Array<Object>>} Action results
+     */
+    async multiAct(actions) {
+      const results = [];
+      const totalActions = (actions || []).length;
+      if (totalActions === 0) return results;
+
+      for (let i = 0; i < totalActions; i++) {
+        if (this.isStopped) break;
+
+        const actionObj = actions[i];
+        const actionName = actionObj.action_name;
+        let params = actionObj.parameters || {};
+
+        if (this.urlShortener && params) {
+          params = this.urlShortener.restoreParams(params);
+        }
+
+        // Guard 1: ONLY ALLOW TO CALL `done` IF IT IS A SINGLE ACTION
+        if (i > 0 && (actionName === 'done' || params.is_done)) {
+          const skipMsg = `Aksi 'done' hanya diizinkan sebagai aksi tunggal — batch dihentikan setelah aksi ${i} / ${totalActions}.`;
+          this._emit('OBSERVATION', skipMsg, { stoppedAt: i, totalActions });
+          break;
+        }
+
+        // Guard 2: Short wait between actions (only after first action)
+        if (i > 0) {
+          await this.browserSession.wait(0.35);
+          if (this.isStopped) break;
+        }
+
+        // Capture pre-action URL
+        const preActionUrl = (await this.browserSession.getCurrentUrl?.()) || '';
+
+        // Execute via Tools
+        const res = await this.tools.execute(actionName, params);
+        results.push(res);
+
+        // Record action to loop detector
+        if (this.loopDetector) {
+          this.loopDetector.recordAction(actionName, params);
+        }
+
+        // If action failed or marks task done, stop remaining actions
+        if (!res.success || res.data?.is_done || actionName === 'done' || i === totalActions - 1) {
+          break;
+        }
+
+        // Guard 3: Static flag — actions that terminate sequence
+        const terminatesSequence = ['navigate', 'refresh', 'switch_tab', 'open_tab', 'close_tab', 'go_back', 'parallel_research'].includes(actionName);
+        if (terminatesSequence) {
+          this._emit('OBSERVATION', `Aksi "${actionName}" memicu perubahan navigasi/halaman — melewati ${totalActions - i - 1} aksi berikutnya untuk memindai DOM baru.`, {
+            action: actionName,
+            skippedCount: totalActions - i - 1,
+          });
+          break;
+        }
+
+        // Guard 4: Runtime URL change detection
+        const postActionUrl = (await this.browserSession.getCurrentUrl?.()) || '';
+        if (postActionUrl && postActionUrl !== preActionUrl) {
+          this._emit('OBSERVATION', `URL berubah dari "${preActionUrl}" ke "${postActionUrl}" setelah "${actionName}" — melewati ${totalActions - i - 1} aksi tersisa untuk observasi DOM segar.`, {
+            action: actionName,
+            oldUrl: preActionUrl,
+            newUrl: postActionUrl,
+            skippedCount: totalActions - i - 1,
+          });
+          break;
+        }
+      }
+
+      return results;
+    }
+
 
 
     /**
@@ -259,7 +432,15 @@
           }
 
           // ─── 2. CONTEXT & PROMPT ────────────────────────────────────────────────
-          const stepPayload = this.messageManager.buildStepPrompt(state, this.step, { isStuckOscillating, loopNudge });
+          const planDescription = this._renderPlanDescription();
+          const replanNudge = this._getPlanNudge();
+
+          const stepPayload = this.messageManager.buildStepPrompt(state, this.step, {
+            isStuckOscillating,
+            loopNudge,
+            planDescription,
+            replanNudge,
+          });
           if (this.isStopped) break;
 
           // URL Shortener: Compress tracking and bloated URLs in prompt text to save token context
@@ -285,6 +466,9 @@
 
           if (this.isStopped) break;
 
+          // Priority 2: Update Plan State Machine from model output
+          this._updatePlanFromModelOutput(decision);
+
           // URL Shortener: Restore any shortened URLs passed in decision parameters
           if (this.urlShortener && decision.parameters) {
             decision.parameters = this.urlShortener.restoreParams(decision.parameters);
@@ -297,207 +481,295 @@
             });
           }
 
-          const actionName = decision.action_name;
-          const params = decision.parameters || {};
-
-          // ─── 4. INTERACTIVE WIDGETS & HITL APPROVAL ─────────────────────────────
-          if (actionName === 'ask_user') {
-            const ixRes = await this.interactionManager.requestInteraction({
-              type: params.type || 'choice',
-              question: params.question,
-              options: params.options,
-              description: params.description,
-            });
-
-            const userVal = ixRes.value;
-            this._emit('USER_RESPONDED', `User answered: ${JSON.stringify(userVal)}`, { value: userVal });
-            this.messageManager.recordStep(
-              this.step,
-              decision.thinking,
-              { name: 'ask_user', parameters: params },
-              { success: true, user_response: userVal }
-            );
-            continue;
+          // Priority 2: Multi-Action Batch Preparation
+          let actionsToExecute = [];
+          if (Array.isArray(decision.actions) && decision.actions.length > 0) {
+            actionsToExecute = decision.actions;
+          } else if (decision.action_name) {
+            actionsToExecute = [{
+              action_name: decision.action_name,
+              parameters: decision.parameters || {},
+            }];
           }
 
-          const requiresHumanReview = (
-            this.mode === 'hitl' ||
-            (this.securityPolicy && (
-              (typeof this.securityPolicy.isHighRisk === 'function' && this.securityPolicy.isHighRisk(actionName, params)) ||
-              (this.mode !== 'auto' && this.securityPolicy.requiresReview(actionName, params))
-            ))
-          );
+          let batchTerminalResult = null;
 
-          if (requiresHumanReview) {
-            const proposalId = 'prop_' + Date.now().toString(36) + '_' + this.step;
-            this._emit('ACTION_PROPOSED', `Proposal Aksi: ${actionName}`, { action_name: actionName, parameters: params, proposal_id: proposalId });
-            this._emit('USER_APPROVAL_REQUIRED', `Menunggu persetujuan untuk aksi: ${actionName}`, {
-              action_name: actionName,
-              parameters: params,
-              proposal_id: proposalId,
-            });
+          for (let actIdx = 0; actIdx < actionsToExecute.length; actIdx++) {
+            if (this.isStopped) break;
 
-            const approvalResult = await this.interactionManager.requestInteraction({
-              type: 'approval',
-              question: `Konfirmasi aksi: ${actionName}`,
-              action_name: actionName,
-              parameters: params,
-              proposal_id: proposalId,
-            });
+            const currentAction = actionsToExecute[actIdx];
+            const actionName = currentAction.action_name;
+            let params = currentAction.parameters || {};
 
-            // Validate approval binding: ensure response matches active proposal
-            if (approvalResult.action_name && approvalResult.action_name !== actionName) {
-              const mismatchMsg = `Persetujuan tidak cocok (proposal: ${actionName}, respon: ${approvalResult.action_name}).`;
-              this._emit('ACTION_FAILED', mismatchMsg, { error: mismatchMsg });
-              continue;
+            if (this.urlShortener && params) {
+              params = this.urlShortener.restoreParams(params);
+              currentAction.parameters = params;
             }
 
-            if (!approvalResult.approved && approvalResult.value === 'reject') {
-              const feedback = approvalResult.feedback || 'User rejected the action.';
-              this._emit('RETRY', `Aksi ditolak: ${feedback}. Merencanakan ulang...`, { feedback });
-              this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Rejected by user: ${feedback}` });
-              continue;
-            } else if (approvalResult.value === 'edit') {
-              const feedback = approvalResult.feedback || 'User requested modification.';
-              this._emit('RETRY', `Instruksi diubah: ${feedback}. Merencanakan ulang...`, { feedback });
-              this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Modified by user: ${feedback}` });
-              continue;
-            }
-          }
-
-
-          if (this.securityPolicy && typeof this.securityPolicy.isActionAllowed === 'function') {
-            if (!this.securityPolicy.isActionAllowed(actionName, params)) {
-              const blockedMsg = `Aksi "${actionName}" tidak diizinkan oleh kebijakan preset aktif: ${this.preset}`;
-              this._emit('ACTION_FAILED', blockedMsg, { error: blockedMsg, action_name: actionName, preset: this.preset });
-              this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: blockedMsg });
-              continue;
-            }
-          }
-
-          // Anti-loop duplicate click guard:
-          // If the agent attempts to click the exact same element consecutively right after clicking it,
-          // intercept it with an automatic Waiting process (without terminating) so background operations
-          // like commit changes, form submissions, or async saves can complete.
-          if (actionName === 'click_element') {
-            if (params.index === lastClickedIndex) {
-              consecutiveClickCount++;
-            } else {
-              lastClickedIndex = params.index;
-              consecutiveClickCount = 1;
+            // Guard 1: ONLY ALLOW `done` IF IT IS A SINGLE ACTION
+            if (actIdx > 0 && (actionName === 'done' || params.is_done)) {
+              this._emit('OBSERVATION', `Aksi 'done' hanya diizinkan sebagai aksi tunggal — batch dihentikan setelah sub-aksi ${actIdx} / ${actionsToExecute.length}.`);
+              break;
             }
 
-            if (consecutiveClickCount >= 2) {
-              const waitReason = `Elemen [${params.index}] telah diklik di langkah sebelumnya. Menjalankan proses Waiting (tanpa terminasi) untuk memberi waktu proses halaman (commit/submit/mutasi) selesai...`;
-              this._emit('WAITING', waitReason, {
-                seconds: 3.5,
-                index: params.index,
-                reason: 'Menunggu proses background / commit selesai',
+            // Guard 2: Pacing between actions in multi-act batch
+            if (actIdx > 0) {
+              await this.browserSession.wait(0.35);
+              if (this.isStopped) break;
+            }
+
+            if (actionsToExecute.length > 1) {
+              this._emit('MULTI_ACTION_STEP', `[Sub-aksi ${actIdx + 1}/${actionsToExecute.length}] Menjalankan: ${actionName}`, {
+                index: actIdx + 1,
+                total: actionsToExecute.length,
+                action_name: actionName,
+                parameters: params,
               });
-              await this.browserSession.wait(3.5);
-              consecutiveClickCount = 0;
+            }
+
+            // ─── 4. INTERACTIVE WIDGETS & HITL APPROVAL ─────────────────────────────
+            if (actionName === 'ask_user') {
+              const ixRes = await this.interactionManager.requestInteraction({
+                type: params.type || 'choice',
+                question: params.question,
+                options: params.options,
+                description: params.description,
+              });
+
+              const userVal = ixRes.value;
+              this._emit('USER_RESPONDED', `User answered: ${JSON.stringify(userVal)}`, { value: userVal });
               this.messageManager.recordStep(
                 this.step,
                 decision.thinking,
-                { name: 'wait', parameters: { seconds: 3.5, reason: 'Menunggu proses selesai setelah klik' } },
-                { success: true, message: 'Proses waiting selesai, memeriksa pembaruan halaman.' }
+                { name: 'ask_user', parameters: params },
+                { success: true, user_response: userVal }
               );
-              continue;
+              break;
             }
-          } else {
-            consecutiveClickCount = 0;
-            if (actionName !== 'wait') {
-              lastClickedIndex = null;
-            }
-          }
 
-          // ─── 5. EMIT SPECIFIC ACTION EVENT ──────────────────────────────────────
-          this._emitActionSpecificEvent(actionName, params);
+            const requiresHumanReview = (
+              this.mode === 'hitl' ||
+              (this.securityPolicy && (
+                (typeof this.securityPolicy.isHighRisk === 'function' && this.securityPolicy.isHighRisk(actionName, params)) ||
+                (this.mode !== 'auto' && this.securityPolicy.requiresReview(actionName, params))
+              ))
+            );
 
-          // ─── 6. ACT ─────────────────────────────────────────────────────────────
-          const preActionUrl = state.url;
-          const actionResult = await this.tools.execute(actionName, params);
-          if (this.isStopped) break;
-
-          if (!actionResult.success) {
-            this._emit('ACTION_FAILED', `Gagal: ${actionResult.error}`, { error: actionResult.error });
-          } else {
-            this._emit('ACTION_EXECUTED', actionResult.message || `Aksi ${actionName} dieksekusi`, { data: actionResult.data });
-
-            if (actionName === 'parallel_research') {
-              const report = actionResult.data?.synthesizedReport || actionResult.message;
-              this.isRunning = false;
-              this._emit('TASK_COMPLETED', report, {
-                result: report,
-                totalSteps: this.step,
-                success: true,
+            if (requiresHumanReview) {
+              const proposalId = 'prop_' + Date.now().toString(36) + '_' + this.step + '_' + actIdx;
+              this._emit('ACTION_PROPOSED', `Proposal Aksi: ${actionName}`, { action_name: actionName, parameters: params, proposal_id: proposalId });
+              this._emit('USER_APPROVAL_REQUIRED', `Menunggu persetujuan untuk aksi: ${actionName}`, {
+                action_name: actionName,
+                parameters: params,
+                proposal_id: proposalId,
               });
-              return { success: true, result: report, totalSteps: this.step };
-            } else if (actionName === 'save_as_pdf') {
-              this._emit('PDF_SAVED', actionResult.message, actionResult.data);
-              const taskLower = (this.task || '').toLowerCase().trim();
-              if (taskLower.includes('pdf') || taskLower.includes('ekspor')) {
-                const finalAnswer = actionResult.message || 'Dokumen PDF berhasil diekspor.';
+
+              const approvalResult = await this.interactionManager.requestInteraction({
+                type: 'approval',
+                question: `Konfirmasi aksi: ${actionName}`,
+                action_name: actionName,
+                parameters: params,
+                proposal_id: proposalId,
+              });
+
+              if (approvalResult.action_name && approvalResult.action_name !== actionName) {
+                const mismatchMsg = `Persetujuan tidak cocok (proposal: ${actionName}, respon: ${approvalResult.action_name}).`;
+                this._emit('ACTION_FAILED', mismatchMsg, { error: mismatchMsg });
+                break;
+              }
+
+              if (!approvalResult.approved && approvalResult.value === 'reject') {
+                const feedback = approvalResult.feedback || 'User rejected the action.';
+                this._emit('RETRY', `Aksi ditolak: ${feedback}. Merencanakan ulang...`, { feedback });
+                this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Rejected by user: ${feedback}` });
+                break;
+              } else if (approvalResult.value === 'edit') {
+                const feedback = approvalResult.feedback || 'User requested modification.';
+                this._emit('RETRY', `Instruksi diubah: ${feedback}. Merencanakan ulang...`, { feedback });
+                this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: `Modified by user: ${feedback}` });
+                break;
+              }
+            }
+
+            if (this.securityPolicy && typeof this.securityPolicy.isActionAllowed === 'function') {
+              if (!this.securityPolicy.isActionAllowed(actionName, params)) {
+                const blockedMsg = `Aksi "${actionName}" tidak diizinkan oleh kebijakan preset aktif: ${this.preset}`;
+                this._emit('ACTION_FAILED', blockedMsg, { error: blockedMsg, action_name: actionName, preset: this.preset });
+                this.messageManager.recordStep(this.step, decision.thinking, { name: actionName, parameters: params }, { success: false, error: blockedMsg });
+                break;
+              }
+            }
+
+            // Anti-loop duplicate click guard
+            if (actionName === 'click_element') {
+              if (params.index === lastClickedIndex) {
+                consecutiveClickCount++;
+              } else {
+                lastClickedIndex = params.index;
+                consecutiveClickCount = 1;
+              }
+
+              if (consecutiveClickCount >= 2) {
+                const waitReason = `Elemen [${params.index}] telah diklik di langkah sebelumnya. Menjalankan proses Waiting (tanpa terminasi) untuk memberi waktu proses halaman (commit/submit/mutasi) selesai...`;
+                this._emit('WAITING', waitReason, {
+                  seconds: 3.5,
+                  index: params.index,
+                  reason: 'Menunggu proses background / commit selesai',
+                });
+                await this.browserSession.wait(3.5);
+                consecutiveClickCount = 0;
+                this.messageManager.recordStep(
+                  this.step,
+                  decision.thinking,
+                  { name: 'wait', parameters: { seconds: 3.5, reason: 'Menunggu proses selesai setelah klik' } },
+                  { success: true, message: 'Proses waiting selesai, memeriksa pembaruan halaman.' }
+                );
+                break;
+              }
+            } else {
+              consecutiveClickCount = 0;
+              if (actionName !== 'wait') {
+                lastClickedIndex = null;
+              }
+            }
+
+            // ─── 5. EMIT SPECIFIC ACTION EVENT ──────────────────────────────────────
+            this._emitActionSpecificEvent(actionName, params);
+
+            // ─── 6. ACT ─────────────────────────────────────────────────────────────
+            const preActionUrl = (state.url || '');
+            const actionResult = await this.tools.execute(actionName, params);
+            if (this.isStopped) break;
+
+            if (!actionResult.success) {
+              this.consecutiveActionFailures++;
+              this._emit('ACTION_FAILED', `Gagal: ${actionResult.error}`, { error: actionResult.error });
+            } else {
+              this.consecutiveActionFailures = 0;
+              this._emit('ACTION_EXECUTED', actionResult.message || `Aksi ${actionName} dieksekusi`, { data: actionResult.data });
+
+              if (actionName === 'parallel_research') {
+                const report = actionResult.data?.synthesizedReport || actionResult.message;
                 this.isRunning = false;
-                this._emit('TASK_COMPLETED', finalAnswer, {
-                  result: finalAnswer,
+                this._emit('TASK_COMPLETED', report, {
+                  result: report,
                   totalSteps: this.step,
                   success: true,
                 });
-                return { success: true, result: finalAnswer, totalSteps: this.step };
+                batchTerminalResult = { success: true, result: report, totalSteps: this.step };
+                break;
+              } else if (actionName === 'save_as_pdf') {
+                this._emit('PDF_SAVED', actionResult.message, actionResult.data);
+                const taskLower = (this.task || '').toLowerCase().trim();
+                if (taskLower.includes('pdf') || taskLower.includes('ekspor')) {
+                  const finalAnswer = actionResult.message || 'Dokumen PDF berhasil diekspor.';
+                  this.isRunning = false;
+                  this._emit('TASK_COMPLETED', finalAnswer, {
+                    result: finalAnswer,
+                    totalSteps: this.step,
+                    success: true,
+                  });
+                  batchTerminalResult = { success: true, result: finalAnswer, totalSteps: this.step };
+                  break;
+                }
+              } else if (actionName === 'screenshot' || actionName === 'take_screenshot') {
+                this._emit('SCREENSHOT_CAPTURED', actionResult.message || 'Tangkapan layar berhasil diambil.', actionResult.data);
+              } else if (actionName === 'extract_html_snippet') {
+                this._emit('HTML_SNIPPET_CAPTURED', `Struktur informasi visual berhasil diekstrak.`, actionResult.data);
               }
-            } else if (actionName === 'screenshot' || actionName === 'take_screenshot') {
-              this._emit('SCREENSHOT_CAPTURED', actionResult.message || 'Tangkapan layar berhasil diambil.', actionResult.data);
-            } else if (actionName === 'extract_html_snippet') {
-              this._emit('HTML_SNIPPET_CAPTURED', `Struktur informasi visual berhasil diekstrak.`, actionResult.data);
             }
-          }
 
-          // Update consecutive scroll counter for anti-loop detection
-          if (actionName === 'scroll_page') {
-            consecutiveScrollCount++;
-          } else if (['highlight_text', 'highlight_sections', 'click_element', 'input_text', 'navigate', 'refresh', 'parallel_research'].includes(actionName)) {
-            consecutiveScrollCount = 0;
-            if (actionName === 'refresh') {
-              lastPageUrl = null; // triggers mandatory auto-scan on next step!
+            // Update consecutive scroll counter for anti-loop detection
+            if (actionName === 'scroll_page') {
+              consecutiveScrollCount++;
+            } else if (['highlight_text', 'highlight_sections', 'click_element', 'input_text', 'navigate', 'refresh', 'parallel_research'].includes(actionName)) {
+              consecutiveScrollCount = 0;
+              if (actionName === 'refresh') {
+                lastPageUrl = null;
+              }
             }
-          }
 
-          // ActionLoopDetector: Record action into rolling window for repetition analysis
-          if (this.loopDetector) {
-            this.loopDetector.recordAction(actionName, params);
-          }
+            // ActionLoopDetector: Record action into rolling window for repetition analysis
+            if (this.loopDetector) {
+              this.loopDetector.recordAction(actionName, params);
+            }
 
-          // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────
-          const verification = await this._verifyAction(actionName, params, preActionUrl, actionResult);
-          this._emit('VERIFICATION', verification.message, {
-            verified: verification.verified,
-            outcome: verification.outcome || (verification.verified ? 'verified' : 'failed'),
-            error: verification.error,
-          });
-
-          // ─── 8. RECORD STEP & REFLECT ───────────────────────────────────────────
-          this.messageManager.recordStep(
-            this.step,
-            decision.thinking,
-            { name: actionName, parameters: params },
-            { success: verification.verified && actionResult.success, error: actionResult.error || verification.error }
-          );
-
-          // ─── 9. COMPLETION CHECK ────────────────────────────────────────────────
-          if (actionName === 'done' || actionResult.data?.is_done) {
-            const finalAnswer = actionResult.data?.text || params.text || 'Tugas selesai.';
-            this.isRunning = false;
-            this._emit('TASK_COMPLETED', finalAnswer, {
-              result: finalAnswer,
-              totalSteps: this.step,
-              success: actionResult.data?.success !== false,
+            // ─── 7. DETERMINISTIC VERIFICATION ──────────────────────────────────────
+            const verification = await this._verifyAction(actionName, params, preActionUrl, actionResult);
+            this._emit('VERIFICATION', verification.message, {
+              verified: verification.verified,
+              outcome: verification.outcome || (verification.verified ? 'verified' : 'failed'),
+              error: verification.error,
             });
-            return {
-              success: true,
-              result: finalAnswer,
-              totalSteps: this.step,
-            };
+
+            // ─── 8. RECORD STEP & REFLECT ───────────────────────────────────────────
+            this.messageManager.recordStep(
+              this.step,
+              decision.thinking,
+              { name: actionName, parameters: params },
+              { success: verification.verified && actionResult.success, error: actionResult.error || verification.error }
+            );
+
+            // ─── 9. COMPLETION CHECK ────────────────────────────────────────────────
+            if (actionName === 'done' || actionResult.data?.is_done) {
+              const finalAnswer = actionResult.data?.text || params.text || 'Tugas selesai.';
+              this.isRunning = false;
+              this._emit('TASK_COMPLETED', finalAnswer, {
+                result: finalAnswer,
+                totalSteps: this.step,
+                success: actionResult.data?.success !== false,
+              });
+              batchTerminalResult = {
+                success: true,
+                result: finalAnswer,
+                totalSteps: this.step,
+              };
+              break;
+            }
+
+            // If action or verification failed, abort remaining actions in batch
+            if (!actionResult.success || !verification.verified) {
+              if (actIdx < actionsToExecute.length - 1) {
+                this._emit('OBSERVATION', `Aksi "${actionName}" gagal atau tidak terverifikasi — melewati ${actionsToExecute.length - actIdx - 1} aksi berikutnya dalam batch untuk observasi ulang.`, {
+                  failedAction: actionName,
+                  skippedCount: actionsToExecute.length - actIdx - 1,
+                });
+              }
+              break;
+            }
+
+            // --- PAGE-CHANGE GUARDS (only when more actions remain in batch) ---
+            if (actIdx < actionsToExecute.length - 1) {
+              // Layer 1: Static flag — action terminates sequence
+              const terminatesSequence = ['navigate', 'refresh', 'switch_tab', 'open_tab', 'close_tab', 'go_back', 'parallel_research'].includes(actionName);
+              if (terminatesSequence) {
+                this._emit('OBSERVATION', `Aksi "${actionName}" memicu perpindahan navigasi/halaman — melewati ${actionsToExecute.length - actIdx - 1} aksi berikutnya untuk memindai DOM baru.`, {
+                  action: actionName,
+                  skippedCount: actionsToExecute.length - actIdx - 1,
+                });
+                break;
+              }
+
+              // Layer 2: Runtime detection — URL changed
+              try {
+                const currentPostUrl = (await this.browserSession.getCurrentUrl?.()) || '';
+                if (currentPostUrl && currentPostUrl !== preActionUrl) {
+                  this._emit('OBSERVATION', `URL berubah dari "${preActionUrl}" ke "${currentPostUrl}" setelah "${actionName}" — melewati ${actionsToExecute.length - actIdx - 1} aksi tersisa untuk observasi DOM segar.`, {
+                    action: actionName,
+                    oldUrl: preActionUrl,
+                    newUrl: currentPostUrl,
+                    skippedCount: actionsToExecute.length - actIdx - 1,
+                  });
+                  break;
+                }
+              } catch (postUrlErr) {
+                console.warn('[Agent] Error checking post-action URL guard:', postUrlErr);
+              }
+            }
+          } // end of actionsToExecute loop
+
+          if (batchTerminalResult) {
+            return batchTerminalResult;
           }
 
           // Pacing pause between actions to prevent LLM TPM exhaustion and allow user to observe actions
@@ -726,4 +998,4 @@
   }
 
   global.Agent = Agent;
-})(typeof window !== 'undefined' ? window : this);
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

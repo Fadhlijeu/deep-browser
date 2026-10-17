@@ -630,10 +630,46 @@ Respond strictly with a JSON object:
 
       action_name = String(action_name).trim().toLowerCase();
 
+      // Priority 2: Multi-Action Pipeline support
+      let actions = [];
+      if (Array.isArray(obj.actions) && obj.actions.length > 0) {
+        actions = obj.actions.map(a => {
+          let aName = a.action_name || a.action || a.name || '';
+          let aParams = a.parameters || a.params || a.args || {};
+          if (typeof aName === 'object' && aName !== null) {
+            aParams = aName.parameters || aName.params || aParams;
+            aName = aName.name || aName.action_name || '';
+          }
+          return {
+            action_name: String(aName).trim().toLowerCase(),
+            parameters: typeof aParams === 'object' && aParams !== null ? aParams : {},
+          };
+        }).filter(a => a.action_name);
+      }
+
+      if (actions.length === 0 && action_name) {
+        actions = [{
+          action_name,
+          parameters: typeof parameters === 'object' && parameters !== null ? parameters : {},
+        }];
+      }
+
+      if (actions.length > 0 && !action_name) {
+        action_name = actions[0].action_name;
+        parameters = actions[0].parameters;
+      }
+
+      // Priority 2: Plan State Machine fields
+      const plan_update = Array.isArray(obj.plan_update) ? obj.plan_update.map(String) : (Array.isArray(obj.plan) ? obj.plan.map(String) : null);
+      const current_plan_item = typeof obj.current_plan_item === 'number' ? obj.current_plan_item : (typeof obj.current_step === 'number' ? obj.current_step : null);
+
       return {
         thinking: String(thinking),
         action_name,
         parameters: typeof parameters === 'object' && parameters !== null ? parameters : {},
+        actions,
+        plan_update,
+        current_plan_item,
       };
     }
   }

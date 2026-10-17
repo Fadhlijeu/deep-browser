@@ -112,6 +112,22 @@
     }
 
     /**
+     * Gets the current tab URL efficiently without DOM re-extraction.
+     */
+    async getCurrentUrl() {
+      if (typeof chrome !== 'undefined' && chrome.tabs && this.tabId) {
+        try {
+          const tab = await chrome.tabs.get(this.tabId);
+          if (tab && tab.url) {
+            this.activeTabInfo = tab;
+            return tab.url;
+          }
+        } catch (_) {}
+      }
+      return this.activeTabInfo?.url || '';
+    }
+
+    /**
      * Lists all tabs in the current Edge window.
      */
     async listTabs() {

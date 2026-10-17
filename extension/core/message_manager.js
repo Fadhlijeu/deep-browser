@@ -179,6 +179,30 @@ At each step, you receive:
     - The \`FULL PAGE ARTICLE OUTLINE & HEADINGS\` and \`SUBSTANTIVE ARTICLE & TEXT CONTENT\` contain the complete text, headings, tables, and models from top to bottom.
     - Always inspect the full DOM text blocks and outline to identify all requested sections or models across the entire document.
 
+13. **MULTI-ACTION BATCHING (\`actions: [...]\`)**:
+    - When multiple deterministic actions can be performed together on the current view without needing intermediate LLM re-planning (e.g. filling out several form fields, checking multiple boxes, or typing into a search field and clicking the search button):
+    - You can provide an \`actions\` array to execute them sequentially in a single turn!
+    - Example:
+      \`\`\`json
+      {
+        "thinking": "Filling username and password simultaneously",
+        "actions": [
+          { "action_name": "input_text", "parameters": { "index": 3, "text": "myuser" } },
+          { "action_name": "input_text", "parameters": { "index": 5, "text": "mypass" } },
+          { "action_name": "click_element", "parameters": { "index": 7 } }
+        ]
+      }
+      \`\`\`
+    - Page-change guard is automatic: if any action causes a navigation or URL change, remaining actions in the batch are safely interrupted to re-observe the new DOM.
+    - Note: \`done\` is ONLY allowed as a single action, never inside a multi-action sequence.
+
+14. **STRUCTURED PLAN TRACKING (\`plan_update\` & \`current_plan_item\`)**:
+    - For multi-step or complex goals, you can declare and track your workflow:
+    - Output \`plan_update: ["1. Step one", "2. Step two", "3. Step three"]\` to establish or revise your roadmap.
+    - Output \`current_plan_item: <0-indexed integer>\` to declare which step you are actively working on.
+    - The prompt will reflect live progress markers: \`[x]\` done, \`[>]\` active, \`[ ]\` pending, \`[-]\` skipped.
+
+
 
 ### AVAILABLE ACTIONS
 ${toolsDoc}
@@ -187,11 +211,16 @@ ${toolsDoc}
 You MUST always output a SINGLE valid JSON object with the following schema:
 \`\`\`json
 {
-  "thinking": "Deep step-by-step reasoning: 1. Current state analysis (list vs detail page, tab selection, scroll progress, total count vs seen items). 2. Exploration plan. 3. Target element selection and why.",
-  "action_name": "<one of the action names above, e.g. click_element | input_text | navigate | scroll_page | screenshot | parallel_research | ask_user | done>",
+  "thinking": "Deep step-by-step reasoning: 1. Current state analysis. 2. Target element selection and why. 3. Expected outcome.",
+  "plan_update": ["1. Optional roadmap", "2. List of steps"],
+  "current_plan_item": 0,
+  "action_name": "<action name, e.g. click_element | input_text | navigate | scroll_page | highlight_sections | ask_user | done>",
   "parameters": {
     "<param_name>": "<param_value>"
-  }
+  },
+  "actions": [
+    { "action_name": "<action>", "parameters": { ... } }
+  ]
 }
 \`\`\`
 Do NOT wrap with markdown other than \`\`\`json or raw JSON. Output valid JSON only.`;
@@ -225,6 +254,23 @@ You MUST choose one of the following two actions immediately:
       if (options.loopNudge) {
         loopNudgeSection = `### ⚠️ SYSTEM LOOP & STAGNATION AWARENESS NUDGE:
 ${options.loopNudge}
+`;
+      }
+
+      // Check if plan description exists
+      let planSection = '';
+      if (options.planDescription) {
+        planSection = `### 📋 CURRENT EXECUTION PLAN (Progress Status):
+${options.planDescription}
+Status markers: [x]=done, [>]=current step, [ ]=pending, [-]=skipped. Update with "plan_update" or advance "current_plan_item".
+`;
+      }
+
+      // Check if replan nudge exists
+      let replanNudgeSection = '';
+      if (options.replanNudge) {
+        replanNudgeSection = `### ⚠️ REPLAN ADVICE (PLAN STALL DETECTED):
+${options.replanNudge}
 `;
       }
 
@@ -277,7 +323,7 @@ CRITICAL OUTPUT COMPLETION RULES:
    DO NOT BE LAZY: Never use phrases like "dan X lainnya", "serta repository lainnya...", or "...". If there are 16 or 17 items, list all 16 or 17 completely!
 Return your JSON response.`;
 
-      const textPrompt = [historySection, antiLoopSection, loopNudgeSection, latestUserResponseSection, stateSection, userGoalSection]
+      const textPrompt = [historySection, antiLoopSection, loopNudgeSection, planSection, replanNudgeSection, latestUserResponseSection, stateSection, userGoalSection]
         .filter(Boolean)
         .join('\n\n');
 
@@ -330,4 +376,4 @@ Return your JSON response.`;
   }
 
   global.MessageManager = MessageManager;
-})(typeof window !== 'undefined' ? window : this);
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
