@@ -32,6 +32,10 @@
       this.ollamaHost = config.ollamaHost || 'http://localhost:11434';
       this.temperature = config.temperature ?? 0.1;
       this.currentAbortController = null;
+
+      // Priority 3: Fallback LLM support
+      this.fallbackClient = config.fallbackClient || null;
+      this.isUsingFallback = false;
     }
 
     /**
@@ -53,6 +57,19 @@
      * @returns {Promise<Object>} { thinking, action_name, parameters }
      */
     async planNextStep(systemPrompt, stepPayload) {
+      try {
+        return await this._executePlanStep(systemPrompt, stepPayload);
+      } catch (err) {
+        if (this.fallbackClient && !this.isUsingFallback && err.name !== 'AbortError') {
+          console.warn(`[LLMClient] Primary LLM failed (${err.message}), switching to fallback LLM...`);
+          this.isUsingFallback = true;
+          return await this.fallbackClient.planNextStep(systemPrompt, stepPayload);
+        }
+        throw err;
+      }
+    }
+
+    async _executePlanStep(systemPrompt, stepPayload) {
       const { textPrompt, screenshotBase64 } = stepPayload;
 
       let rawResponseText = '';
@@ -260,7 +277,10 @@ Respond strictly with a JSON object:
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         const msg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-        throw new Error(`Gemini API Error: ${msg}`);
+        const err = new Error(`Gemini API Error: ${msg}`);
+        err.status = res.status;
+        err.statusCode = res.status;
+        throw err;
       }
 
       const data = await res.json();
@@ -364,7 +384,10 @@ Respond strictly with a JSON object:
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         const msg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-        throw new Error(`OpenAI API Error: ${msg}`);
+        const err = new Error(`OpenAI API Error: ${msg}`);
+        err.status = res.status;
+        err.statusCode = res.status;
+        throw err;
       }
 
       const data = await res.json();
@@ -417,7 +440,10 @@ Respond strictly with a JSON object:
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         const msg = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-        throw new Error(`Anthropic API Error: ${msg}`);
+        const err = new Error(`Anthropic API Error: ${msg}`);
+        err.status = res.status;
+        err.statusCode = res.status;
+        throw err;
       }
 
       const data = await res.json();
@@ -675,4 +701,4 @@ Respond strictly with a JSON object:
   }
 
   global.LLMClient = LLMClient;
-})(typeof window !== 'undefined' ? window : this);
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

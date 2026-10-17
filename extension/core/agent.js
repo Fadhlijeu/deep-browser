@@ -79,6 +79,14 @@
       this.currentPlanItemIndex = 0;
       this.planGenerationStep = null;
       this.consecutiveActionFailures = 0;
+
+      // Priority 3 from browser_use legacy: Fallback LLM, History Rerun & Trace Judge
+      this.fallbackLlmClient = options.fallbackLlmClient || null;
+      this.isUsingFallbackLlm = false;
+      const JudgeCls = (typeof window !== 'undefined' && window.Judge) || (typeof global !== 'undefined' && global.Judge) || (typeof Judge !== 'undefined' ? Judge : null);
+      this.judge = options.judge || (JudgeCls ? new JudgeCls({ llmClient: options.judgeLlmClient || this.llmClient }) : null);
+      this.useJudge = options.useJudge === true;
+      this.groundTruth = options.groundTruth || null;
     }
 
 
@@ -213,6 +221,180 @@
      * @param {Array<{action_name: string, parameters: Object}>} actions
      * @returns {Promise<Array<Object>>} Action results
      */
+    
+    /**
+     * Attempts to switch to fallback LLM on rate limits, quota exhaustion, or server errors.
+     * @param {Error} error
+     * @returns {boolean} True if successfully switched
+     */
+    _trySwitchToFallbackLlm(error) {
+      if (this.isUsingFallbackLlm || !this.fallbackLlmClient) {
+        return false;
+      }
+
+      const retryableStatusCodes = [401, 402, 429, 500, 502, 503, 504];
+      const errMsg = String(error.message || '');
+      const isRateLimit = (
+        errMsg.includes('429') ||
+        errMsg.toLowerCase().includes('rate limit') ||
+        errMsg.toLowerCase().includes('quota') ||
+        errMsg.toLowerCase().includes('resource_exhausted')
+      );
+      const hasRetryableStatus = error.status && retryableStatusCodes.includes(error.status);
+
+      if (!isRateLimit && !hasRetryableStatus) {
+        return false;
+      }
+
+      this._originalLlmClient = this.llmClient;
+      this.llmClient = this.fallbackLlmClient;
+      this.isUsingFallbackLlm = true;
+      return true;
+    }
+
+    /**
+     * Reruns a saved history of actions deterministically with retry logic and pacing (browser-use legacy adoption).
+     * @param {Array<Object>} history - Array of step items with action definitions
+     * @param {Object} [options]
+     * @param {number} [options.maxRetries=2] - Max retries per action
+     * @param {boolean} [options.skipFailures=false] - Whether to continue if an action fails
+     * @param {number} [options.delayBetweenActions=1.0] - Delay in seconds between actions
+     * @returns {Promise<Object>} Execution summary
+     */
+    async rerunHistory(history = [], options = {}) {
+      if (!Array.isArray(history) || history.length === 0) {
+        return { success: false, error: 'History trace is empty or invalid' };
+      }
+
+      const maxRetries = options.maxRetries ?? 2;
+      const skipFailures = options.skipFailures ?? false;
+      const delayBetweenActions = options.delayBetweenActions ?? 1.0;
+
+      this.isRunning = true;
+      this.isStopped = false;
+      this._emit('TASK_STARTED', `Memulai pemutaran ulang ${history.length} langkah history deterministik...`);
+
+      const results = [];
+
+      for (let i = 0; i < history.length; i++) {
+        if (this.isStopped) {
+          return { success: false, error: 'Rerun stopped by user', completedSteps: i };
+        }
+
+        const stepItem = history[i];
+        const actionObj = stepItem.action || {};
+        const actionName = actionObj.name || actionObj.action_name || stepItem.name || 'unknown';
+        const params = actionObj.parameters || stepItem.parameters || {};
+
+        if (i > 0 && delayBetweenActions > 0) {
+          await this.browserSession.wait(delayBetweenActions);
+          if (this.isStopped) break;
+        }
+
+        this._emit('RERUN_STEP', `[Replay Langkah ${i + 1}/${history.length}] Menjalankan: ${actionName}`, {
+          stepIndex: i + 1,
+          totalSteps: history.length,
+          action_name: actionName,
+          parameters: params,
+        });
+
+        let actionRes = null;
+        let attempt = 0;
+
+        while (attempt <= maxRetries) {
+          attempt++;
+          actionRes = await this.tools.execute(actionName, params);
+          if (actionRes.success || attempt > maxRetries) break;
+
+          this._emit('RETRY', `Aksi "${actionName}" gagal (percobaan ${attempt}/${maxRetries}): ${actionRes.error}. Mencoba ulang...`, {
+            action_name: actionName,
+            attempt,
+          });
+          await this.browserSession.wait(0.8);
+        }
+
+        results.push(actionRes);
+
+        if (!actionRes.success) {
+          this._emit('ACTION_FAILED', `Gagal menjalankan langkah replay [${i + 1}]: ${actionRes.error}`);
+          if (!skipFailures) {
+            this.isRunning = false;
+            return {
+              success: false,
+              error: `Replay failed at step ${i + 1}: ${actionRes.error}`,
+              failedStep: i + 1,
+              completedSteps: i,
+              results,
+            };
+          }
+        } else {
+          this._emit('ACTION_EXECUTED', `Berhasil menjalankan replay langkah [${i + 1}]: ${actionName}`);
+        }
+
+        if (actionName === 'done' || actionRes.data?.is_done) {
+          const completionText = actionRes.data?.text || params.text || 'Replay history selesai.';
+          this.isRunning = false;
+          this._emit('TASK_COMPLETED', completionText, { success: true, completedSteps: i + 1 });
+          return {
+            success: true,
+            result: completionText,
+            completedSteps: i + 1,
+            results,
+          };
+        }
+      }
+
+      this.isRunning = false;
+      const doneMsg = `Replay history selesai (${results.length} langkah dieksekusi).`;
+      this._emit('TASK_COMPLETED', doneMsg, { success: true, completedSteps: results.length });
+      return {
+        success: true,
+        result: doneMsg,
+        completedSteps: results.length,
+        results,
+      };
+    }
+
+    /**
+     * Evaluates the completed agent trace with an independent Judge LLM.
+     * @param {Object} [options]
+     * @param {string} [options.groundTruth]
+     * @returns {Promise<Object>} JudgementResult
+     */
+    async judgeTrace(options = {}) {
+      const JudgeCls = (typeof window !== 'undefined' && window.Judge) || (typeof global !== 'undefined' && global.Judge) || (typeof Judge !== 'undefined' ? Judge : null);
+      if (!this.judge && JudgeCls) {
+        this.judge = new JudgeCls({ llmClient: options.judgeLlmClient || this.llmClient });
+      }
+
+      if (!this.judge) {
+        return { verdict: true, reasoning: 'Judge module not available, defaulting to true' };
+      }
+
+      this._emit('JUDGE_STARTED', 'Memulai evaluasi independen trace oleh AI Judge...');
+
+      const lastHistoryItem = this.messageManager.history[this.messageManager.history.length - 1];
+      const finalResult = lastHistoryItem?.action?.parameters?.text || lastHistoryItem?.result?.message || 'Task completed.';
+      let screenshotBase64 = null;
+      try {
+        const state = await this.browserSession.getState(false);
+        screenshotBase64 = state.screenshot || null;
+      } catch (_) {}
+
+      const judgement = await this.judge.evaluateTrace({
+        task: this.task,
+        finalResult,
+        history: this.messageManager.history,
+        screenshotBase64,
+        groundTruth: options.groundTruth || this.groundTruth,
+        llmClient: options.judgeLlmClient || this.llmClient,
+      });
+
+      this._emit('TRACE_JUDGED', `Hasil evaluasi Judge: ${judgement.verdict ? 'VALID (BERHASIL)' : 'INVALID (BELUM MEMENUHI)'} — ${judgement.reasoning}`, judgement);
+
+      return judgement;
+    }
+
     async multiAct(actions) {
       const results = [];
       const totalActions = (actions || []).length;
@@ -461,7 +643,26 @@
             if (this.isStopped || llmErr.name === 'AbortError') {
               return { success: false, error: 'Agent stopped by user' };
             }
-            throw new Error(`LLM Error: ${llmErr.message}`);
+
+            // Fallback LLM Switch (browser-use legacy adoption)
+            if (this._trySwitchToFallbackLlm(llmErr)) {
+              this._emit('FALLBACK_LLM_SWITCHED', `LLM primer mengalami kendala (${llmErr.message}). Otomatis beralih ke Fallback LLM (${this.llmClient.model || this.llmClient.provider})...`, {
+                originalError: llmErr.message,
+                status: llmErr.status,
+                fallbackModel: this.llmClient.model,
+                fallbackProvider: this.llmClient.provider,
+              });
+              try {
+                decision = await this.llmClient.planNextStep(systemPrompt, stepPayload);
+              } catch (fallbackErr) {
+                if (this.isStopped || fallbackErr.name === 'AbortError') {
+                  return { success: false, error: 'Agent stopped by user' };
+                }
+                throw new Error(`Fallback LLM Error: ${fallbackErr.message}`);
+              }
+            } else {
+              throw new Error(`LLM Error: ${llmErr.message}`);
+            }
           }
 
           if (this.isStopped) break;
