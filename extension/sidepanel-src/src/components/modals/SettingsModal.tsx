@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { MODE_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
 import { ExecutionMode, ModelDef } from '../../types';
+import { ProviderLogo } from '../common/ProviderLogo';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -64,6 +65,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [formProvider, setFormProvider] = useState<ModelDef['provider']>('gemini');
   const [formModelId, setFormModelId] = useState('');
   const [formBaseUrl, setFormBaseUrl] = useState('');
+
+  // Auto-fetch models state
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchToast, setFetchToast] = useState<string | null>(null);
+
+  const handleAutoFetch = async () => {
+    setIsFetchingModels(true);
+    setFetchToast(null);
+    try {
+      const added = await sidepanelStore.autoFetchModels();
+      if (added > 0) {
+        setFetchToast(`Berhasil menambahkan ${added} model baru!`);
+      } else {
+        setFetchToast('Semua model sudah mutakhir (tidak ada model baru).');
+      }
+    } catch (e: any) {
+      setFetchToast(`Auto-fetch gagal: ${e?.message || 'Error'}`);
+    } finally {
+      setIsFetchingModels(false);
+      setTimeout(() => setFetchToast(null), 3500);
+    }
+  };
 
   // API Keys state
   const [keysInput, setKeysInput] = useState<Record<string, string>>({ ...apiKeys });
@@ -189,6 +212,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="settings-head-actions">
                     <button 
                       className="settings-action-pill-btn" 
+                      onClick={handleAutoFetch}
+                      disabled={isFetchingModels}
+                      title="Auto-fetch model terbaru dari endpoint Gemini / Ollama"
+                    >
+                      <Sparkles size={11} className={isFetchingModels ? 'animate-spin' : ''} style={{ color: '#60a5fa' }} />
+                      <span>{isFetchingModels ? 'Memeriksa...' : 'Auto Fetch'}</span>
+                    </button>
+                    <button 
+                      className="settings-action-pill-btn" 
                       onClick={() => sidepanelStore.resetModelsToDefault()}
                       title="Kembalikan daftar model ke default"
                     >
@@ -206,6 +238,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {fetchToast && (
+                <div style={{
+                  fontSize: '11px',
+                  color: '#93c5fd',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Sparkles size={12} />
+                  <span>{fetchToast}</span>
+                </div>
+              )}
 
               {/* Inline Add / Edit Form Drawer */}
               {isFormOpen ? (
@@ -299,23 +348,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           key={m.id} 
                           className={`model-card-item ${isSelected ? 'active' : ''}`}
                         >
-                          <div className="model-card-info">
-                            <div className="model-card-top-row">
-                              <span className="model-card-name truncate">{m.name}</span>
-                              <span className="model-provider-badge">{m.provider}</span>
-                              {isSelected && (
-                                <span className="model-active-tag">
-                                  <Check size={10} />
-                                  <span>Aktif</span>
-                                </span>
-                              )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--bg-subtle)',
+                              border: '1px solid var(--border-subtle)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              <ProviderLogo provider={m.provider} size={18} />
                             </div>
-                            <div className="model-card-sub-row truncate">
-                              <span className="model-slug-code">{m.modelId}</span>
-                              {m.baseUrl && (
-                                <span className="model-url-preview truncate" title={m.baseUrl}>
-                                  • {m.baseUrl}
-                                </span>
+
+                            <div className="model-card-info">
+                              <div className="model-card-top-row">
+                                <span className="model-card-name truncate">{m.name}</span>
+                                <span className="model-provider-badge">{m.provider}</span>
+                                {m.category && (
+                                  <span className="model-category-badge">{m.category}</span>
+                                )}
+                                {isSelected && (
+                                  <span className="model-active-tag">
+                                    <Check size={10} />
+                                    <span>Aktif</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="model-card-sub-row truncate">
+                                <span className="model-slug-code">{m.modelId}</span>
+                                {m.baseUrl && (
+                                  <span className="model-url-preview truncate" title={m.baseUrl}>
+                                    • {m.baseUrl}
+                                  </span>
+                                )}
+                              </div>
+                              {(m.rpm || m.tpm || m.rpd) && (
+                                <div className="model-quota-row">
+                                  {m.rpm && (
+                                    <span className="model-quota-chip">
+                                      <span className="chip-label">RPM</span>
+                                      <span className="chip-val">{m.rpm}</span>
+                                    </span>
+                                  )}
+                                  {m.tpm && (
+                                    <span className="model-quota-chip">
+                                      <span className="chip-label">TPM</span>
+                                      <span className="chip-val">{m.tpm}</span>
+                                    </span>
+                                  )}
+                                  {m.rpd && (
+                                    <span className="model-quota-chip">
+                                      <span className="chip-label">RPD</span>
+                                      <span className="chip-val">{m.rpd}</span>
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>

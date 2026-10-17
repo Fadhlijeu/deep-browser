@@ -18,9 +18,16 @@
 
 // ─── Default Models ───────────────────────────────────────────────────────────
 const DEFAULT_MODELS = [
-  { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',       icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-2.0-flash' },
-  { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite',  icon: 'speed',      provider: 'gemini',        modelId: 'gemini-2.0-flash-lite' },
-  { id: 'gemini/gemini-1.5-pro',        name: 'Gemini 1.5 Pro',         icon: 'psychology', provider: 'gemini',        modelId: 'gemini-1.5-pro' },
+  // Google Gemini (8 Active Models Only)
+  { id: 'gemini/gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', icon: 'speed',      provider: 'gemini',        modelId: 'gemini-3.5-flash-lite', category: 'Text-out models', rpm: '15', tpm: '250K', rpd: '500' },
+  { id: 'gemini/gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', icon: 'speed',      provider: 'gemini',        modelId: 'gemini-3.1-flash-lite', category: 'Text-out models', rpm: '15', tpm: '250K', rpd: '500' },
+  { id: 'gemini/gemini-2.5-flash',      name: 'Gemini 2.5 Flash',       icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-2.5-flash',      category: 'Text-out models', rpm: '5',  tpm: '250K', rpd: '20' },
+  { id: 'gemini/gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite',  icon: 'speed',      provider: 'gemini',        modelId: 'gemini-2.5-flash-lite', category: 'Text-out models', rpm: '10', tpm: '250K', rpd: '20' },
+  { id: 'gemini/gemini-3-flash',        name: 'Gemini 3 Flash',        icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-3-flash',        category: 'Text-out models', rpm: '5',  tpm: '250K', rpd: '20' },
+  { id: 'gemini/gemini-3.6-flash',      name: 'Gemini 3.6 Flash',      icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-3.6-flash',      category: 'Text-out models', rpm: '5',  tpm: '250K', rpd: '20' },
+  { id: 'gemini/gemini-3.7-flash',      name: 'Gemini 3.7 Flash',      icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-3.7-flash',      category: 'Text-out models', rpm: '5',  tpm: '250K', rpd: '20' },
+  { id: 'gemini/gemini-3.8-flash',      name: 'Gemini 3.8 Flash',      icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-3.8-flash',      category: 'Text-out models', rpm: '5',  tpm: '250K', rpd: '20' },
+  // Other Non-Gemini Providers
   { id: 'openai/gpt-4o',                name: 'GPT-4o',                 icon: 'memory',     provider: 'openai',        modelId: 'gpt-4o' },
   { id: 'openai/gpt-4o-mini',           name: 'GPT-4o Mini',            icon: 'bolt',       provider: 'openai',        modelId: 'gpt-4o-mini' },
   { id: 'anthropic/claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',      icon: 'psychology', provider: 'anthropic',     modelId: 'claude-3-5-sonnet-20241022' },
@@ -56,7 +63,7 @@ let state = {
   currentTab: null,
   tabsList: [],
   models: [...DEFAULT_MODELS],
-  selectedModelId: 'gemini/gemini-2.0-flash',
+  selectedModelId: 'gemini/gemini-3.5-flash-lite',
   selectedMode: 'agent_decide',
   selectedPreset: 'default',
   apiKeys: {},

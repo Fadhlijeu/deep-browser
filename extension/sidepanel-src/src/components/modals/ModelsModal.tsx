@@ -2,6 +2,7 @@ import React from 'react';
 import { Scale, Bot, Check, X, Sparkles } from 'lucide-react';
 import { ModelDef } from '../../types';
 import { sidepanelStore } from '../../state/sidepanelStore';
+import { ProviderLogo } from '../common/ProviderLogo';
 
 interface ModelsModalProps {
   isOpen: boolean;
@@ -79,23 +80,71 @@ export const ModelsModal: React.FC<ModelsModalProps> = ({
                       border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
                       cursor: 'pointer',
                       transition: 'all 0.12s ease',
+                      gap: '8px'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '15px', color: isSelected ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-                        {m.icon}
-                      </span>
-                      <div>
-                        <div style={{ fontWeight: 500, fontSize: '12px', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                          {m.name}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: 'var(--radius-xs)',
+                        background: isSelected ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-subtle)',
+                        border: '1px solid var(--border-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <ProviderLogo provider={m.provider} size={16} />
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '12px', color: isSelected ? '#ffffff' : 'var(--text-primary)' }} className="truncate">
+                            {m.name}
+                          </span>
+                          <span style={{
+                            fontSize: '9px',
+                            fontFamily: 'var(--font-mono)',
+                            color: 'var(--text-tertiary)',
+                            textTransform: 'uppercase',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            padding: '1px 4px',
+                            borderRadius: '3px'
+                          }}>
+                            {m.provider}
+                          </span>
+                          {m.category && (
+                            <span className="model-category-badge" style={{ fontSize: '8.5px', padding: '1px 4px' }}>
+                              {m.category}
+                            </span>
+                          )}
                         </div>
-                        <div style={{ fontSize: '9.5px', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
-                          {m.provider}
-                        </div>
+                        {(m.rpm || m.tpm || m.rpd) && (
+                          <div className="model-quota-row" style={{ marginTop: '2px' }}>
+                            {m.rpm && (
+                              <span className="model-quota-chip" style={{ fontSize: '9px' }}>
+                                <span className="chip-label">RPM</span>
+                                <span className="chip-val">{m.rpm}</span>
+                              </span>
+                            )}
+                            {m.tpm && (
+                              <span className="model-quota-chip" style={{ fontSize: '9px' }}>
+                                <span className="chip-label">TPM</span>
+                                <span className="chip-val">{m.tpm}</span>
+                              </span>
+                            )}
+                            {m.rpd && (
+                              <span className="model-quota-chip" style={{ fontSize: '9px' }}>
+                                <span className="chip-label">RPD</span>
+                                <span className="chip-val">{m.rpd}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     {isSelected && (
-                      <Check size={15} style={{ color: 'var(--accent)' }} />
+                      <Check size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                     )}
                   </div>
                 );

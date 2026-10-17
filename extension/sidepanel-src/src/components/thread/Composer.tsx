@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { PRESET_OPTIONS, sidepanelStore } from '../../state/sidepanelStore';
 import { PresetId, ExecutionMode, ModelDef } from '../../types';
+import { ProviderLogo } from '../common/ProviderLogo';
 
 interface ComposerProps {
   runState: string;
@@ -180,10 +181,10 @@ export const Composer: React.FC<ComposerProps> = ({
           <button
             className="pill-selector-btn"
             onClick={onOpenModels}
-            title={`Model Aktif: ${selectedModel.name}`}
+            title={`Model Aktif: ${selectedModel.name} (${selectedModel.provider})`}
           >
-            <Cpu size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <span>{selectedModel.name}</span>
+            <ProviderLogo provider={selectedModel.provider} size={13} />
+            <span className="truncate">{selectedModel.name}</span>
           </button>
         </div>
 

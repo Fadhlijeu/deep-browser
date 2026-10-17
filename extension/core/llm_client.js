@@ -26,7 +26,7 @@
      */
     constructor(config = {}) {
       this.provider = config.provider || 'gemini';
-      this.model = config.model || 'gemini-2.0-flash';
+      this.model = config.model || 'gemini-3.5-flash-lite';
       this.apiKey = config.apiKey || '';
       this.baseUrl = config.baseUrl || '';
       this.ollamaHost = config.ollamaHost || 'http://localhost:11434';

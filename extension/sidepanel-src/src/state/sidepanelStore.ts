@@ -3,14 +3,138 @@ import { Session, ChatMessage, ModelDef, TabItem, RunState, ConnectionStatus, Co
 declare const chrome: any;
 
 export const DEFAULT_MODELS: ModelDef[] = [
-  { id: 'gemini/gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      icon: 'bolt',       provider: 'gemini',        modelId: 'gemini-2.0-flash' },
-  { id: 'gemini/gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', icon: 'speed',      provider: 'gemini',        modelId: 'gemini-2.0-flash-lite' },
-  { id: 'gemini/gemini-1.5-pro',        name: 'Gemini 1.5 Pro',        icon: 'psychology', provider: 'gemini',        modelId: 'gemini-1.5-pro' },
-  { id: 'openai/gpt-4o',                name: 'GPT-4o',                icon: 'memory',     provider: 'openai',        modelId: 'gpt-4o' },
-  { id: 'openai/gpt-4o-mini',           name: 'GPT-4o Mini',           icon: 'bolt',       provider: 'openai',        modelId: 'gpt-4o-mini' },
-  { id: 'anthropic/claude-3-5-sonnet',  name: 'Claude 3.5 Sonnet',     icon: 'psychology', provider: 'anthropic',     modelId: 'claude-3-5-sonnet-20241022' },
-  { id: 'custom/deepseek-chat',         name: 'DeepSeek Chat (V3)',    icon: 'hub',        provider: 'custom_openai', modelId: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
-  { id: 'ollama/llama3',                name: 'Llama 3 (Local)',       icon: 'terminal',   provider: 'ollama',        modelId: 'llama3', baseUrl: 'http://localhost:11434' },
+  // Google Gemini (8 Active Models Only)
+  {
+    id: 'gemini/gemini-3.5-flash-lite',
+    name: 'Gemini 3.5 Flash Lite',
+    icon: 'speed',
+    provider: 'gemini',
+    modelId: 'gemini-3.5-flash-lite',
+    category: 'Text-out models',
+    rpm: '15',
+    tpm: '250K',
+    rpd: '500',
+  },
+  {
+    id: 'gemini/gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    icon: 'speed',
+    provider: 'gemini',
+    modelId: 'gemini-3.1-flash-lite',
+    category: 'Text-out models',
+    rpm: '15',
+    tpm: '250K',
+    rpd: '500',
+  },
+  {
+    id: 'gemini/gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    icon: 'bolt',
+    provider: 'gemini',
+    modelId: 'gemini-2.5-flash',
+    category: 'Text-out models',
+    rpm: '5',
+    tpm: '250K',
+    rpd: '20',
+  },
+  {
+    id: 'gemini/gemini-2.5-flash-lite',
+    name: 'Gemini 2.5 Flash Lite',
+    icon: 'speed',
+    provider: 'gemini',
+    modelId: 'gemini-2.5-flash-lite',
+    category: 'Text-out models',
+    rpm: '10',
+    tpm: '250K',
+    rpd: '20',
+  },
+  {
+    id: 'gemini/gemini-3-flash',
+    name: 'Gemini 3 Flash',
+    icon: 'bolt',
+    provider: 'gemini',
+    modelId: 'gemini-3-flash',
+    category: 'Text-out models',
+    rpm: '5',
+    tpm: '250K',
+    rpd: '20',
+  },
+  {
+    id: 'gemini/gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
+    icon: 'bolt',
+    provider: 'gemini',
+    modelId: 'gemini-3.6-flash',
+    category: 'Text-out models',
+    rpm: '5',
+    tpm: '250K',
+    rpd: '20',
+  },
+  {
+    id: 'gemini/gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
+    icon: 'bolt',
+    provider: 'gemini',
+    modelId: 'gemini-3.7-flash',
+    category: 'Text-out models',
+    rpm: '5',
+    tpm: '250K',
+    rpd: '20',
+  },
+  {
+    id: 'gemini/gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    icon: 'bolt',
+    provider: 'gemini',
+    modelId: 'gemini-3.8-flash',
+    category: 'Text-out models',
+    rpm: '5',
+    tpm: '250K',
+    rpd: '20',
+  },
+  // Other Non-Gemini Providers
+  {
+    id: 'openai/gpt-4o',
+    name: 'GPT-4o',
+    icon: 'memory',
+    provider: 'openai',
+    modelId: 'gpt-4o',
+    category: 'Flagship Multimodal',
+  },
+  {
+    id: 'openai/gpt-4o-mini',
+    name: 'GPT-4o Mini',
+    icon: 'bolt',
+    provider: 'openai',
+    modelId: 'gpt-4o-mini',
+    category: 'Fast Lightweight',
+  },
+  {
+    id: 'anthropic/claude-3-5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    icon: 'psychology',
+    provider: 'anthropic',
+    modelId: 'claude-3-5-sonnet-20241022',
+    category: 'Reasoning & Coding',
+  },
+  {
+    id: 'custom/deepseek-chat',
+    name: 'DeepSeek Chat (V3)',
+    icon: 'hub',
+    provider: 'custom_openai',
+    modelId: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com/v1',
+    category: 'OpenAI-Compatible',
+  },
+  {
+    id: 'ollama/llama3',
+    name: 'Llama 3 (Local)',
+    icon: 'terminal',
+    provider: 'ollama',
+    modelId: 'llama3',
+    baseUrl: 'http://localhost:11434',
+    category: 'Local Offline',
+  },
 ];
 
 export const PRESET_OPTIONS: { id: PresetId; name: string; icon: string }[] = [
@@ -75,7 +199,7 @@ export class SidepanelStateManager {
       sessions: [{ id: initId, name: 'Sesi Baru', createdAt: Date.now(), messages: [], events: [] }],
       activeSessionId: initId,
       models: [...DEFAULT_MODELS],
-      selectedModelId: 'gemini/gemini-2.0-flash',
+      selectedModelId: 'gemini/gemini-3.5-flash-lite',
       selectedMode: 'agent_decide',
       selectedPreset: 'default',
       apiKeys: {},
@@ -177,11 +301,51 @@ export class SidepanelStateManager {
         if (stored.activeSessionId && this.state.sessions.some((s) => String(s.id) === String(stored.activeSessionId))) {
           this.state.activeSessionId = stored.activeSessionId;
         }
-        if (stored.selectedModelId) this.state.selectedModelId = stored.selectedModelId;
         if (stored.selectedMode) this.state.selectedMode = stored.selectedMode;
         if (stored.selectedPreset) this.state.selectedPreset = stored.selectedPreset;
         if (stored.apiKeys) this.state.apiKeys = stored.apiKeys;
-        if (stored.models && stored.models.length > 0) this.state.models = stored.models;
+        if (stored.models && stored.models.length > 0) {
+          const validGeminiSlugs = new Set([
+            'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash',
+            'gemini-2.5-flash-lite', 'gemini-3-flash', 'gemini-3.6-flash',
+            'gemini-3.7-flash', 'gemini-3.8-flash'
+          ]);
+          // Filter out legacy models like gemini-2.0-flash or gemini-1.5-pro
+          let sanitized: ModelDef[] = stored.models.filter((m: ModelDef) => {
+            if (m.provider === 'gemini') {
+              return validGeminiSlugs.has(m.modelId);
+            }
+            return true;
+          });
+          // Ensure all active Gemini models are populated with quota metadata
+          const activeGemini = DEFAULT_MODELS.filter((dm) => dm.provider === 'gemini');
+          for (const ag of activeGemini) {
+            const existingIdx = sanitized.findIndex((m: ModelDef) => m.modelId === ag.modelId);
+            if (existingIdx === -1) {
+              sanitized.push({ ...ag });
+            } else {
+              sanitized[existingIdx] = {
+                ...ag,
+                ...sanitized[existingIdx],
+                rpm: ag.rpm,
+                tpm: ag.tpm,
+                rpd: ag.rpd,
+                category: ag.category,
+              };
+            }
+          }
+          this.state.models = sanitized;
+        } else {
+          this.state.models = [...DEFAULT_MODELS];
+        }
+
+        if (stored.selectedModelId) {
+          if (this.state.models.some((m) => m.id === stored.selectedModelId)) {
+            this.state.selectedModelId = stored.selectedModelId;
+          } else {
+            this.state.selectedModelId = 'gemini/gemini-3.5-flash-lite';
+          }
+        }
         if (typeof stored.sidepanelEnabled === 'boolean') this.state.sidepanelEnabled = stored.sidepanelEnabled;
         if (typeof stored.indexLabelingEnabled === 'boolean') this.state.indexLabelingEnabled = stored.indexLabelingEnabled;
         if (typeof stored.judgeEnabled === 'boolean') this.state.judgeEnabled = stored.judgeEnabled;
@@ -791,10 +955,86 @@ export class SidepanelStateManager {
   public resetModelsToDefault() {
     this.state.models = [...DEFAULT_MODELS];
     if (!this.state.models.some((m) => m.id === this.state.selectedModelId)) {
-      this.state.selectedModelId = this.state.models[0].id;
+      this.state.selectedModelId = 'gemini/gemini-3.5-flash-lite';
     }
     this.saveStorage();
     this.notify();
+  }
+
+  public async autoFetchModels(provider: 'gemini' | 'openai' | 'anthropic' | 'custom_openai' | 'ollama'): Promise<{ success: boolean; count: number; message: string }> {
+    const apiKey = this.state.apiKeys[provider] || (provider === 'gemini' ? this.state.apiKeys.gemini : '');
+    try {
+      if (provider === 'gemini') {
+        if (!apiKey) throw new Error('API Key Google Gemini belum diisi di Pengaturan (ikon kunci).');
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const data = await res.json();
+        const apiModels: Array<{ name: string; displayName?: string; description?: string; supportedGenerationMethods?: string[] }> = data.models || [];
+        
+        let addedCount = 0;
+        for (const m of apiModels) {
+          const rawSlug = m.name.replace(/^models\//, '');
+          if (m.supportedGenerationMethods?.includes('generateContent')) {
+            const exists = this.state.models.some((existing) => existing.provider === 'gemini' && existing.modelId === rawSlug);
+            if (!exists) {
+              this.state.models.push({
+                id: `gemini/${rawSlug}`,
+                name: m.displayName || rawSlug,
+                icon: rawSlug.includes('lite') ? 'speed' : (rawSlug.includes('flash') ? 'bolt' : 'psychology'),
+                provider: 'gemini',
+                modelId: rawSlug,
+                category: 'Auto-fetched API model',
+              });
+              addedCount++;
+            }
+          }
+        }
+        if (addedCount > 0) {
+          this.saveStorage();
+          this.notify();
+        }
+        return {
+          success: true,
+          count: addedCount,
+          message: addedCount > 0 ? `Berhasil mengimpor ${addedCount} model baru dari Google Gemini API.` : 'Semua model Gemini dari API sudah terdaftar.',
+        };
+      } else if (provider === 'ollama') {
+        const host = this.state.apiKeys.ollama || 'http://localhost:11434';
+        const res = await fetch(`${host.replace(/\/+$/, '')}/api/tags`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const data = await res.json();
+        const models: Array<{ name: string }> = data.models || [];
+        let addedCount = 0;
+        for (const m of models) {
+          const slug = m.name;
+          const exists = this.state.models.some((existing) => existing.provider === 'ollama' && existing.modelId === slug);
+          if (!exists) {
+            this.state.models.push({
+              id: `ollama/${slug}`,
+              name: slug,
+              icon: 'terminal',
+              provider: 'ollama',
+              modelId: slug,
+              baseUrl: host,
+              category: 'Local Ollama Model',
+            });
+            addedCount++;
+          }
+        }
+        if (addedCount > 0) {
+          this.saveStorage();
+          this.notify();
+        }
+        return {
+          success: true,
+          count: addedCount,
+          message: addedCount > 0 ? `Berhasil mengimpor ${addedCount} model baru dari Ollama lokal.` : 'Semua model Ollama lokal sudah terdaftar.',
+        };
+      }
+      return { success: false, count: 0, message: `Auto-fetch untuk provider "${provider}" belum didukung.` };
+    } catch (err: any) {
+      return { success: false, count: 0, message: err.message || String(err) };
+    }
   }
 
   public setSelectedMode(mode: ExecutionMode) {

@@ -5,6 +5,10 @@ export interface ModelDef {
   provider: 'gemini' | 'openai' | 'anthropic' | 'custom_openai' | 'ollama';
   modelId: string;
   baseUrl?: string;
+  category?: string;
+  rpm?: string | number;
+  tpm?: string | number;
+  rpd?: string | number;
 }
 
 export interface ToolStep {
